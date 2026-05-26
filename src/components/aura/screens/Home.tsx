@@ -66,8 +66,20 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </button>
       </section>
 
+      {/* Quick nav */}
+      <section className="px-6 mt-7 grid grid-cols-2 gap-3">
+        <button onClick={() => go("shop")} className="text-left rounded-2xl bg-[var(--champagne)]/30 border border-[var(--champagne)]/50 p-4 active:scale-[0.98] transition">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The edit</p>
+          <p className="font-serif text-lg mt-1">Shop your gaps</p>
+        </button>
+        <button onClick={() => go("community")} className="text-left rounded-2xl bg-secondary/60 p-4 active:scale-[0.98] transition">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
+          <p className="font-serif text-lg mt-1">Community</p>
+        </button>
+      </section>
+
       {/* Stats */}
-      <section className="px-6 mt-8 grid grid-cols-3 gap-3">
+      <section className="px-6 mt-5 grid grid-cols-3 gap-3">
         {[
           { n: "184", l: "Pieces" },
           { n: "47", l: "Outfits" },
