@@ -1,6 +1,7 @@
-import { Settings, Share2, ChevronRight } from "lucide-react";
+import { Settings, Share2, ChevronRight, LogOut } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
+import { useAuth } from "@/hooks/use-auth";
 
 const seasonPalette = [
   { name: "Cream", hex: "#f5ead6" },
@@ -18,6 +19,7 @@ const avoid = [
 ];
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
+  const { user, signOut } = useAuth();
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
@@ -98,6 +100,16 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           </button>
         ))}
       </section>
+
+      <div className="px-6 mt-6">
+        <p className="text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">{user?.email}</p>
+        <button
+          onClick={signOut}
+          className="w-full h-12 rounded-full border border-border flex items-center justify-center gap-2 text-xs uppercase tracking-[0.3em] active:scale-[0.98]"
+        >
+          <LogOut size={14} /> Sign out
+        </button>
+      </div>
 
       <p className="text-center mt-8 text-[9px] uppercase tracking-[0.4em] text-muted-foreground">aura · v 1.0</p>
     </div>
