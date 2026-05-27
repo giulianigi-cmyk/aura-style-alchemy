@@ -19,6 +19,7 @@ const avoid = [
 ];
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
+  const { user, signOut } = useAuth();
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
