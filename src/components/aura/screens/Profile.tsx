@@ -1,6 +1,7 @@
-import { Settings, Share2, ChevronRight } from "lucide-react";
+import { Settings, Share2, ChevronRight, LogOut } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
+import { useAuth } from "@/hooks/use-auth";
 
 const seasonPalette = [
   { name: "Cream", hex: "#f5ead6" },
