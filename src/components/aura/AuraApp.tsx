@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Splash } from "./screens/Splash";
 import { Onboarding } from "./screens/Onboarding";
 import { Auth } from "./screens/Auth";
+import { ProfileSetup } from "./screens/ProfileSetup";
 import { Home } from "./screens/Home";
 import { Wardrobe } from "./screens/Wardrobe";
 import { AddItem } from "./screens/AddItem";
@@ -13,42 +14,58 @@ import { Profile } from "./screens/Profile";
 import { TabBar } from "./TabBar";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
 
 export type Screen =
-  | "splash" | "onboarding" | "auth" | "home" | "wardrobe" | "add"
+  | "splash" | "onboarding" | "auth" | "profile-setup" | "home" | "wardrobe" | "add"
   | "ai" | "planner" | "shop" | "community" | "profile";
 
 function Inner() {
   const { user, loading } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
   const [screen, setScreen] = useState<Screen>("splash");
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
 
+  // Initial routing after splash
   useEffect(() => {
     if (loading) return;
     if (screen !== "splash") return;
     const t = setTimeout(() => {
       if (!onboarded) setScreen("onboarding");
       else if (!user) setScreen("auth");
+      else if (!profileLoading && profile && !profile.setup_complete) setScreen("profile-setup");
       else setScreen("home");
     }, 1600);
     return () => clearTimeout(t);
-  }, [loading, screen, onboarded, user]);
+  }, [loading, profileLoading, screen, onboarded, user, profile]);
 
+  // Auth state transitions
   useEffect(() => {
     if (loading || screen === "splash") return;
-    if (!user && !["onboarding", "auth"].includes(screen)) setScreen("auth");
-    if (user && ["auth", "onboarding"].includes(screen)) setScreen("home");
-  }, [user, loading, screen]);
+    if (!user && !["onboarding", "auth"].includes(screen)) {
+      setScreen("auth");
+      return;
+    }
+    if (user && ["auth"].includes(screen)) {
+      if (!profileLoading && profile && !profile.setup_complete) setScreen("profile-setup");
+      else if (!profileLoading) setScreen("home");
+    }
+    if (user && screen === "onboarding") {
+      if (!profileLoading && profile && !profile.setup_complete) setScreen("profile-setup");
+    }
+  }, [user, loading, screen, profile, profileLoading]);
 
   const finishOnboarding = () => {
     localStorage.setItem("aura.onboarded", "1");
     setOnboarded(true);
-    setScreen(user ? "home" : "auth");
+    if (!user) setScreen("auth");
+    else if (profile && !profile.setup_complete) setScreen("profile-setup");
+    else setScreen("home");
   };
 
-  const showTabs = user && !["splash", "onboarding", "auth", "add"].includes(screen);
+  const showTabs = user && !["splash", "onboarding", "auth", "profile-setup", "add"].includes(screen);
 
   return (
     <PhoneFrame>
@@ -57,6 +74,7 @@ function Inner() {
           {screen === "splash" && <Splash />}
           {screen === "onboarding" && <Onboarding onDone={finishOnboarding} />}
           {screen === "auth" && <Auth />}
+          {screen === "profile-setup" && <ProfileSetup onDone={() => setScreen("home")} />}
           {screen === "home" && <Home go={setScreen} />}
           {screen === "wardrobe" && <Wardrobe go={setScreen} />}
           {screen === "add" && <AddItem onClose={() => setScreen("wardrobe")} />}
