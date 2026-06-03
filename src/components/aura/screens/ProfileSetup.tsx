@@ -101,10 +101,10 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           {step === 1 && (
             <div className="space-y-6">
               <div>
-                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Age</label>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</label>
                 <input
-                  type="number" min={13} max={120} value={age}
-                  onChange={e => setAge(e.target.value)} placeholder="28"
+                  type="date" max={new Date().toISOString().slice(0, 10)}
+                  value={birthDate} onChange={e => setBirthDate(e.target.value)}
                   className="mt-1 w-full bg-transparent border-b border-border py-2 font-serif text-2xl outline-none focus:border-foreground transition"
                 />
               </div>
