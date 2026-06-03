@@ -5,7 +5,7 @@ import { useAuth } from "./use-auth";
 export type Profile = {
   id: string;
   full_name: string | null;
-  age: number | null;
+  birth_date: string | null; // ISO date (YYYY-MM-DD); source of truth for age
   gender: string | null;
   style_preferences: string[] | null;
   favorite_brands: string[] | null;
@@ -16,6 +16,17 @@ export type Profile = {
   created_at: string;
   updated_at: string;
 };
+
+export function calcAge(birthDate: string | null | undefined): number | null {
+  if (!birthDate) return null;
+  const d = new Date(birthDate);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 ? age : null;
+}
 
 export function useProfile() {
   const { user } = useAuth();
