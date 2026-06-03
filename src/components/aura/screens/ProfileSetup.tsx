@@ -20,7 +20,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState<string>("");
+  const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
@@ -41,7 +41,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
   const canAdvance = () => {
     if (step === 0) return fullName.trim().length > 1;
-    if (step === 1) return age !== "" && gender !== "";
+    if (step === 1) return birthDate !== "" && gender !== "";
     if (step === 2) return styles.length > 0;
     if (step === 3) return brands.length > 0;
     return true;
@@ -51,7 +51,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
     setSaving(true); setErr(null);
     const patch: any = {
       full_name: fullName.trim(),
-      age: age ? Number(age) : null,
+      birth_date: birthDate || null,
       gender: gender || null,
       style_preferences: styles,
       favorite_brands: brands,

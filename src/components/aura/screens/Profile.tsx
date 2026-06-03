@@ -3,7 +3,7 @@ import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loade
 import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
-import { useProfile } from "@/hooks/use-profile";
+import { useProfile, calcAge } from "@/hooks/use-profile";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -32,7 +32,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState<string>("");
+  const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
@@ -43,7 +43,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   useEffect(() => {
     if (!profile) return;
     setFullName(profile.full_name ?? "");
-    setAge(profile.age ? String(profile.age) : "");
+    setBirthDate(profile.birth_date ?? "");
     setGender(profile.gender ?? "");
     setStyles(profile.style_preferences ?? []);
     setBrands(profile.favorite_brands ?? []);
@@ -56,7 +56,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setSaving(true); setErr(null);
     const { error } = await update({
       full_name: fullName.trim() || null,
-      age: age ? Number(age) : null,
+      birth_date: birthDate || null,
       gender: gender || null,
       style_preferences: styles,
       favorite_brands: brands,
@@ -132,7 +132,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           {[
             { n: profile?.favorite_brands?.length ?? 0, l: "Brands" },
             { n: profile?.style_preferences?.length ?? 0, l: "Styles" },
-            { n: profile?.age ?? "—", l: "Age" },
+            { n: calcAge(profile?.birth_date) ?? "—", l: "Age" },
           ].map(s => (
             <div key={s.l} className="text-center">
               <p className="font-serif text-xl">{s.n}</p>
@@ -146,12 +146,17 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       {editing && (
         <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 space-y-5 animate-fade-up">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Age</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</p>
             <input
-              type="number" min={13} max={120} value={age} onChange={e => setAge(e.target.value)}
-              placeholder="—"
+              type="date" max={new Date().toISOString().slice(0, 10)}
+              value={birthDate} onChange={e => setBirthDate(e.target.value)}
               className="mt-1 w-full bg-transparent border-b border-border py-1.5 font-serif text-xl outline-none focus:border-foreground transition"
             />
+            {birthDate && (
+              <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                Age · {calcAge(birthDate) ?? "—"}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Gender</p>
