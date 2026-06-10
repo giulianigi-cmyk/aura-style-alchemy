@@ -279,8 +279,13 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
           {/* Menu */}
           <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-card border border-border/60 overflow-hidden">
-            {["Wardrobe insights", "Saved outfits", "Sustainability score", "Notifications", "Invite friends"].map(l => (
-              <button key={l} className="w-full flex items-center justify-between px-5 py-4 active:bg-secondary/40 transition">
+            {([
+              { l: "Wardrobe insights", s: "insights" as Screen },
+              { l: "Saved outfits", s: "saved-outfits" as Screen },
+              { l: "Notifications", s: "notifications" as Screen },
+              { l: "Invite friends", s: "invite" as Screen },
+            ]).map(({ l, s }) => (
+              <button key={l} onClick={() => _go(s)} className="w-full flex items-center justify-between px-5 py-4 active:bg-secondary/40 transition">
                 <span className="text-sm">{l}</span>
                 <ChevronRight size={14} className="text-muted-foreground" />
               </button>
