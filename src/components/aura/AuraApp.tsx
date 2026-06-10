@@ -12,6 +12,10 @@ import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
 import { Community } from "./screens/Community";
 import { Profile } from "./screens/Profile";
+import { Insights } from "./screens/Insights";
+import { SavedOutfits } from "./screens/SavedOutfits";
+import { Notifications } from "./screens/Notifications";
+import { Invite } from "./screens/Invite";
 import { TabBar } from "./TabBar";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -19,7 +23,8 @@ import { useProfile } from "@/hooks/use-profile";
 
 export type Screen =
   | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
-  | "ai" | "planner" | "shop" | "community" | "profile";
+  | "ai" | "planner" | "shop" | "community" | "profile"
+  | "insights" | "saved-outfits" | "notifications" | "invite";
 
 function Inner() {
   const { user, loading, recovery } = useAuth();
