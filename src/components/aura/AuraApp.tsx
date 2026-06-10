@@ -96,6 +96,10 @@ function Inner() {
           {screen === "shop" && <Shop go={setScreen} />}
           {screen === "community" && <Community go={setScreen} />}
           {screen === "profile" && <Profile go={setScreen} />}
+          {screen === "insights" && <Insights go={setScreen} />}
+          {screen === "saved-outfits" && <SavedOutfits go={setScreen} />}
+          {screen === "notifications" && <Notifications go={setScreen} />}
+          {screen === "invite" && <Invite go={setScreen} />}
         </div>
         {showTabs && <TabBar current={screen} go={setScreen} />}
       </div>
