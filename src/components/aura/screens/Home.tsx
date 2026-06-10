@@ -1,4 +1,5 @@
-import { Bell, Search, Sparkles, TrendingUp, Cloud } from "lucide-react";
+import { useState } from "react";
+import { Bell, Search, Sparkles, TrendingUp, Cloud, MapPin, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import outfit1 from "@/assets/outfit-1.jpg";
 import outfit2 from "@/assets/outfit-2.jpg";
@@ -6,8 +7,16 @@ import outfit3 from "@/assets/outfit-3.jpg";
 import item1 from "@/assets/item-1.jpg";
 import item3 from "@/assets/item-3.jpg";
 import item5 from "@/assets/item-5.jpg";
+import { useProfile } from "@/hooks/use-profile";
+import { useLocation } from "@/hooks/use-location";
 
 export function Home({ go }: { go: (s: Screen) => void }) {
+  const { profile } = useProfile();
+  const { city, status, detect, setManual } = useLocation();
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualCity, setManualCity] = useState("");
+  const greetingName = profile?.full_name?.split(" ")[0] || "there";
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
