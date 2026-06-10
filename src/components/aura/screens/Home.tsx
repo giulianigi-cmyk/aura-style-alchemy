@@ -22,30 +22,53 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       {/* Header */}
       <header className="px-6 pt-14 pb-4 flex items-center justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Tuesday, May 26</p>
-          <h1 className="font-serif text-3xl mt-1">Good morning, Elise</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{today}</p>
+          <h1 className="font-serif text-3xl mt-1">Good morning, {greetingName}</h1>
         </div>
         <div className="flex gap-2">
           <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition">
             <Search size={16} />
           </button>
-          <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
+          <button onClick={() => go("notifications")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
             <Bell size={16} />
             <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-[var(--champagne)]" />
           </button>
         </div>
       </header>
 
-      {/* Weather strip */}
-      <div className="mx-6 mt-2 flex items-center justify-between rounded-2xl bg-secondary/60 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Cloud size={18} className="text-muted-foreground" />
-          <div>
-            <p className="text-sm">Paris · 18°</p>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">light breeze · cashmere weather</p>
+      {/* Weather / location strip */}
+      <div className="mx-6 mt-2 rounded-2xl bg-secondary/60 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <Cloud size={18} className="text-muted-foreground shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm truncate">{city ? `${city} · 18°` : "Set your location"}</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                {city ? "light breeze · cashmere weather" : "for tailored daily edits"}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={() => { if (city) setManualOpen(v => !v); else detect(); }}
+            className="shrink-0 ml-2 h-8 px-3 rounded-full bg-background border border-border text-[10px] uppercase tracking-widest flex items-center gap-1.5 active:scale-95"
+          >
+            {status === "loading" ? <Loader2 size={11} className="animate-spin" /> : <MapPin size={11} />}
+            {city ? "Change" : "Use location"}
+          </button>
         </div>
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">7d</span>
+        {(manualOpen || status === "denied" || status === "unsupported" || status === "error") && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); setManual(manualCity); setManualCity(""); setManualOpen(false); }}
+            className="mt-3 flex gap-2 animate-fade-up"
+          >
+            <input
+              value={manualCity} onChange={e => setManualCity(e.target.value)}
+              placeholder="Enter your city"
+              className="flex-1 bg-background border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-foreground"
+            />
+            <button type="submit" className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95">Save</button>
+          </form>
+        )}
       </div>
 
       {/* Outfit of the day - hero */}
