@@ -34,6 +34,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
+  const [bio, setBio] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
