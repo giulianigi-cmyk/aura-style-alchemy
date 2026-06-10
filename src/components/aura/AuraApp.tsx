@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Splash } from "./screens/Splash";
 import { Onboarding } from "./screens/Onboarding";
 import { Auth } from "./screens/Auth";
+import { ResetPassword } from "./screens/ResetPassword";
 import { ProfileSetup } from "./screens/ProfileSetup";
 import { Home } from "./screens/Home";
 import { Wardrobe } from "./screens/Wardrobe";
@@ -17,21 +18,27 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 
 export type Screen =
-  | "splash" | "onboarding" | "auth" | "profile-setup" | "home" | "wardrobe" | "add"
+  | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
   | "ai" | "planner" | "shop" | "community" | "profile";
 
 function Inner() {
-  const { user, loading } = useAuth();
+  const { user, loading, recovery } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
   const [screen, setScreen] = useState<Screen>("splash");
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
 
+  // Recovery flow always wins
+  useEffect(() => {
+    if (recovery) setScreen("reset");
+  }, [recovery]);
+
   // Initial routing after splash
   useEffect(() => {
     if (loading) return;
     if (screen !== "splash") return;
+    if (recovery) { setScreen("reset"); return; }
     const t = setTimeout(() => {
       if (!onboarded) setScreen("onboarding");
       else if (!user) setScreen("auth");
@@ -39,11 +46,11 @@ function Inner() {
       else setScreen("home");
     }, 1600);
     return () => clearTimeout(t);
-  }, [loading, profileLoading, screen, onboarded, user, profile]);
+  }, [loading, profileLoading, screen, onboarded, user, profile, recovery]);
 
   // Auth state transitions
   useEffect(() => {
-    if (loading || screen === "splash") return;
+    if (loading || screen === "splash" || screen === "reset") return;
     if (!user && !["onboarding", "auth"].includes(screen)) {
       setScreen("auth");
       return;
@@ -65,7 +72,7 @@ function Inner() {
     else setScreen("home");
   };
 
-  const showTabs = user && !["splash", "onboarding", "auth", "profile-setup", "add"].includes(screen);
+  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add"].includes(screen);
 
   return (
     <PhoneFrame>
@@ -74,6 +81,7 @@ function Inner() {
           {screen === "splash" && <Splash />}
           {screen === "onboarding" && <Onboarding onDone={finishOnboarding} />}
           {screen === "auth" && <Auth />}
+          {screen === "reset" && <ResetPassword onDone={() => setScreen(user ? "home" : "auth")} />}
           {screen === "profile-setup" && <ProfileSetup onDone={() => setScreen("home")} />}
           {screen === "home" && <Home go={setScreen} />}
           {screen === "wardrobe" && <Wardrobe go={setScreen} />}

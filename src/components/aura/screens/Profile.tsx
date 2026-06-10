@@ -14,7 +14,7 @@ const BRANDS = [
   "Bottega Veneta", "Celine", "Hermès", "Prada", "Chloé", "Acne Studios",
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
-const GENDERS = ["Woman", "Man", "Non-binary", "Prefer not to say"];
+const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
 
 const seasonPalette = [
   { name: "Cream", hex: "#f5ead6" },
@@ -34,6 +34,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
+  const [bio, setBio] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -45,6 +46,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setFullName(profile.full_name ?? "");
     setBirthDate(profile.birth_date ?? "");
     setGender(profile.gender ?? "");
+    setBio(profile.bio ?? "");
     setStyles(profile.style_preferences ?? []);
     setBrands(profile.favorite_brands ?? []);
   }, [profile]);
@@ -58,6 +60,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       full_name: fullName.trim() || null,
       birth_date: birthDate || null,
       gender: gender || null,
+      bio: bio.trim() || null,
       style_preferences: styles,
       favorite_brands: brands,
       setup_complete: true,
@@ -197,6 +200,15 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               })}
             </div>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Bio</p>
+            <textarea
+              value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={240}
+              placeholder="A line or two about your style…"
+              className="mt-1 w-full bg-transparent border-b border-border py-2 text-sm outline-none focus:border-foreground transition resize-none"
+            />
+            <p className="text-right text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{bio.length}/240</p>
+          </div>
 
           {err && <p className="text-xs text-red-700">{err}</p>}
 
@@ -213,6 +225,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       {/* Read-only summary chips */}
       {!editing && (
         <>
+          {profile?.bio && (
+            <section className="mx-6 mt-6 animate-fade-up">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Bio</p>
+              <p className="text-sm leading-relaxed text-foreground/80">{profile.bio}</p>
+            </section>
+          )}
           {(profile?.style_preferences?.length ?? 0) > 0 && (
             <section className="mx-6 mt-6 animate-fade-up">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Style</p>

@@ -11,7 +11,7 @@ const BRANDS = [
   "Bottega Veneta", "Celine", "Hermès", "Prada", "Chloé", "Acne Studios",
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
-const GENDERS = ["Woman", "Man", "Non-binary", "Prefer not to say"];
+const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
 
 export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const { update, uploadAvatar } = useProfile();
