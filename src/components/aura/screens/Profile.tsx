@@ -46,6 +46,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setFullName(profile.full_name ?? "");
     setBirthDate(profile.birth_date ?? "");
     setGender(profile.gender ?? "");
+    setBio(profile.bio ?? "");
     setStyles(profile.style_preferences ?? []);
     setBrands(profile.favorite_brands ?? []);
   }, [profile]);
@@ -59,6 +60,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       full_name: fullName.trim() || null,
       birth_date: birthDate || null,
       gender: gender || null,
+      bio: bio.trim() || null,
       style_preferences: styles,
       favorite_brands: brands,
       setup_complete: true,
