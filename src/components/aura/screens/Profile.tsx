@@ -200,6 +200,15 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               })}
             </div>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Bio</p>
+            <textarea
+              value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={240}
+              placeholder="A line or two about your style…"
+              className="mt-1 w-full bg-transparent border-b border-border py-2 text-sm outline-none focus:border-foreground transition resize-none"
+            />
+            <p className="text-right text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{bio.length}/240</p>
+          </div>
 
           {err && <p className="text-xs text-red-700">{err}</p>}
 
