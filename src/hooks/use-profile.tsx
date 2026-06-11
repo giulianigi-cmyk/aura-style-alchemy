@@ -82,7 +82,7 @@ export function useProfile() {
     });
     if (upErr) return { error: upErr.message, url: null };
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const { error } = await update({ avatar_url: data.publicUrl });
+    const { error } = await update({ profile_image: data.publicUrl, avatar_url: data.publicUrl });
     return { error, url: data.publicUrl };
   }, [user, update]);
 
