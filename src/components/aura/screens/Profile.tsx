@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
