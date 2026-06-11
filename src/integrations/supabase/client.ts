@@ -20,6 +20,8 @@ export type WardrobeItem = {
   category: string | null;
   color: string | null;
   season: string | null;
+  style: string | null;
+  occasion: string | null;
   material: string | null;
   image_url: string;
   created_at: string;

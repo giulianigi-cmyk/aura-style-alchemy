@@ -10,6 +10,7 @@ export type Profile = {
   style_preferences: string[] | null;
   favorite_brands: string[] | null;
   avatar_url: string | null;
+  profile_image: string | null;
   bio: string | null;
   city: string | null;
   season: string | null;
@@ -81,7 +82,7 @@ export function useProfile() {
     });
     if (upErr) return { error: upErr.message, url: null };
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const { error } = await update({ avatar_url: data.publicUrl });
+    const { error } = await update({ profile_image: data.publicUrl, avatar_url: data.publicUrl });
     return { error, url: data.publicUrl };
   }, [user, update]);
 

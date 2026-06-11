@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
@@ -66,19 +67,22 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       setup_complete: true,
     });
     setSaving(false);
-    if (error) { setErr(error); return; }
+    if (error) { setErr(error); toast.error("Couldn't save profile"); return; }
+    toast.success("Profile updated");
     setEditing(false);
   };
 
   const onPickAvatar = async (f: File | null) => {
     if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Please select an image"); return; }
     setUploading(true); setErr(null);
     const { error } = await uploadAvatar(f);
     setUploading(false);
-    if (error) setErr(error);
+    if (error) { setErr(error); toast.error("Upload failed"); }
+    else toast.success("Profile photo updated");
   };
 
-  const avatarSrc = profile?.avatar_url || profile1;
+  const avatarSrc = profile?.profile_image || profile?.avatar_url || profile1;
   const displayName = profile?.full_name || "Your name";
   const meta = [profile?.city, profile?.season || "Warm Autumn"].filter(Boolean).join(" · ");
 
