@@ -80,9 +80,10 @@ export function useProfile() {
     const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, {
       cacheControl: "3600", upsert: true,
     });
-    if (upErr) return { error: upErr.message, url: null };
+    if (upErr) { console.error("avatar upload", upErr); return { error: upErr.message, url: null }; }
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const { error } = await update({ profile_image: data.publicUrl, avatar_url: data.publicUrl });
+    const { error } = await update({ profile_image: data.publicUrl });
+    if (error) console.error("avatar profile update", error);
     return { error, url: data.publicUrl };
   }, [user, update]);
 
