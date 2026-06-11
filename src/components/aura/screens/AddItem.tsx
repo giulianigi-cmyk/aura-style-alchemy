@@ -41,19 +41,26 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setSeasons(seasons.includes(s) ? seasons.filter(x => x !== s) : [...seasons, s]);
 
   const save = async () => {
-    if (!user || !file) return;
+    if (!file) return;
     setSaving(true); setErr(null);
     try {
+      // Always resolve user_id from Supabase auth (auth.uid()), never trust form/state alone.
+      const { data: auth, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !auth?.user?.id) {
+        throw new Error("You must be signed in to add a piece.");
+      }
+      const uid = auth.user.id;
+
       const ext = file.name.split(".").pop() || "jpg";
-      const path = `${user.id}/${Date.now()}.${ext}`;
+      const path = `${uid}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
         cacheControl: "3600", upsert: false,
       });
-      if (upErr) throw upErr;
+      if (upErr) { console.error("wardrobe upload", upErr); throw upErr; }
       const { data: pub } = supabase.storage.from("wardrobe").getPublicUrl(path);
 
-      const payload: Record<string, unknown> = {
-        user_id: user.id,
+      const payload = {
+        user_id: uid,
         name: name || "Untitled piece",
         brand: brand || null,
         category,
@@ -65,7 +72,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       };
 
       const { error: dbErr } = await supabase.from("wardrobe_items").insert(payload);
-      if (dbErr) throw dbErr;
+      if (dbErr) { console.error("wardrobe insert", dbErr, payload); throw dbErr; }
       toast.success("Added to your closet");
       onClose();
     } catch (e: unknown) {
