@@ -10,6 +10,7 @@ export type Profile = {
   style_preferences: string[] | null;
   favorite_brands: string[] | null;
   avatar_url: string | null;
+  profile_image: string | null;
   bio: string | null;
   city: string | null;
   season: string | null;
