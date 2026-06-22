@@ -15,7 +15,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setItems([]); setLoading(false); return; }
+    setLoading(true);
     supabase.from("wardrobe_items")
       .select(wardrobeColumns).eq("user_id", user.id).order("created_at", { ascending: false })
       .then(({ data, error }) => {

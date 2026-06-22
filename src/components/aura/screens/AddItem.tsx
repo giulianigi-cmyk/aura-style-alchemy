@@ -118,7 +118,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       const { data: auth, error: authErr } = await supabase.auth.getUser();
       console.log("[AURA wardrobe] current authenticated user", {
         userId: auth?.user?.id ?? null,
-        email: auth?.user?.email ?? null,
         authError: authErr?.message ?? null,
       });
       if (authErr || !auth?.user?.id) {
@@ -142,7 +141,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
       const payload = {
         user_id: uid,
-        brand: brand.trim() || null,
+        brand: brand.trim() || name.trim() || null,
         category: categories.includes(category) ? category : "Tops",
         color: color.trim() || null,
         season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
