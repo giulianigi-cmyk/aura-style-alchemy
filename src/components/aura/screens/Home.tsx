@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Bell, Search, Sparkles, TrendingUp, Cloud, MapPin, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, Search, Sparkles, TrendingUp, MapPin, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import outfit1 from "@/assets/outfit-1.jpg";
 import outfit2 from "@/assets/outfit-2.jpg";
@@ -9,12 +9,26 @@ import item3 from "@/assets/item-3.jpg";
 import item5 from "@/assets/item-5.jpg";
 import { useProfile } from "@/hooks/use-profile";
 import { useLocation } from "@/hooks/use-location";
+import { useWeather } from "@/hooks/use-weather";
+import { describeWeather, suggestOutfit } from "@/lib/weather";
 
 export function Home({ go }: { go: (s: Screen) => void }) {
   const { profile } = useProfile();
-  const { city, status, detect, setManual } = useLocation();
+  const { city, latitude, longitude, status, detect, setManual } = useLocation();
+  const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualCity, setManualCity] = useState("");
+  const [autoTried, setAutoTried] = useState(false);
+
+  // Try geolocation once on first visit if no location stored yet.
+  useEffect(() => {
+    if (autoTried) return;
+    if (profile && !city && status === "idle") {
+      setAutoTried(true);
+      detect();
+    }
+  }, [profile, city, status, detect, autoTried]);
+
   const greetingName = profile?.full_name?.split(" ")[0] || "there";
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   return (
@@ -40,11 +54,21 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       <div className="mx-6 mt-2 rounded-2xl bg-secondary/60 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <Cloud size={18} className="text-muted-foreground shrink-0" />
+            <span className="text-xl shrink-0">
+              {weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).icon : "📍"}
+            </span>
             <div className="min-w-0">
-              <p className="text-sm truncate">{city ? `${city} · 18°` : "Set your location"}</p>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                {city ? "light breeze · cashmere weather" : "for tailored daily edits"}
+              <p className="text-sm truncate">
+                {city
+                  ? weather
+                    ? `${city} · ${Math.round(weather.current.temperature)}${weather.units.temp}`
+                    : wxLoading ? `${city} · loading…` : city
+                  : "Set your location"}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
+                {weather
+                  ? `${describeWeather(weather.current.weatherCode, weather.current.isDay).label} · ${suggestOutfit(weather.current).headline}`
+                  : city ? "for tailored daily edits" : "for weather-aware styling"}
               </p>
             </div>
           </div>
