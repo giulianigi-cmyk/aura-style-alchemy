@@ -1,4 +1,5 @@
 import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload } from "lucide-react";
+import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +9,52 @@ const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", 
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
+const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+
+const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
+const colorWords = ["black", "white", "cream", "ivory", "beige", "brown", "camel", "grey", "gray", "navy", "blue", "denim", "red", "pink", "green", "olive", "yellow", "gold", "silver", "purple"];
+const categoryHints: Array<[string, string[]]> = [
+  ["Outerwear", ["coat", "jacket", "blazer", "trench", "parka", "puffer"]],
+  ["Bottoms", ["jean", "trouser", "pant", "skirt", "short"]],
+  ["Dresses", ["dress", "gown", "slip"]],
+  ["Shoes", ["shoe", "boot", "heel", "sneaker", "loafer", "sandal"]],
+  ["Bags", ["bag", "tote", "clutch", "purse"]],
+  ["Accessories", ["belt", "scarf", "hat", "jewel", "sunglasses", "watch"]],
+  ["Tops", ["top", "shirt", "tee", "t-shirt", "blouse", "knit", "sweater", "cardigan"]],
+];
+
+function fileExtension(file: File) {
+  const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (fromName && imageExtensions.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  if (file.type === "image/heic") return "heic";
+  if (file.type === "image/heif") return "heif";
+  return "jpg";
+}
+
+function isImageFile(file: File) {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return file.type.startsWith("image/") || imageExtensions.has(ext) || file.type === "";
+}
+
+function suggestDetails(file: File) {
+  const hay = file.name.toLowerCase().replace(/[_-]/g, " ");
+  const category = categoryHints.find(([, hints]) => hints.some((h) => hay.includes(h)))?.[0] ?? "Tops";
+  const color = colorWords.find((c) => hay.includes(c)) ?? "";
+  const styles = [
+    ...(hay.includes("tailor") || hay.includes("blazer") ? ["Tailored"] : []),
+    ...(hay.includes("street") || hay.includes("sneaker") || hay.includes("denim") ? ["Street"] : []),
+    ...(hay.includes("vintage") ? ["Vintage"] : []),
+    ...(hay.includes("romantic") || hay.includes("lace") || hay.includes("silk") ? ["Romantic"] : []),
+  ];
+  const occasions = [
+    ...(hay.includes("work") || hay.includes("office") || hay.includes("blazer") ? ["Work"] : []),
+    ...(hay.includes("evening") || hay.includes("party") || hay.includes("formal") ? ["Evening"] : []),
+    ...(hay.includes("travel") ? ["Travel"] : []),
+  ];
+  return { category, color, seasons: ["All Seasons"], styles, occasions };
+}
 
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
@@ -25,54 +72,86 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState("Tops");
   const [color, setColor] = useState("");
   const [seasons, setSeasons] = useState<string[]>([]);
-  const [style, setStyle] = useState("");
-  const [occasion, setOccasion] = useState("");
+  const [styles, setStyles] = useState<string[]>([]);
+  const [occasions, setOccasions] = useState<string[]>([]);
 
   const onPick = (f: File | null) => {
     if (!f) return;
-    if (!f.type.startsWith("image/")) { toast.error("Please select an image"); return; }
+    if (!isImageFile(f)) { toast.error("Please select an image"); return; }
+    const suggestions = suggestDetails(f);
     setFile(f);
     setPreview(URL.createObjectURL(f));
     setName(f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
+    setCategory(suggestions.category);
+    if (suggestions.color) setColor(suggestions.color);
+    setSeasons(suggestions.seasons);
+    setStyles(suggestions.styles);
+    setOccasions(suggestions.occasions);
     setStep("details");
   };
 
-  const toggleSeason = (s: string) =>
-    setSeasons(seasons.includes(s) ? seasons.filter(x => x !== s) : [...seasons, s]);
+  const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
+    setter(values.includes(value) ? values.filter((x) => x !== value) : [...values, value]);
+
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    onPick(event.dataTransfer.files?.[0] ?? null);
+  };
 
   const save = async () => {
     if (!file) return;
     setSaving(true); setErr(null);
     try {
       // Always resolve user_id from Supabase auth (auth.uid()), never trust form/state alone.
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      console.log("[AURA wardrobe] current session", {
+        hasSession: Boolean(sessionData.session),
+        userId: sessionData.session?.user?.id ?? null,
+        sessionError: sessionErr?.message ?? null,
+      });
+      if (sessionErr || !sessionData.session?.user?.id) {
+        throw new Error("Your session is missing. Please sign in again before adding a piece.");
+      }
       const { data: auth, error: authErr } = await supabase.auth.getUser();
+      console.log("[AURA wardrobe] current authenticated user", {
+        userId: auth?.user?.id ?? null,
+        email: auth?.user?.email ?? null,
+        authError: authErr?.message ?? null,
+      });
       if (authErr || !auth?.user?.id) {
         throw new Error("You must be signed in to add a piece.");
       }
       const uid = auth.user.id;
+      if (sessionData.session.user.id !== uid) {
+        throw new Error("Authentication mismatch. Please sign in again before adding a piece.");
+      }
 
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${uid}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
-        cacheControl: "3600", upsert: false,
+      const ext = fileExtension(file);
+      const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      console.log("[AURA wardrobe] uploading image", { bucket: "wardrobe", path, fileType: file.type, fileSize: file.size });
+      const { data: uploadData, error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
+        cacheControl: "3600", upsert: false, contentType: file.type || "image/jpeg",
       });
-      if (upErr) { console.error("wardrobe upload", upErr); throw upErr; }
+      console.log("[AURA wardrobe] upload result", { data: uploadData, error: upErr });
+      if (upErr) { console.error("[AURA wardrobe] upload error", upErr); throw upErr; }
       const { data: pub } = supabase.storage.from("wardrobe").getPublicUrl(path);
+      if (!pub.publicUrl) throw new Error("Upload succeeded, but no public image URL was returned.");
 
       const payload = {
         user_id: uid,
-        name: name || "Untitled piece",
-        brand: brand || null,
-        category,
-        color: color || null,
-        season: seasons.length ? seasons.join(", ") : null,
-        style: style || null,
-        occasion: occasion || null,
+        brand: brand.trim() || null,
+        category: categories.includes(category) ? category : "Tops",
+        color: color.trim() || null,
+        season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
+        style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
+        occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
         image_url: pub.publicUrl,
       };
+      console.log("[AURA wardrobe] insert payload", payload, { matchesAuthUid: payload.user_id === uid });
 
-      const { error: dbErr } = await supabase.from("wardrobe_items").insert(payload);
-      if (dbErr) { console.error("wardrobe insert", dbErr, payload); throw dbErr; }
+      const { data: inserted, error: dbErr } = await supabase.from("wardrobe_items").insert(payload).select(wardrobeColumns).single();
+      console.log("[AURA wardrobe] database insert result", { data: inserted, error: dbErr });
+      if (dbErr) { console.error("[AURA wardrobe] insert error", dbErr, payload); throw dbErr; }
       toast.success("Added to your closet");
       onClose();
     } catch (e: unknown) {
@@ -149,7 +228,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-6 pb-10 animate-fade-in">
-          <div className="rounded-2xl overflow-hidden bg-secondary/40 aspect-[4/5]">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            className="rounded-2xl overflow-hidden bg-secondary/40 aspect-[4/5]"
+          >
             {preview && <img src={preview} alt="" className="h-full w-full object-cover" />}
           </div>
 
@@ -171,7 +254,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 {seasonOptions.map(s => {
                   const on = seasons.includes(s);
                   return (
-                    <button key={s} onClick={() => toggleSeason(s)}
+                    <button key={s} onClick={() => toggle(seasons, setSeasons, s)}
                       className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
                       {s}
                     </button>
@@ -180,8 +263,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            <ChipGroup label="Style" options={styleOptions} value={style} onChange={setStyle} clearable />
-            <ChipGroup label="Occasion" options={occasionOptions} value={occasion} onChange={setOccasion} clearable />
+            <MultiChipGroup label="Style" options={styleOptions} values={styles} onToggle={(v: string) => toggle(styles, setStyles, v)} />
+            <MultiChipGroup label="Occasion" options={occasionOptions} values={occasions} onToggle={(v: string) => toggle(occasions, setOccasions, v)} />
           </div>
 
           {err && <p className="mt-4 text-xs text-red-700">{err}</p>}
@@ -225,6 +308,25 @@ function ChipGroup({ label, options, value, onChange, clearable }: { label: stri
             className={`rounded-full px-3 py-1.5 text-xs transition ${value === o ? "bg-foreground text-background" : "bg-secondary/60"}`}
           >{o}</button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function MultiChipGroup({ label, options, values, onToggle }: { label: string; options: string[]; values: string[]; onToggle: (v: string) => void }) {
+  return (
+    <div className="border-b border-border/60 pb-3">
+      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map(o => {
+          const on = values.includes(o);
+          return (
+            <button key={o}
+              onClick={() => onToggle(o)}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}
+            >{o}</button>
+          );
+        })}
       </div>
     </div>
   );

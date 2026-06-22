@@ -4,6 +4,8 @@ import type { Screen } from "../AuraApp";
 import { supabase, type WardrobeItem, type Outfit } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
+const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+
 export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
@@ -16,7 +18,7 @@ export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
   const load = async () => {
     if (!user) return;
     const [{ data: i }, { data: o }] = await Promise.all([
-      supabase.from("wardrobe_items").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("wardrobe_items").select(wardrobeColumns).eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("outfits").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setItems((i ?? []) as WardrobeItem[]);
@@ -87,7 +89,7 @@ export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
               const on = selected.includes(it.id);
               return (
                 <button key={it.id} onClick={() => toggle(it.id)} className={`relative rounded-xl overflow-hidden aspect-square transition ${on ? "ring-2 ring-foreground" : ""}`}>
-                  <img src={it.image_url} alt={it.name} className="h-full w-full object-cover" />
+                  <img src={it.image_url} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`} className="h-full w-full object-cover" />
                   {on && (
                     <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center">
                       <Check size={11} />
