@@ -13,6 +13,8 @@ export type Profile = {
   profile_image: string | null;
   bio: string | null;
   city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   season: string | null;
   setup_complete: boolean;
   created_at: string;
