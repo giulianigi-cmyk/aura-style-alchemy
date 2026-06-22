@@ -57,7 +57,7 @@ function suggestDetails(file: File) {
 }
 
 export function AddItem({ onClose }: { onClose: () => void }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -109,6 +109,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         userId: sessionData.session?.user?.id ?? null,
         sessionError: sessionErr?.message ?? null,
       });
+      if (authLoading || !user?.id) {
+        throw new Error("Authentication is still loading. Please try again in a moment.");
+      }
       if (sessionErr || !sessionData.session?.user?.id) {
         throw new Error("Your session is missing. Please sign in again before adding a piece.");
       }
@@ -122,7 +125,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         throw new Error("You must be signed in to add a piece.");
       }
       const uid = auth.user.id;
-      if (sessionData.session.user.id !== uid) {
+      if (sessionData.session.user.id !== uid || user.id !== uid) {
         throw new Error("Authentication mismatch. Please sign in again before adding a piece.");
       }
 
@@ -153,6 +156,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       console.log("[AURA wardrobe] database insert result", { data: inserted, error: dbErr });
       if (dbErr) { console.error("[AURA wardrobe] insert error", dbErr, payload); throw dbErr; }
       toast.success("Added to your closet");
+      window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to save";
@@ -177,12 +181,17 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
-      <input ref={fileRef} type="file" className="hidden"
+      <input ref={fileRef} type="file" accept="image/*"
+        className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
 
       {step === "capture" ? (
         <div className="flex-1 flex flex-col px-6 pb-10">
-          <div className="relative flex-1 rounded-[2rem] overflow-hidden bg-gradient-to-br from-[oklch(0.35_0.02_60)] to-[oklch(0.18_0.012_60)] mb-6">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            className="relative flex-1 rounded-[2rem] overflow-hidden bg-gradient-to-br from-[oklch(0.35_0.02_60)] to-[oklch(0.18_0.012_60)] mb-6"
+          >
             <div className="absolute inset-0 grain opacity-30" />
             <div className="absolute inset-8 border border-white/20 rounded-2xl" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white/60">
@@ -271,7 +280,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
           <button
             onClick={save}
-            disabled={saving}
+            disabled={saving || authLoading}
             className="mt-8 w-full h-14 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
