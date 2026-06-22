@@ -15,14 +15,12 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
 export type WardrobeItem = {
   id: string;
   user_id: string;
-  name: string;
   brand: string | null;
   category: string | null;
   color: string | null;
   season: string | null;
   style: string | null;
   occasion: string | null;
-  material: string | null;
   image_url: string;
   created_at: string;
 };

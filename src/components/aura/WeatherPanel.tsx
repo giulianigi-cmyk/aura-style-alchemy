@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
+const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+
 const dayLabel = (iso: string, i: number) => {
   if (i === 0) return "Today";
   const d = new Date(iso);
@@ -24,16 +26,19 @@ export function WeatherPanel() {
     if (!user) return;
     supabase
       .from("wardrobe_items")
-      .select("*")
+      .select(wardrobeColumns)
       .eq("user_id", user.id)
-      .then(({ data }) => setItems((data as WardrobeItem[]) ?? []));
+      .then(({ data, error }) => {
+        if (error) console.error("[AURA wardrobe] weather panel load error", error);
+        setItems((data as WardrobeItem[]) ?? []);
+      });
   }, [user]);
 
   const suggestion = data ? suggestOutfit(data.current) : null;
   const matched = suggestion
     ? items
         .filter((it) => {
-          const hay = `${it.category ?? ""} ${it.name ?? ""} ${it.style ?? ""} ${it.material ?? ""}`.toLowerCase();
+          const hay = `${it.category ?? ""} ${it.brand ?? ""} ${it.color ?? ""} ${it.style ?? ""} ${it.occasion ?? ""} ${it.season ?? ""}`.toLowerCase();
           return suggestion.categories.some((c) => hay.includes(c));
         })
         .slice(0, 6)
@@ -164,7 +169,7 @@ export function WeatherPanel() {
                     {matched.map((it) => (
                       <div key={it.id} className="rounded-xl overflow-hidden bg-secondary/40 aspect-square">
                         {it.image_url && (
-                          <img src={it.image_url} alt={it.name} className="h-full w-full object-cover" loading="lazy" />
+                          <img src={it.image_url} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`} className="h-full w-full object-cover" loading="lazy" />
                         )}
                       </div>
                     ))}

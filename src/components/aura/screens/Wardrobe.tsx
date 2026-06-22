@@ -5,6 +5,7 @@ import { supabase, type WardrobeItem } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
 const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
+const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
 
 export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
@@ -14,15 +15,19 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setItems([]); setLoading(false); return; }
+    setLoading(true);
     supabase.from("wardrobe_items")
-      .select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => { setItems((data ?? []) as WardrobeItem[]); setLoading(false); });
+      .select(wardrobeColumns).eq("user_id", user.id).order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) console.error("[AURA wardrobe] load error", error);
+        setItems((data ?? []) as WardrobeItem[]); setLoading(false);
+      });
   }, [user]);
 
   const filtered = items.filter(i =>
     (cat === "All" || i.category === cat) &&
-    (q === "" || [i.name, i.brand, i.color].some(v => v?.toLowerCase().includes(q.toLowerCase())))
+    (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season].some(v => v?.toLowerCase().includes(q.toLowerCase())))
   );
 
   return (
@@ -78,14 +83,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             <div key={it.id} className="group animate-fade-up" style={{ animationDelay: `${i * 0.04}s` }}>
               <div className="overflow-hidden rounded-2xl bg-secondary/40 shadow-soft">
                 <img
-                  src={it.image_url} alt={it.name}
+                  src={it.image_url} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`}
                   className={`w-full object-cover transition-transform duration-500 group-active:scale-95 ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"}`}
                   loading="lazy"
                 />
               </div>
               <div className="px-1 mt-2">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.brand ?? it.category}</p>
-                <p className="font-serif text-base leading-tight">{it.name}</p>
+                <p className="font-serif text-base leading-tight">{[it.color, it.category].filter(Boolean).join(" ") || "Wardrobe piece"}</p>
               </div>
             </div>
           ))}
