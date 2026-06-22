@@ -5,6 +5,7 @@ import type { Screen } from "../AuraApp";
 import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
+import { WeatherPanel } from "../WeatherPanel";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -280,6 +281,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               ))}
             </div>
           </section>
+
+          <WeatherPanel />
 
           {/* Menu */}
           <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-card border border-border/60 overflow-hidden">
