@@ -268,18 +268,35 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         throw new Error("Wardrobe item user_id does not match the authenticated user.");
       }
 
-      const insertResult = await supabase.from("wardrobe_items").insert(payload);
+      const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/wardrobe_items`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(payload),
+      });
+      let insertBody: unknown = null;
+      try { insertBody = await insertResponse.clone().json(); } catch { insertBody = await insertResponse.text(); }
+      const insertResult = {
+        status: insertResponse.status,
+        ok: insertResponse.ok,
+        body: insertBody,
+      };
       console.log("[AURA wardrobe] database insert result", insertResult);
-      if (insertResult.error) {
+      if (!insertResponse.ok) {
+        const insertError = insertBody || { message: `Wardrobe insert failed with status ${insertResponse.status}` };
         console.error("[AURA wardrobe] insert error", {
-          error: insertResult.error,
-          postgresMessage: insertResult.error.message,
-          details: insertResult.error.details,
-          hint: insertResult.error.hint,
-          code: insertResult.error.code,
+          error: insertError,
+          postgresMessage: typeof insertError === "object" && insertError && "message" in insertError ? insertError.message : insertError,
+          details: typeof insertError === "object" && insertError && "details" in insertError ? insertError.details : null,
+          hint: typeof insertError === "object" && insertError && "hint" in insertError ? insertError.hint : null,
+          code: typeof insertError === "object" && insertError && "code" in insertError ? insertError.code : null,
           payload,
         });
-        throw insertResult.error;
+        throw insertError;
       }
 
       const readBackResult = await supabase
