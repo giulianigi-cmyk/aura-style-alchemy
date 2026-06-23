@@ -39,7 +39,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     supabase.from("wardrobe_items")
       .select(wardrobeColumns).eq("user_id", user.id).order("created_at", { ascending: false })
       .then(({ data, error }) => {
-        if (error) console.error("[AURA wardrobe] load error", error);
+        if (error) {
+          console.error("[AURA wardrobe] load error", error);
+          setLoading(false);
+          return;
+        }
         setItems((data ?? []) as WardrobeItem[]); setLoading(false);
       });
   }, [user]);
