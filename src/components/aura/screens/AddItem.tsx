@@ -186,31 +186,51 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (!file) return;
     setSaving(true); setErr(null);
     try {
+      console.groupCollapsed("[AURA wardrobe] save audit");
+      console.log("[AURA wardrobe] auth context snapshot", {
+        authLoading,
+        contextUserId: user?.id ?? null,
+      });
+
       // Always resolve user_id from Supabase auth (auth.uid()), never trust form/state alone.
       const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      const jwtAudit = readJwtSubject(sessionData.session?.access_token);
       console.log("[AURA wardrobe] current session", {
         hasSession: Boolean(sessionData.session),
         userId: sessionData.session?.user?.id ?? null,
+        authUidFromJwtSub: jwtAudit?.sub ?? null,
+        jwtRole: jwtAudit?.role ?? null,
+        jwtExpiresAt: jwtAudit?.exp ?? null,
         sessionError: sessionErr?.message ?? null,
       });
-      if (authLoading || !user?.id) {
-        throw new Error("Authentication is still loading. Please try again in a moment.");
-      }
       if (sessionErr || !sessionData.session?.user?.id) {
         throw new Error("Your session is missing. Please sign in again before adding a piece.");
       }
+      if (!sessionData.session.access_token) {
+        throw new Error("Your session token is missing. Please sign in again before adding a piece.");
+      }
+
       const { data: auth, error: authErr } = await supabase.auth.getUser();
       console.log("[AURA wardrobe] current authenticated user", {
         userId: auth?.user?.id ?? null,
+        authUidFromJwtSub: jwtAudit?.sub ?? null,
+        idsMatchSession: auth?.user?.id === sessionData.session.user.id,
+        idsMatchAuthUid: auth?.user?.id === jwtAudit?.sub,
+        idsMatchAuthContext: user?.id ? auth?.user?.id === user.id : "no context user yet",
         authError: authErr?.message ?? null,
       });
       if (authErr || !auth?.user?.id) {
         throw new Error("You must be signed in to add a piece.");
       }
       const uid = auth.user.id;
-      if (sessionData.session.user.id !== uid || user.id !== uid) {
+      if (!uuidPattern.test(uid)) {
+        throw new Error(`Authenticated user id is not a valid UUID: ${uid}`);
+      }
+      if (sessionData.session.user.id !== uid || (jwtAudit?.sub && jwtAudit.sub !== uid)) {
         throw new Error("Authentication mismatch. Please sign in again before adding a piece.");
       }
+
+      await auditWardrobeSchemaAndRls(sessionData.session.access_token, uid);
 
       const ext = fileExtension(file);
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -222,30 +242,76 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (upErr) { console.error("[AURA wardrobe] upload error", upErr); throw upErr; }
       const { data: pub } = supabase.storage.from("wardrobe").getPublicUrl(path);
       if (!pub.publicUrl) throw new Error("Upload succeeded, but no public image URL was returned.");
+      console.log("[AURA wardrobe] public image URL", { imagePath: uploadData?.path ?? path, publicUrl: pub.publicUrl });
 
       const payload = {
+        id: makeUuid(),
         user_id: uid,
-        brand: brand.trim() || name.trim() || null,
+        image_url: pub.publicUrl,
         category: categories.includes(category) ? category : "Tops",
+        brand: brand.trim() || name.trim() || null,
         color: color.trim() || null,
         season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
         style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
-        image_url: pub.publicUrl,
       };
-      console.log("[AURA wardrobe] insert payload", payload, { matchesAuthUid: payload.user_id === uid });
+      console.log("[AURA wardrobe] insert payload", payload, {
+        idIsValidUuid: uuidPattern.test(payload.id),
+        userIdIsValidUuid: uuidPattern.test(payload.user_id),
+        userIdMatchesAuthUser: payload.user_id === uid,
+        userIdMatchesAuthUid: payload.user_id === jwtAudit?.sub,
+      });
+      if (!uuidPattern.test(payload.id)) throw new Error(`Generated wardrobe item id is not a valid UUID: ${payload.id}`);
+      if (!uuidPattern.test(payload.user_id)) throw new Error(`Wardrobe item user_id is not a valid UUID: ${payload.user_id}`);
+      if (payload.user_id !== uid || (jwtAudit?.sub && payload.user_id !== jwtAudit.sub)) {
+        throw new Error("Wardrobe item user_id does not match the authenticated user.");
+      }
 
-      const { data: inserted, error: dbErr } = await supabase.from("wardrobe_items").insert(payload).select(wardrobeColumns).single();
-      console.log("[AURA wardrobe] database insert result", { data: inserted, error: dbErr });
-      if (dbErr) { console.error("[AURA wardrobe] insert error", dbErr, payload); throw dbErr; }
+      const insertResult = await supabase.from("wardrobe_items").insert(payload);
+      console.log("[AURA wardrobe] database insert result", insertResult);
+      if (insertResult.error) {
+        console.error("[AURA wardrobe] insert error", {
+          error: insertResult.error,
+          postgresMessage: insertResult.error.message,
+          details: insertResult.error.details,
+          hint: insertResult.error.hint,
+          code: insertResult.error.code,
+          payload,
+        });
+        throw insertResult.error;
+      }
+
+      const readBackResult = await supabase
+        .from("wardrobe_items")
+        .select(wardrobeColumns)
+        .eq("id", payload.id)
+        .eq("user_id", uid)
+        .single();
+      console.log("[AURA wardrobe] read-after-insert result", readBackResult);
+      if (readBackResult.error) {
+        console.error("[AURA wardrobe] insert succeeded but SELECT/readback failed", {
+          error: readBackResult.error,
+          postgresMessage: readBackResult.error.message,
+          details: readBackResult.error.details,
+          hint: readBackResult.error.hint,
+          code: readBackResult.error.code,
+        });
+      }
+
+      const inserted = readBackResult.data ?? { ...payload, created_at: new Date().toISOString() };
+      try {
+        sessionStorage.setItem("aura:last-created-wardrobe-item", JSON.stringify(inserted));
+      } catch { /* non-critical */ }
       toast.success("Added to your closet");
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to save";
+      const msg = describeSupabaseError(e);
+      console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
     } finally {
+      console.groupEnd();
       setSaving(false);
     }
   };
