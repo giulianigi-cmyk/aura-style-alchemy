@@ -23,6 +23,36 @@ const categoryHints: Array<[string, string[]]> = [
   ["Tops", ["top", "shirt", "tee", "t-shirt", "blouse", "knit", "sweater", "cardigan"]],
 ];
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function readJwtSubject(accessToken?: string) {
+  if (!accessToken) return null;
+  try {
+    const [, payload] = accessToken.split(".");
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as {
+      sub?: string;
+      role?: string;
+      exp?: number;
+    };
+    return { sub: decoded.sub ?? null, role: decoded.role ?? null, exp: decoded.exp ?? null };
+  } catch (error) {
+    console.warn("[AURA wardrobe] could not decode auth uid from JWT", error);
+    return null;
+  }
+}
+
+function describeSupabaseError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return error instanceof Error ? error.message : "Failed to save wardrobe item.";
+  }
+
+  const e = error as { message?: string; details?: string; hint?: string; code?: string; name?: string };
+  const parts = [e.message, e.details, e.hint, e.code ? `Code: ${e.code}` : null].filter(Boolean);
+  return parts.join(" · ") || e.name || "Failed to save wardrobe item.";
+}
+
 function fileExtension(file: File) {
   const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (fromName && imageExtensions.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
