@@ -109,6 +109,7 @@ function fileExtension(file: File) {
 function makeUuid() {
   const browserCrypto = globalThis.crypto;
   if (browserCrypto?.randomUUID) return browserCrypto.randomUUID();
+  if (!browserCrypto?.getRandomValues) throw new Error("Secure UUID generation is unavailable in this browser.");
   const bytes = new Uint8Array(16);
   browserCrypto.getRandomValues(bytes);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
