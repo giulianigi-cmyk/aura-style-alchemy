@@ -83,30 +83,17 @@ async function auditWardrobeSchemaAndRls(accessToken: string, uid: string) {
     console.error("[AURA wardrobe] schema audit request failed", error);
   }
 
-  try {
-    const rlsProbePayload = {
-      user_id: "00000000-0000-4000-8000-000000000000",
-      image_url: "https://aura.invalid/rls-probe.jpg",
-    };
-    const rlsResponse = await fetch(`${SUPABASE_URL}/rest/v1/wardrobe_items`, {
-      method: "POST",
-      headers: { ...headers, Prefer: "return=minimal" },
-      body: JSON.stringify(rlsProbePayload),
-    });
-    let rlsBody: unknown = null;
-    try { rlsBody = await rlsResponse.clone().json(); } catch { rlsBody = await rlsResponse.text(); }
-    console.log("[AURA wardrobe] RLS insert policy audit", {
-      probe: "deliberately mismatched user_id; should be rejected when INSERT policy is auth.uid() = user_id",
-      authenticatedUid: uid,
-      probeUserId: rlsProbePayload.user_id,
-      expectedStatus: "401/403 with code 42501",
-      status: rlsResponse.status,
-      ok: rlsResponse.ok,
-      result: rlsBody,
-    });
-  } catch (error) {
-    console.error("[AURA wardrobe] RLS policy audit request failed", error);
-  }
+  console.log("[AURA wardrobe] RLS policy audit", {
+    table: "wardrobe_items",
+    requiredPolicies: {
+      SELECT: "authenticated users can select rows where auth.uid() = user_id",
+      INSERT: "authenticated users can insert rows with check auth.uid() = user_id",
+      UPDATE: "authenticated users can update rows where auth.uid() = user_id with check auth.uid() = user_id",
+      DELETE: "authenticated users can delete rows where auth.uid() = user_id",
+    },
+    runtimeCheck: "The actual save request below is sent with an explicit Authorization bearer token; if INSERT still fails, the logged Postgres 42501 response is the policy failure point.",
+    authUid: uid,
+  });
 }
 
 function fileExtension(file: File) {
