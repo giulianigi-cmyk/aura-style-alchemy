@@ -2,7 +2,7 @@ import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload } from 
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
 const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
@@ -10,6 +10,7 @@ const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+const wardrobeSchemaAuditColumns = "id,user_id,image_url";
 
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 const colorWords = ["black", "white", "cream", "ivory", "beige", "brown", "camel", "grey", "gray", "navy", "blue", "denim", "red", "pink", "green", "olive", "yellow", "gold", "silver", "purple"];
@@ -51,6 +52,61 @@ function describeSupabaseError(error: unknown) {
   const e = error as { message?: string; details?: string; hint?: string; code?: string; name?: string };
   const parts = [e.message, e.details, e.hint, e.code ? `Code: ${e.code}` : null].filter(Boolean);
   return parts.join(" · ") || e.name || "Failed to save wardrobe item.";
+}
+
+async function auditWardrobeSchemaAndRls(accessToken: string, uid: string) {
+  const headers = {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const schemaResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/wardrobe_items?select=${encodeURIComponent(wardrobeSchemaAuditColumns)}&limit=0`,
+      { headers },
+    );
+    let schemaBody: unknown = null;
+    try { schemaBody = await schemaResponse.clone().json(); } catch { schemaBody = await schemaResponse.text(); }
+    console.log("[AURA wardrobe] schema audit", {
+      table: "wardrobe_items",
+      expectedColumns: {
+        id: "uuid",
+        user_id: "uuid (must match auth.uid())",
+        image_url: "text",
+      },
+      status: schemaResponse.status,
+      ok: schemaResponse.ok,
+      result: schemaBody,
+    });
+  } catch (error) {
+    console.error("[AURA wardrobe] schema audit request failed", error);
+  }
+
+  try {
+    const rlsProbePayload = {
+      user_id: "00000000-0000-4000-8000-000000000000",
+      image_url: "https://aura.invalid/rls-probe.jpg",
+    };
+    const rlsResponse = await fetch(`${SUPABASE_URL}/rest/v1/wardrobe_items`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify(rlsProbePayload),
+    });
+    let rlsBody: unknown = null;
+    try { rlsBody = await rlsResponse.clone().json(); } catch { rlsBody = await rlsResponse.text(); }
+    console.log("[AURA wardrobe] RLS insert policy audit", {
+      probe: "deliberately mismatched user_id; should be rejected when INSERT policy is auth.uid() = user_id",
+      authenticatedUid: uid,
+      probeUserId: rlsProbePayload.user_id,
+      expectedStatus: "401/403 with code 42501",
+      status: rlsResponse.status,
+      ok: rlsResponse.ok,
+      result: rlsBody,
+    });
+  } catch (error) {
+    console.error("[AURA wardrobe] RLS policy audit request failed", error);
+  }
 }
 
 function fileExtension(file: File) {
