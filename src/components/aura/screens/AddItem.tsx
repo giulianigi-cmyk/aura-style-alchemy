@@ -83,6 +83,23 @@ async function auditWardrobeSchemaAndRls(accessToken: string, uid: string) {
     console.error("[AURA wardrobe] schema audit request failed", error);
   }
 
+    try {
+      const uuidTypeResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/wardrobe_items?select=id,user_id&user_id=eq.not-a-uuid&limit=0`,
+        { headers },
+      );
+      let uuidTypeBody: unknown = null;
+      try { uuidTypeBody = await uuidTypeResponse.clone().json(); } catch { uuidTypeBody = await uuidTypeResponse.text(); }
+      console.log("[AURA wardrobe] UUID datatype audit", {
+        check: "Filtering user_id with an invalid UUID should return Postgres code 22P02 when user_id is uuid, confirming it matches auth.uid() type.",
+        status: uuidTypeResponse.status,
+        ok: uuidTypeResponse.ok,
+        result: uuidTypeBody,
+      });
+    } catch (error) {
+      console.error("[AURA wardrobe] UUID datatype audit request failed", error);
+    }
+
   console.log("[AURA wardrobe] RLS policy audit", {
     table: "wardrobe_items",
     requiredPolicies: {
