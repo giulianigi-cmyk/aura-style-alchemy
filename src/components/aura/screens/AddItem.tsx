@@ -2,7 +2,7 @@ import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload } from 
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
 const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
@@ -10,6 +10,7 @@ const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+const wardrobeSchemaAuditColumns = "id,user_id,image_url";
 
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 const colorWords = ["black", "white", "cream", "ivory", "beige", "brown", "camel", "grey", "gray", "navy", "blue", "denim", "red", "pink", "green", "olive", "yellow", "gold", "silver", "purple"];
@@ -23,6 +24,95 @@ const categoryHints: Array<[string, string[]]> = [
   ["Tops", ["top", "shirt", "tee", "t-shirt", "blouse", "knit", "sweater", "cardigan"]],
 ];
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function readJwtSubject(accessToken?: string) {
+  if (!accessToken) return null;
+  try {
+    const [, payload] = accessToken.split(".");
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as {
+      sub?: string;
+      role?: string;
+      exp?: number;
+    };
+    return { sub: decoded.sub ?? null, role: decoded.role ?? null, exp: decoded.exp ?? null };
+  } catch (error) {
+    console.warn("[AURA wardrobe] could not decode auth uid from JWT", error);
+    return null;
+  }
+}
+
+function describeSupabaseError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return error instanceof Error ? error.message : "Failed to save wardrobe item.";
+  }
+
+  const e = error as { message?: string; details?: string; hint?: string; code?: string; name?: string };
+  const parts = [e.message, e.details, e.hint, e.code ? `Code: ${e.code}` : null].filter(Boolean);
+  return parts.join(" · ") || e.name || "Failed to save wardrobe item.";
+}
+
+async function auditWardrobeSchemaAndRls(accessToken: string, uid: string) {
+  const headers = {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const schemaResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/wardrobe_items?select=${encodeURIComponent(wardrobeSchemaAuditColumns)}&limit=0`,
+      { headers },
+    );
+    let schemaBody: unknown = null;
+    try { schemaBody = await schemaResponse.clone().json(); } catch { schemaBody = await schemaResponse.text(); }
+    console.log("[AURA wardrobe] schema audit", {
+      table: "wardrobe_items",
+      expectedColumns: {
+        id: "uuid",
+        user_id: "uuid (must match auth.uid())",
+        image_url: "text",
+      },
+      status: schemaResponse.status,
+      ok: schemaResponse.ok,
+      result: schemaBody,
+    });
+  } catch (error) {
+    console.error("[AURA wardrobe] schema audit request failed", error);
+  }
+
+    try {
+      const uuidTypeResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/wardrobe_items?select=id,user_id&user_id=eq.not-a-uuid&limit=0`,
+        { headers },
+      );
+      let uuidTypeBody: unknown = null;
+      try { uuidTypeBody = await uuidTypeResponse.clone().json(); } catch { uuidTypeBody = await uuidTypeResponse.text(); }
+      console.log("[AURA wardrobe] UUID datatype audit", {
+        check: "Filtering user_id with an invalid UUID should return Postgres code 22P02 when user_id is uuid, confirming it matches auth.uid() type.",
+        status: uuidTypeResponse.status,
+        ok: uuidTypeResponse.ok,
+        result: uuidTypeBody,
+      });
+    } catch (error) {
+      console.error("[AURA wardrobe] UUID datatype audit request failed", error);
+    }
+
+  console.log("[AURA wardrobe] RLS policy audit", {
+    table: "wardrobe_items",
+    requiredPolicies: {
+      SELECT: "authenticated users can select rows where auth.uid() = user_id",
+      INSERT: "authenticated users can insert rows with check auth.uid() = user_id",
+      UPDATE: "authenticated users can update rows where auth.uid() = user_id with check auth.uid() = user_id",
+      DELETE: "authenticated users can delete rows where auth.uid() = user_id",
+    },
+    runtimeCheck: "The actual save request below is sent with an explicit Authorization bearer token; if INSERT still fails, the logged Postgres 42501 response is the policy failure point.",
+    authUid: uid,
+  });
+}
+
 function fileExtension(file: File) {
   const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (fromName && imageExtensions.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
@@ -31,6 +121,18 @@ function fileExtension(file: File) {
   if (file.type === "image/heic") return "heic";
   if (file.type === "image/heif") return "heif";
   return "jpg";
+}
+
+function makeUuid() {
+  const browserCrypto = globalThis.crypto;
+  if (browserCrypto?.randomUUID) return browserCrypto.randomUUID();
+  if (!browserCrypto?.getRandomValues) throw new Error("Secure UUID generation is unavailable in this browser.");
+  const bytes = new Uint8Array(16);
+  browserCrypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
 
 function isImageFile(file: File) {
@@ -102,31 +204,51 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (!file) return;
     setSaving(true); setErr(null);
     try {
+      console.groupCollapsed("[AURA wardrobe] save audit");
+      console.log("[AURA wardrobe] auth context snapshot", {
+        authLoading,
+        contextUserId: user?.id ?? null,
+      });
+
       // Always resolve user_id from Supabase auth (auth.uid()), never trust form/state alone.
       const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      const jwtAudit = readJwtSubject(sessionData.session?.access_token);
       console.log("[AURA wardrobe] current session", {
         hasSession: Boolean(sessionData.session),
         userId: sessionData.session?.user?.id ?? null,
+        authUidFromJwtSub: jwtAudit?.sub ?? null,
+        jwtRole: jwtAudit?.role ?? null,
+        jwtExpiresAt: jwtAudit?.exp ?? null,
         sessionError: sessionErr?.message ?? null,
       });
-      if (authLoading || !user?.id) {
-        throw new Error("Authentication is still loading. Please try again in a moment.");
-      }
       if (sessionErr || !sessionData.session?.user?.id) {
         throw new Error("Your session is missing. Please sign in again before adding a piece.");
       }
+      if (!sessionData.session.access_token) {
+        throw new Error("Your session token is missing. Please sign in again before adding a piece.");
+      }
+
       const { data: auth, error: authErr } = await supabase.auth.getUser();
       console.log("[AURA wardrobe] current authenticated user", {
         userId: auth?.user?.id ?? null,
+        authUidFromJwtSub: jwtAudit?.sub ?? null,
+        idsMatchSession: auth?.user?.id === sessionData.session.user.id,
+        idsMatchAuthUid: auth?.user?.id === jwtAudit?.sub,
+        idsMatchAuthContext: user?.id ? auth?.user?.id === user.id : "no context user yet",
         authError: authErr?.message ?? null,
       });
       if (authErr || !auth?.user?.id) {
         throw new Error("You must be signed in to add a piece.");
       }
       const uid = auth.user.id;
-      if (sessionData.session.user.id !== uid || user.id !== uid) {
+      if (!uuidPattern.test(uid)) {
+        throw new Error(`Authenticated user id is not a valid UUID: ${uid}`);
+      }
+      if (sessionData.session.user.id !== uid || (jwtAudit?.sub && jwtAudit.sub !== uid)) {
         throw new Error("Authentication mismatch. Please sign in again before adding a piece.");
       }
+
+      await auditWardrobeSchemaAndRls(sessionData.session.access_token, uid);
 
       const ext = fileExtension(file);
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -138,30 +260,93 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (upErr) { console.error("[AURA wardrobe] upload error", upErr); throw upErr; }
       const { data: pub } = supabase.storage.from("wardrobe").getPublicUrl(path);
       if (!pub.publicUrl) throw new Error("Upload succeeded, but no public image URL was returned.");
+      console.log("[AURA wardrobe] public image URL", { imagePath: uploadData?.path ?? path, publicUrl: pub.publicUrl });
 
       const payload = {
+        id: makeUuid(),
         user_id: uid,
-        brand: brand.trim() || name.trim() || null,
+        image_url: pub.publicUrl,
         category: categories.includes(category) ? category : "Tops",
+        brand: brand.trim() || name.trim() || null,
         color: color.trim() || null,
         season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
         style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
-        image_url: pub.publicUrl,
       };
-      console.log("[AURA wardrobe] insert payload", payload, { matchesAuthUid: payload.user_id === uid });
+      console.log("[AURA wardrobe] insert payload", payload, {
+        idIsValidUuid: uuidPattern.test(payload.id),
+        userIdIsValidUuid: uuidPattern.test(payload.user_id),
+        userIdMatchesAuthUser: payload.user_id === uid,
+        userIdMatchesAuthUid: payload.user_id === jwtAudit?.sub,
+      });
+      if (!uuidPattern.test(payload.id)) throw new Error(`Generated wardrobe item id is not a valid UUID: ${payload.id}`);
+      if (!uuidPattern.test(payload.user_id)) throw new Error(`Wardrobe item user_id is not a valid UUID: ${payload.user_id}`);
+      if (payload.user_id !== uid || (jwtAudit?.sub && payload.user_id !== jwtAudit.sub)) {
+        throw new Error("Wardrobe item user_id does not match the authenticated user.");
+      }
 
-      const { data: inserted, error: dbErr } = await supabase.from("wardrobe_items").insert(payload).select(wardrobeColumns).single();
-      console.log("[AURA wardrobe] database insert result", { data: inserted, error: dbErr });
-      if (dbErr) { console.error("[AURA wardrobe] insert error", dbErr, payload); throw dbErr; }
+      const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/wardrobe_items`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(payload),
+      });
+      let insertBody: unknown = null;
+      try { insertBody = await insertResponse.clone().json(); } catch { insertBody = await insertResponse.text(); }
+      const insertResult = {
+        status: insertResponse.status,
+        ok: insertResponse.ok,
+        body: insertBody,
+      };
+      console.log("[AURA wardrobe] database insert result", insertResult);
+      if (!insertResponse.ok) {
+        const insertError = insertBody || { message: `Wardrobe insert failed with status ${insertResponse.status}` };
+        console.error("[AURA wardrobe] insert error", {
+          error: insertError,
+          postgresMessage: typeof insertError === "object" && insertError && "message" in insertError ? insertError.message : insertError,
+          details: typeof insertError === "object" && insertError && "details" in insertError ? insertError.details : null,
+          hint: typeof insertError === "object" && insertError && "hint" in insertError ? insertError.hint : null,
+          code: typeof insertError === "object" && insertError && "code" in insertError ? insertError.code : null,
+          payload,
+        });
+        throw insertError;
+      }
+
+      const readBackResult = await supabase
+        .from("wardrobe_items")
+        .select(wardrobeColumns)
+        .eq("id", payload.id)
+        .eq("user_id", uid)
+        .single();
+      console.log("[AURA wardrobe] read-after-insert result", readBackResult);
+      if (readBackResult.error) {
+        console.error("[AURA wardrobe] insert succeeded but SELECT/readback failed", {
+          error: readBackResult.error,
+          postgresMessage: readBackResult.error.message,
+          details: readBackResult.error.details,
+          hint: readBackResult.error.hint,
+          code: readBackResult.error.code,
+        });
+      }
+
+      const inserted = readBackResult.data ?? { ...payload, created_at: new Date().toISOString() };
+      try {
+        sessionStorage.setItem("aura:last-created-wardrobe-item", JSON.stringify(inserted));
+      } catch { /* non-critical */ }
       toast.success("Added to your closet");
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to save";
+      const msg = describeSupabaseError(e);
+      console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
     } finally {
+      console.groupEnd();
       setSaving(false);
     }
   };

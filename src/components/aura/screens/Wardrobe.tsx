@@ -15,12 +15,35 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [q, setQ] = useState("");
 
   useEffect(() => {
+    const addCreatedItem = (item: WardrobeItem) => {
+      if (!item?.id || (user?.id && item.user_id !== user.id)) return;
+      setItems((current) => current.some((existing) => existing.id === item.id) ? current : [item, ...current]);
+    };
+
+    try {
+      const cached = sessionStorage.getItem("aura:last-created-wardrobe-item");
+      if (cached) {
+        addCreatedItem(JSON.parse(cached) as WardrobeItem);
+        sessionStorage.removeItem("aura:last-created-wardrobe-item");
+      }
+    } catch { /* non-critical */ }
+
+    const onCreated = (event: Event) => addCreatedItem((event as CustomEvent<WardrobeItem>).detail);
+    window.addEventListener("aura:wardrobe-item-created", onCreated);
+    return () => window.removeEventListener("aura:wardrobe-item-created", onCreated);
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!user) { setItems([]); setLoading(false); return; }
     setLoading(true);
     supabase.from("wardrobe_items")
       .select(wardrobeColumns).eq("user_id", user.id).order("created_at", { ascending: false })
       .then(({ data, error }) => {
-        if (error) console.error("[AURA wardrobe] load error", error);
+        if (error) {
+          console.error("[AURA wardrobe] load error", error);
+          setLoading(false);
+          return;
+        }
         setItems((data ?? []) as WardrobeItem[]); setLoading(false);
       });
   }, [user]);
