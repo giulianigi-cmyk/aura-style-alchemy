@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      outfits: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          id: string
+          item_ids: string[]
+          name: string
+          user_id: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          item_ids?: string[]
+          name?: string
+          user_id?: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          item_ids?: string[]
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          birth_date: string | null
+          city: string | null
+          created_at: string
+          favorite_brands: string[] | null
+          full_name: string | null
+          gender: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          profile_image: string | null
+          season: string | null
+          setup_complete: boolean
+          style_preferences: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          birth_date?: string | null
+          city?: string | null
+          created_at?: string
+          favorite_brands?: string[] | null
+          full_name?: string | null
+          gender?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          profile_image?: string | null
+          season?: string | null
+          setup_complete?: boolean
+          style_preferences?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          birth_date?: string | null
+          city?: string | null
+          created_at?: string
+          favorite_brands?: string[] | null
+          full_name?: string | null
+          gender?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          profile_image?: string | null
+          season?: string | null
+          setup_complete?: boolean
+          style_preferences?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       wardrobe_items: {
         Row: {
           brand: string | null
