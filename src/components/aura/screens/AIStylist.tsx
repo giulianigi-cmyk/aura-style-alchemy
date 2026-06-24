@@ -1,7 +1,8 @@
 import { Check, Loader2, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Screen } from "../AuraApp";
-import { supabase, type WardrobeItem, type Outfit } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
+import type { Outfit, WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 
 const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
