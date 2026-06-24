@@ -1,7 +1,8 @@
 import { Plus, Filter, Search, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Screen } from "../AuraApp";
-import { supabase, type WardrobeItem } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
+import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 
 const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];

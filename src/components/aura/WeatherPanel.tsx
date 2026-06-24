@@ -4,7 +4,7 @@ import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, suggestOutfit } from "@/lib/weather";
 import { supabase } from "@/integrations/supabase/client";
-import type { WardrobeItem } from "@/integrations/supabase/client";
+import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 
 const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";

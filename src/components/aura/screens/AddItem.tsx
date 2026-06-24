@@ -222,8 +222,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (!pub.publicUrl) throw new Error("Upload succeeded, but no public image URL was returned.");
       console.log("[AURA wardrobe] public image URL", { imagePath: uploadData?.path ?? path, publicUrl: pub.publicUrl });
 
+      const itemId = makeUuid();
       const payload: TablesInsert<"wardrobe_items"> = {
-        id: makeUuid(),
+        id: itemId,
         user_id: uid,
         image_url: pub.publicUrl,
         category: categories.includes(category) ? category : "Tops",
@@ -234,13 +235,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
       };
       console.log("[AURA wardrobe] insert payload", payload, {
-        idIsValidUuid: uuidPattern.test(payload.id),
-        userIdIsValidUuid: uuidPattern.test(payload.user_id),
+        idIsValidUuid: uuidPattern.test(itemId),
+        userIdIsValidUuid: uuidPattern.test(uid),
         userIdMatchesAuthUser: payload.user_id === uid,
         userIdMatchesAuthUid: payload.user_id === jwtAudit?.sub,
       });
-      if (!uuidPattern.test(payload.id)) throw new Error(`Generated wardrobe item id is not a valid UUID: ${payload.id}`);
-      if (!uuidPattern.test(payload.user_id)) throw new Error(`Wardrobe item user_id is not a valid UUID: ${payload.user_id}`);
+      if (!uuidPattern.test(itemId)) throw new Error(`Generated wardrobe item id is not a valid UUID: ${itemId}`);
+      if (!uuidPattern.test(uid)) throw new Error(`Wardrobe item user_id is not a valid UUID: ${uid}`);
       if (payload.user_id !== uid || (jwtAudit?.sub && payload.user_id !== jwtAudit.sub)) {
         throw new Error("Wardrobe item user_id does not match the authenticated user.");
       }
