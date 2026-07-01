@@ -2,124 +2,43 @@ import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload } from 
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
+import { ColorPicker } from "@/components/aura/ColorPicker";
+import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 
 const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
-const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
-
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
-const colorWords = ["black", "white", "cream", "ivory", "beige", "brown", "camel", "grey", "gray", "navy", "blue", "denim", "red", "pink", "green", "olive", "yellow", "gold", "silver", "purple"];
-const categoryHints: Array<[string, string[]]> = [
-  ["Outerwear", ["coat", "jacket", "blazer", "trench", "parka", "puffer"]],
-  ["Bottoms", ["jean", "trouser", "pant", "skirt", "short"]],
-  ["Dresses", ["dress", "gown", "slip"]],
-  ["Shoes", ["shoe", "boot", "heel", "sneaker", "loafer", "sandal"]],
-  ["Bags", ["bag", "tote", "clutch", "purse"]],
-  ["Accessories", ["belt", "scarf", "hat", "jewel", "sunglasses", "watch"]],
-  ["Tops", ["top", "shirt", "tee", "t-shirt", "blouse", "knit", "sweater", "cardigan"]],
-];
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function readJwtSubject(accessToken?: string) {
-  if (!accessToken) return null;
-  try {
-    const [, payload] = accessToken.split(".");
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as {
-      sub?: string;
-      role?: string;
-      exp?: number;
-    };
-    return { sub: decoded.sub ?? null, role: decoded.role ?? null, exp: decoded.exp ?? null };
-  } catch (error) {
-    console.warn("[AURA wardrobe] could not decode auth uid from JWT", error);
-    return null;
-  }
-}
-
-function describeSupabaseError(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return error instanceof Error ? error.message : "Failed to save wardrobe item.";
-  }
-
-  const e = error as { message?: string; details?: string; hint?: string; code?: string; name?: string };
-  const parts = [e.message, e.details, e.hint, e.code ? `Code: ${e.code}` : null].filter(Boolean);
-  return parts.join(" · ") || e.name || "Failed to save wardrobe item.";
-}
-
-function auditWardrobeSchemaAndRls(uid: string) {
-  console.log("[AURA wardrobe] RLS policy audit", {
-    table: "wardrobe_items",
-    verifiedSchema: {
-      id: "uuid primary key",
-      user_id: "uuid not null default auth.uid()",
-      image_url: "text not null",
-    },
-    requiredPolicies: {
-      SELECT: "authenticated users can select rows where auth.uid() = user_id",
-      INSERT: "authenticated users can insert rows with check auth.uid() = user_id",
-      UPDATE: "authenticated users can update rows where auth.uid() = user_id with check auth.uid() = user_id",
-      DELETE: "authenticated users can delete rows where auth.uid() = user_id",
-    },
-    runtimeCheck: "The save request below is sent through the authenticated client. If INSERT fails, the logged Postgres 42501 response is the policy failure point.",
-    authUid: uid,
-  });
-}
 
 function fileExtension(file: File) {
   const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (fromName && imageExtensions.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  if (file.type === "image/heic") return "heic";
-  if (file.type === "image/heif") return "heif";
-  return "jpg";
-}
-
-function makeUuid() {
-  const browserCrypto = globalThis.crypto;
-  if (browserCrypto?.randomUUID) return browserCrypto.randomUUID();
-  if (!browserCrypto?.getRandomValues) throw new Error("Secure UUID generation is unavailable in this browser.");
-  const bytes = new Uint8Array(16);
-  browserCrypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0"));
-  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+  const map: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif" };
+  return map[file.type] ?? "jpg";
 }
 
 function isImageFile(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  return file.type.startsWith("image/") || imageExtensions.has(ext) || file.type === "";
+  return file.type.startsWith("image/") || imageExtensions.has(ext);
 }
 
-function suggestDetails(file: File) {
-  const hay = file.name.toLowerCase().replace(/[_-]/g, " ");
-  const category = categoryHints.find(([, hints]) => hints.some((h) => hay.includes(h)))?.[0] ?? "Tops";
-  const color = colorWords.find((c) => hay.includes(c)) ?? "";
-  const styles = [
-    ...(hay.includes("tailor") || hay.includes("blazer") ? ["Tailored"] : []),
-    ...(hay.includes("street") || hay.includes("sneaker") || hay.includes("denim") ? ["Street"] : []),
-    ...(hay.includes("vintage") ? ["Vintage"] : []),
-    ...(hay.includes("romantic") || hay.includes("lace") || hay.includes("silk") ? ["Romantic"] : []),
-  ];
-  const occasions = [
-    ...(hay.includes("work") || hay.includes("office") || hay.includes("blazer") ? ["Work"] : []),
-    ...(hay.includes("evening") || hay.includes("party") || hay.includes("formal") ? ["Evening"] : []),
-    ...(hay.includes("travel") ? ["Travel"] : []),
-  ];
-  return { category, color, seasons: ["All Seasons"], styles, occasions };
+function readFileAsDataUrl(f: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(f);
+  });
 }
 
 export function AddItem({ onClose }: { onClose: () => void }) {
-  const { user, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
+  const analyze = useServerFn(analyzeWardrobeImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -127,29 +46,41 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("Tops");
-  const [color, setColor] = useState("");
+  const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
   const [occasions, setOccasions] = useState<string[]>([]);
 
-  const onPick = (f: File | null) => {
+  const onPick = async (f: File | null) => {
     if (!f) return;
     if (!isImageFile(f)) { toast.error("Please select an image"); return; }
-    const suggestions = suggestDetails(f);
     setFile(f);
     setPreview(URL.createObjectURL(f));
-    setName(f.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
-    setCategory(suggestions.category);
-    if (suggestions.color) setColor(suggestions.color);
-    setSeasons(suggestions.seasons);
-    setStyles(suggestions.styles);
-    setOccasions(suggestions.occasions);
     setStep("details");
+    // Reset previous suggestions
+    setBrand(""); setCategory("Tops"); setColors([]); setSeasons([]); setStyles([]); setOccasions([]);
+
+    // Kick off AI analysis
+    setAnalyzing(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(f);
+      const result = await analyze({ data: { imageDataUrl: dataUrl } });
+      if (result.category) setCategory(result.category);
+      if (result.colors?.length) setColors(result.colors);
+      if (result.styles?.length) setStyles(result.styles);
+      if (result.occasions?.length) setOccasions(result.occasions);
+      if (result.seasons?.length) setSeasons(result.seasons);
+      if (result.brand) setBrand(result.brand);
+    } catch (e) {
+      console.warn("[AURA] AI analysis failed", e);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
@@ -157,127 +88,50 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    onPick(event.dataTransfer.files?.[0] ?? null);
+    void onPick(event.dataTransfer.files?.[0] ?? null);
   };
 
   const save = async () => {
     if (!file) return;
     setSaving(true); setErr(null);
     try {
-      console.groupCollapsed("[AURA wardrobe] save audit");
-      console.log("[AURA wardrobe] auth context snapshot", {
-        authLoading,
-        contextUserId: user?.id ?? null,
-      });
-
-      // Always resolve user_id from Supabase auth (auth.uid()), never trust form/state alone.
-      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
-      const jwtAudit = readJwtSubject(sessionData.session?.access_token);
-      console.log("[AURA wardrobe] current session", {
-        hasSession: Boolean(sessionData.session),
-        userId: sessionData.session?.user?.id ?? null,
-        authUidFromJwtSub: jwtAudit?.sub ?? null,
-        jwtRole: jwtAudit?.role ?? null,
-        jwtExpiresAt: jwtAudit?.exp ?? null,
-        sessionError: sessionErr?.message ?? null,
-      });
-      if (sessionErr || !sessionData.session?.user?.id) {
-        throw new Error("Your session is missing. Please sign in again before adding a piece.");
-      }
-      if (!sessionData.session.access_token) {
-        throw new Error("Your session token is missing. Please sign in again before adding a piece.");
-      }
-
       const { data: auth, error: authErr } = await supabase.auth.getUser();
-      console.log("[AURA wardrobe] current authenticated user", {
-        userId: auth?.user?.id ?? null,
-        authUidFromJwtSub: jwtAudit?.sub ?? null,
-        idsMatchSession: auth?.user?.id === sessionData.session.user.id,
-        idsMatchAuthUid: auth?.user?.id === jwtAudit?.sub,
-        idsMatchAuthContext: user?.id ? auth?.user?.id === user.id : "no context user yet",
-        authError: authErr?.message ?? null,
-      });
-      if (authErr || !auth?.user?.id) {
-        throw new Error("You must be signed in to add a piece.");
-      }
+      if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
       const uid = auth.user.id;
-      if (!uuidPattern.test(uid)) {
-        throw new Error(`Authenticated user id is not a valid UUID: ${uid}`);
-      }
-      if (sessionData.session.user.id !== uid || (jwtAudit?.sub && jwtAudit.sub !== uid)) {
-        throw new Error("Authentication mismatch. Please sign in again before adding a piece.");
-      }
-
-      auditWardrobeSchemaAndRls(uid);
 
       const ext = fileExtension(file);
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      console.log("[AURA wardrobe] uploading image", { bucket: "wardrobe", path, fileType: file.type, fileSize: file.size });
-      const { data: uploadData, error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
         cacheControl: "3600", upsert: false, contentType: file.type || "image/jpeg",
       });
-      console.log("[AURA wardrobe] upload result", { data: uploadData, error: upErr });
-      if (upErr) { console.error("[AURA wardrobe] upload error", upErr); throw upErr; }
-      const { data: pub } = supabase.storage.from("wardrobe").getPublicUrl(path);
-      if (!pub.publicUrl) throw new Error("Upload succeeded, but no public image URL was returned.");
-      console.log("[AURA wardrobe] public image URL", { imagePath: uploadData?.path ?? path, publicUrl: pub.publicUrl });
+      if (upErr) throw upErr;
 
-      const itemId = makeUuid();
+      // Store storage path (not URL). Wardrobe grid signs it on read since bucket is private.
       const payload: TablesInsert<"wardrobe_items"> = {
-        id: itemId,
         user_id: uid,
-        image_url: pub.publicUrl,
+        image_url: path,
         category: categories.includes(category) ? category : "Tops",
-        brand: brand.trim() || name.trim() || null,
-        color: color.trim() || null,
+        brand: brand.trim() || null,
+        color: colors[0] ?? null,
+        colors,
         season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
         style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
       };
-      console.log("[AURA wardrobe] insert payload", payload, {
-        idIsValidUuid: uuidPattern.test(itemId),
-        userIdIsValidUuid: uuidPattern.test(uid),
-        userIdMatchesAuthUser: payload.user_id === uid,
-        userIdMatchesAuthUid: payload.user_id === jwtAudit?.sub,
-      });
-      if (!uuidPattern.test(itemId)) throw new Error(`Generated wardrobe item id is not a valid UUID: ${itemId}`);
-      if (!uuidPattern.test(uid)) throw new Error(`Wardrobe item user_id is not a valid UUID: ${uid}`);
-      if (payload.user_id !== uid || (jwtAudit?.sub && payload.user_id !== jwtAudit.sub)) {
-        throw new Error("Wardrobe item user_id does not match the authenticated user.");
-      }
 
-      const insertResult = await supabase
-        .from("wardrobe_items")
-        .insert(payload)
-        .select(wardrobeColumns)
-        .single();
-      console.log("[AURA wardrobe] database insert result", insertResult);
-      if (insertResult.error) {
-        console.error("[AURA wardrobe] insert error", {
-          error: insertResult.error,
-          postgresMessage: insertResult.error.message,
-          details: insertResult.error.details,
-          hint: insertResult.error.hint,
-          code: insertResult.error.code,
-          payload,
-        });
-        throw insertResult.error;
-      }
+      const { data: inserted, error: insErr } = await supabase
+        .from("wardrobe_items").insert(payload).select("*").single();
+      if (insErr) throw insErr;
 
-      const inserted = insertResult.data ?? { ...payload, created_at: new Date().toISOString() };
-      try {
-        sessionStorage.setItem("aura:last-created-wardrobe-item", JSON.stringify(inserted));
-      } catch { /* non-critical */ }
       toast.success("Added to your closet");
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-      const msg = describeSupabaseError(e);
+      const msg = e instanceof Error ? e.message : "Failed to save wardrobe item.";
       console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
     } finally {
-      console.groupEnd();
       setSaving(false);
     }
   };
@@ -296,8 +150,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
-      <input ref={fileRef} type="file" accept="image/*"
-        className="hidden"
+      <input ref={fileRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
 
       {step === "capture" ? (
@@ -361,16 +214,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="mt-6 flex items-center gap-2 rounded-full bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-3.5 py-2 w-fit">
-            <Sparkles size={12} />
-            <span className="text-[10px] uppercase tracking-widest">All fields are optional</span>
+            {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            <span className="text-[10px] uppercase tracking-widest">
+              {analyzing ? "Analyzing your item…" : "AI suggestions ready · edit anything"}
+            </span>
           </div>
 
           <div className="mt-5 space-y-4">
-            <Field label="Name" value={name} onChange={setName} />
-            <Field label="Brand" value={brand} onChange={setBrand} placeholder="optional" />
-            <Field label="Color" value={color} onChange={setColor} placeholder="e.g. cream · warm" />
-
+            <Field label="Brand" value={brand} onChange={setBrand} placeholder={analyzing ? "detecting…" : "leave empty if no logo"} />
             <ChipGroup label="Category" options={categories} value={category} onChange={setCategory} />
+            <ColorPicker value={colors} onChange={setColors} />
 
             <div className="border-b border-border/60 pb-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
@@ -421,14 +274,14 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
   );
 }
 
-function ChipGroup({ label, options, value, onChange, clearable }: { label: string; options: string[]; value: string; onChange: (v: string) => void; clearable?: boolean }) {
+function ChipGroup({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="border-b border-border/60 pb-3">
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map(o => (
           <button key={o}
-            onClick={() => onChange(clearable && value === o ? "" : o)}
+            onClick={() => onChange(o)}
             className={`rounded-full px-3 py-1.5 text-xs transition ${value === o ? "bg-foreground text-background" : "bg-secondary/60"}`}
           >{o}</button>
         ))}

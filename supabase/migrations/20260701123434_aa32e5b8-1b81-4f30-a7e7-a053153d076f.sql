@@ -1,0 +1,1 @@
+alter table public.wardrobe_items add column if not exists colors text[] not null default '{}';
