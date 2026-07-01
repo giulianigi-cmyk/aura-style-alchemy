@@ -37,7 +37,7 @@ function readFileAsDataUrl(f: File): Promise<string> {
 }
 
 export function AddItem({ onClose }: { onClose: () => void }) {
-  const { user, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
