@@ -259,8 +259,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-// Suppress unused warning on `user` from useAuth; kept for future onboarding gating.
-void useAuth;
 
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
