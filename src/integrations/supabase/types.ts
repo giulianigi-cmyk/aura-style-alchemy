@@ -103,6 +103,7 @@ export type Database = {
           brand: string | null
           category: string | null
           color: string | null
+          colors: string[]
           created_at: string
           id: string
           image_url: string
@@ -115,6 +116,7 @@ export type Database = {
           brand?: string | null
           category?: string | null
           color?: string | null
+          colors?: string[]
           created_at?: string
           id?: string
           image_url: string
@@ -127,6 +129,7 @@ export type Database = {
           brand?: string | null
           category?: string | null
           color?: string | null
+          colors?: string[]
           created_at?: string
           id?: string
           image_url?: string
