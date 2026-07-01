@@ -120,21 +120,30 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         </div>
       ) : (
         <div className="px-6 mt-6 grid grid-cols-2 gap-3">
-          {filtered.map((it, i) => (
+          {filtered.map((it, i) => {
+            const path = toStoragePath(it.image_url);
+            const src = path ? (signed[path] ?? "") : "";
+            const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
+            return (
             <div key={it.id} className="group animate-fade-up" style={{ animationDelay: `${i * 0.04}s` }}>
               <div className="overflow-hidden rounded-2xl bg-secondary/40 shadow-soft">
-                <img
-                  src={it.image_url} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`}
-                  className={`w-full object-cover transition-transform duration-500 group-active:scale-95 ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"}`}
-                  loading="lazy"
-                />
+                {src ? (
+                  <img
+                    src={src} alt={`${it.brand ?? label} piece`}
+                    className={`w-full object-cover transition-transform duration-500 group-active:scale-95 ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"}`}
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className={`w-full bg-secondary ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"} animate-pulse`} />
+                )}
               </div>
               <div className="px-1 mt-2">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.brand ?? it.category}</p>
-                <p className="font-serif text-base leading-tight">{[it.color, it.category].filter(Boolean).join(" ") || "Wardrobe piece"}</p>
+                <p className="font-serif text-base leading-tight">{[label, it.category].filter(Boolean).join(" ")}</p>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
