@@ -1,4 +1,4 @@
-import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload } from "lucide-react";
+import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -8,19 +8,14 @@ import type { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
+import { removeBackground } from "@/lib/ai-bgremove.functions";
+import { importProductFromUrl } from "@/lib/import-url.functions";
 
 const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
-
-function fileExtension(file: File) {
-  const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (fromName && imageExtensions.has(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
-  const map: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif" };
-  return map[file.type] ?? "jpg";
-}
 
 function isImageFile(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -36,18 +31,32 @@ function readFileAsDataUrl(f: File): Promise<string> {
   });
 }
 
+async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
+  const resp = await fetch(dataUrl);
+  const blob = await resp.blob();
+  return new File([blob], filename, { type: blob.type || "image/png" });
+}
+
+type Stage = "idle" | "bgremove" | "analyze";
+
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
+  const bgRemove = useServerFn(removeBackground);
+  const importUrl = useServerFn(importProductFromUrl);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<"capture" | "details">("capture");
+  const [step, setStep] = useState<"capture" | "url" | "details">("capture");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [transparent, setTransparent] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [stage, setStage] = useState<Stage>("idle");
   const [err, setErr] = useState<string | null>(null);
+
+  const [urlInput, setUrlInput] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("Tops");
@@ -56,30 +65,84 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [styles, setStyles] = useState<string[]>([]);
   const [occasions, setOccasions] = useState<string[]>([]);
 
+  const resetFields = () => {
+    setBrand(""); setCategory("Tops"); setColors([]);
+    setSeasons([]); setStyles([]); setOccasions([]);
+  };
+
+  /**
+   * Full pipeline for a chosen image (from camera/gallery/upload/URL).
+   * 1. Show preview immediately.
+   * 2. Run AI analysis for form pre-fill.
+   * 3. Attempt background removal; on success, swap file+preview to the PNG.
+   *    On failure, keep the original image (non-blocking).
+   */
+  const runPipeline = async (initialFile: File, opts?: { brand?: string }) => {
+    setFile(initialFile);
+    setPreview(URL.createObjectURL(initialFile));
+    setTransparent(false);
+    setStep("details");
+    resetFields();
+    if (opts?.brand) setBrand(opts.brand);
+
+    const dataUrl = await readFileAsDataUrl(initialFile);
+
+    // Kick both off in parallel; UI shows the current stage.
+    setStage("analyze");
+    const analysisPromise = analyze({ data: { imageDataUrl: dataUrl } })
+      .then(result => {
+        if (result.category) setCategory(result.category);
+        if (result.colors?.length) setColors(result.colors);
+        if (result.styles?.length) setStyles(result.styles);
+        if (result.occasions?.length) setOccasions(result.occasions);
+        if (result.seasons?.length) setSeasons(result.seasons);
+        // Don't overwrite a domain-derived brand with an empty AI result.
+        if (result.brand && !opts?.brand) setBrand(result.brand);
+      })
+      .catch(e => console.warn("[AURA] AI analysis failed", e));
+
+    setStage("bgremove");
+    try {
+      const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
+      if (bg.ok) {
+        const pngFile = await dataUrlToFile(bg.imageDataUrl, `item-${Date.now()}.png`);
+        setFile(pngFile);
+        setPreview(URL.createObjectURL(pngFile));
+        setTransparent(true);
+      }
+    } catch (e) {
+      console.warn("[AURA] bg removal failed", e);
+    }
+
+    await analysisPromise;
+    setStage("idle");
+  };
+
   const onPick = async (f: File | null) => {
     if (!f) return;
     if (!isImageFile(f)) { toast.error("Please select an image"); return; }
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-    setStep("details");
-    // Reset previous suggestions
-    setBrand(""); setCategory("Tops"); setColors([]); setSeasons([]); setStyles([]); setOccasions([]);
+    await runPipeline(f);
+  };
 
-    // Kick off AI analysis
-    setAnalyzing(true);
+  const handleImportUrl = async () => {
+    const raw = urlInput.trim();
+    if (!raw) return;
+    let parsed: URL;
+    try { parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`); }
+    catch { toast.error("Please enter a valid URL"); return; }
+
+    setImporting(true);
     try {
-      const dataUrl = await readFileAsDataUrl(f);
-      const result = await analyze({ data: { imageDataUrl: dataUrl } });
-      if (result.category) setCategory(result.category);
-      if (result.colors?.length) setColors(result.colors);
-      if (result.styles?.length) setStyles(result.styles);
-      if (result.occasions?.length) setOccasions(result.occasions);
-      if (result.seasons?.length) setSeasons(result.seasons);
-      if (result.brand) setBrand(result.brand);
+      const result = await importUrl({ data: { url: parsed.toString() } });
+      if (!result.ok) { toast.error(result.error); return; }
+      const file = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
+      await runPipeline(file, { brand: result.brand || undefined });
+      if (result.title) toast.message(result.title, { description: result.price ?? undefined });
     } catch (e) {
-      console.warn("[AURA] AI analysis failed", e);
+      console.error("[AURA import-url]", e);
+      toast.error("Could not import from that URL");
     } finally {
-      setAnalyzing(false);
+      setImporting(false);
     }
   };
 
@@ -99,14 +162,15 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
       const uid = auth.user.id;
 
-      const ext = fileExtension(file);
+      // Prefer PNG extension after background removal; otherwise use the file's real type.
+      const isPng = file.type === "image/png";
+      const ext = isPng ? "png" : (file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
-        cacheControl: "3600", upsert: false, contentType: file.type || "image/jpeg",
+        cacheControl: "3600", upsert: false, contentType: file.type || "image/png",
       });
       if (upErr) throw upErr;
 
-      // Store storage path (not URL). Wardrobe grid signs it on read since bucket is private.
       const payload: TablesInsert<"wardrobe_items"> = {
         user_id: uid,
         image_url: path,
@@ -135,6 +199,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setSaving(false);
     }
   };
+
+  const stageLabel =
+    stage === "bgremove" ? "Cleaning up image…" :
+    stage === "analyze"  ? "Analyzing your item…" :
+    "AI suggestions ready · edit anything";
 
   return (
     <div className="absolute inset-0 z-50 bg-background animate-slide-up flex flex-col">
@@ -186,20 +255,62 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               onClick={() => galleryRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
               <ImageIcon size={16} />
-              <span className="text-[10px] uppercase tracking-widest">From gallery</span>
+              <span className="text-[10px] uppercase tracking-widest">Gallery</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
               <Upload size={16} />
-              <span className="text-[10px] uppercase tracking-widest">Upload file</span>
+              <span className="text-[10px] uppercase tracking-widest">Upload</span>
+            </button>
+            <button
+              onClick={() => setStep("url")}
+              className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
+            >
+              <LinkIcon size={16} />
+              <span className="text-[10px] uppercase tracking-widest">From URL</span>
+            </button>
+          </div>
+        </div>
+      ) : step === "url" ? (
+        <div className="flex-1 flex flex-col px-6 pb-10 animate-fade-in">
+          <div className="rounded-2xl bg-secondary/40 p-6">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Import from URL</p>
+            <p className="font-serif text-2xl italic mt-2">Paste a product link</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Works with Zara, H&amp;M, ASOS, Mango, COS, Uniqlo and most fashion stores.
+              We'll extract the product photo, clean it up and pre-fill the details.
+            </p>
+            <div className="mt-5 rounded-full bg-background border border-border flex items-center px-4 py-2.5">
+              <LinkIcon size={14} className="text-muted-foreground shrink-0" />
+              <input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://www.zara.com/…"
+                className="flex-1 ml-2 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+                autoFocus
+              />
+            </div>
+            <button
+              onClick={handleImportUrl}
+              disabled={importing || !urlInput.trim()}
+              className="mt-4 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 text-xs uppercase tracking-[0.3em] disabled:opacity-60"
+            >
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />}
+              Import product
+            </button>
+            <button
+              onClick={() => setStep("capture")}
+              className="mt-3 w-full h-10 rounded-full border border-border text-xs uppercase tracking-[0.3em]"
+            >
+              Back
             </button>
           </div>
         </div>
@@ -208,20 +319,25 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
-            className="rounded-2xl overflow-hidden bg-secondary/40 aspect-[4/5]"
+            className="rounded-2xl overflow-hidden aspect-[4/5]"
+            style={{ background: "#F5F5F5" }}
           >
-            {preview && <img src={preview} alt="" className="h-full w-full object-cover" />}
+            {preview && (
+              <img
+                src={preview}
+                alt=""
+                className={`h-full w-full ${transparent ? "object-contain p-4" : "object-cover"}`}
+              />
+            )}
           </div>
 
           <div className="mt-6 flex items-center gap-2 rounded-full bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-3.5 py-2 w-fit">
-            {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-            <span className="text-[10px] uppercase tracking-widest">
-              {analyzing ? "Analyzing your item…" : "AI suggestions ready · edit anything"}
-            </span>
+            {stage !== "idle" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            <span className="text-[10px] uppercase tracking-widest">{stageLabel}</span>
           </div>
 
           <div className="mt-5 space-y-4">
-            <Field label="Brand" value={brand} onChange={setBrand} placeholder={analyzing ? "detecting…" : "leave empty if no logo"} />
+            <Field label="Brand" value={brand} onChange={setBrand} placeholder={stage === "analyze" ? "detecting…" : "leave empty if no logo"} />
             <ChipGroup label="Category" options={categories} value={category} onChange={setCategory} />
             <ColorPicker value={colors} onChange={setColors} />
 
