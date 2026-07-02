@@ -126,15 +126,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
             return (
             <div key={it.id} className="group animate-fade-up" style={{ animationDelay: `${i * 0.04}s` }}>
-              <div className="overflow-hidden rounded-2xl bg-secondary/40 shadow-soft">
+              <div className="overflow-hidden rounded-2xl shadow-soft" style={{ background: "#F5F5F5" }}>
                 {src ? (
                   <img
                     src={src} alt={`${it.brand ?? label} piece`}
-                    className={`w-full object-cover transition-transform duration-500 group-active:scale-95 ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"}`}
+                    className={`w-full object-contain p-2 transition-transform duration-500 group-active:scale-95 ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"}`}
                     loading="lazy"
                   />
                 ) : (
-                  <div className={`w-full bg-secondary ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"} animate-pulse`} />
+                  <div className={`w-full ${i % 3 === 0 ? "aspect-[3/4]" : "aspect-square"} animate-pulse`} style={{ background: "#EDEDED" }} />
                 )}
               </div>
               <div className="px-1 mt-2">
