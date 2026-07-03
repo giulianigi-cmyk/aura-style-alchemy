@@ -1,0 +1,1 @@
+ALTER TABLE public.wardrobe_items ADD COLUMN IF NOT EXISTS price numeric, ADD COLUMN IF NOT EXISTS currency text DEFAULT 'EUR', ADD COLUMN IF NOT EXISTS size text;
