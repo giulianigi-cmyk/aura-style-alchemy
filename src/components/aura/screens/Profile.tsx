@@ -29,7 +29,7 @@ const seasonPalette = [
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
-  const { profile, loading, update, uploadAvatar } = useProfile();
+  const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [editing, setEditing] = useState(false);
