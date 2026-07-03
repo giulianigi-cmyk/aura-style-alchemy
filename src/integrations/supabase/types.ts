@@ -105,10 +105,13 @@ export type Database = {
           color: string | null
           colors: string[]
           created_at: string
+          currency: string | null
           id: string
           image_url: string
           occasion: string | null
+          price: number | null
           season: string | null
+          size: string | null
           style: string | null
           user_id: string
         }
@@ -118,10 +121,13 @@ export type Database = {
           color?: string | null
           colors?: string[]
           created_at?: string
+          currency?: string | null
           id?: string
           image_url: string
           occasion?: string | null
+          price?: number | null
           season?: string | null
+          size?: string | null
           style?: string | null
           user_id?: string
         }
@@ -131,10 +137,13 @@ export type Database = {
           color?: string | null
           colors?: string[]
           created_at?: string
+          currency?: string | null
           id?: string
           image_url?: string
           occasion?: string | null
+          price?: number | null
           season?: string | null
+          size?: string | null
           style?: string | null
           user_id?: string
         }
