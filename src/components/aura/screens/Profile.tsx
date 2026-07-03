@@ -29,7 +29,7 @@ const seasonPalette = [
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
-  const { profile, loading, update, uploadAvatar } = useProfile();
+  const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [editing, setEditing] = useState(false);
@@ -83,7 +83,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     else toast.success("Profile photo updated");
   };
 
-  const avatarSrc = profile?.profile_image || profile?.avatar_url || profile1;
+  const avatarSrc = avatarUrl || profile?.avatar_url || profile1;
   const displayName = profile?.full_name || "Your name";
   const meta = [profile?.city, profile?.season || "Warm Autumn"].filter(Boolean).join(" · ");
 
