@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS owned_brands text[] NOT NULL DEFAULT '{}'::text[];
