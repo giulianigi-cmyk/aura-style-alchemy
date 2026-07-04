@@ -6,6 +6,7 @@ import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
+import { MyBrands } from "../MyBrands";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -246,16 +247,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               </div>
             </section>
           )}
-          {(profile?.favorite_brands?.length ?? 0) > 0 && (
-            <section className="mx-6 mt-5 animate-fade-up">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Houses</p>
-              <div className="flex flex-wrap gap-2">
-                {profile!.favorite_brands!.map(b => (
-                  <span key={b} className="rounded-full px-3 py-1.5 text-xs bg-secondary/60">{b}</span>
-                ))}
-              </div>
-            </section>
-          )}
+          <MyBrands />
+
 
           {/* Color analysis */}
           <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-6 shadow-soft animate-fade-up">

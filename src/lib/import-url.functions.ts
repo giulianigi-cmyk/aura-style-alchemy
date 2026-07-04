@@ -1,62 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getBrandFromUrl } from "./brand-domains";
 
 const InputSchema = z.object({
   url: z.string().url(),
 });
 
-// Known fashion domains → brand names. Used to pre-fill brand when the domain
-// is recognised, even if no logo is visible in the extracted photo.
-const DOMAIN_BRANDS: Record<string, string> = {
-  "zara.com": "Zara",
-  "hm.com": "H&M",
-  "www2.hm.com": "H&M",
-  "asos.com": "ASOS",
-  "mango.com": "Mango",
-  "shop.mango.com": "Mango",
-  "cos.com": "COS",
-  "arket.com": "Arket",
-  "uniqlo.com": "Uniqlo",
-  "massimodutti.com": "Massimo Dutti",
-  "bershka.com": "Bershka",
-  "pullandbear.com": "Pull&Bear",
-  "stradivarius.com": "Stradivarius",
-  "shein.com": "Shein",
-  "nike.com": "Nike",
-  "adidas.com": "Adidas",
-  "newbalance.com": "New Balance",
-  "gucci.com": "Gucci",
-  "prada.com": "Prada",
-  "louisvuitton.com": "Louis Vuitton",
-  "chanel.com": "Chanel",
-  "hermes.com": "Hermès",
-  "dior.com": "Dior",
-  "ysl.com": "Saint Laurent",
-  "saintlaurent.com": "Saint Laurent",
-  "burberry.com": "Burberry",
-  "loewe.com": "Loewe",
-  "toteme-studio.com": "Totême",
-  "acnestudios.com": "Acne Studios",
-  "ganni.com": "Ganni",
-  "reformation.com": "Reformation",
-  "everlane.com": "Everlane",
-  "aritzia.com": "Aritzia",
-  "zalando.com": "Zalando",
-  "farfetch.com": "Farfetch",
-  "net-a-porter.com": "Net-a-Porter",
-  "mytheresa.com": "Mytheresa",
-  "ssense.com": "SSENSE",
-};
-
-function brandFromHost(host: string): string {
-  const h = host.toLowerCase().replace(/^www\./, "");
-  if (DOMAIN_BRANDS[h]) return DOMAIN_BRANDS[h];
-  // try suffix match (e.g. it.zara.com → zara.com)
-  for (const [domain, brand] of Object.entries(DOMAIN_BRANDS)) {
-    if (h === domain || h.endsWith("." + domain)) return brand;
-  }
-  return "";
-}
 
 function pickMeta(html: string, property: string): string {
   const patterns = [
@@ -183,7 +132,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         : jsonLd?.brand && typeof jsonLd.brand === "object"
         ? jsonLd.brand.name ?? ""
         : "";
-    const brand = (brandFromLd || brandFromHost(target.host) || "").trim();
+    const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
     const title = (jsonLd?.name || ogTitle || "").trim();
 
     let price: string | null = null;

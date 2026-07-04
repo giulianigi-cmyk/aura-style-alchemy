@@ -54,6 +54,7 @@ export type Database = {
           id: string
           latitude: number | null
           longitude: number | null
+          owned_brands: string[]
           profile_image: string | null
           season: string | null
           setup_complete: boolean
@@ -72,6 +73,7 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          owned_brands?: string[]
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
@@ -90,6 +92,7 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          owned_brands?: string[]
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean

@@ -1,0 +1,217 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, X, Sparkles, Check, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { BRAND_NAMES } from "@/lib/brand-domains";
+import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
+
+type Suggestion = { brand: string; count: number; pct: number } | null;
+
+/**
+ * "My Brands" panel for the Profile screen.
+ * - Editable pills of brands the user owns / loves.
+ * - Autocomplete search from BRAND_NAMES (with free-text fallback).
+ * - Smart auto-suggest: reads the user's wardrobe, if any brand accounts for
+ *   ≥10% of items and isn't already saved, prompts the user to add it.
+ *   Re-checks whenever a wardrobe item is created (via the existing
+ *   "aura:wardrobe-item-created" custom event).
+ */
+export function MyBrands() {
+  const { user } = useAuth();
+  const { profile, update } = useProfile();
+  const [brands, setBrands] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [suggestion, setSuggestion] = useState<Suggestion>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local editable state from persisted profile.
+  useEffect(() => {
+    setBrands(profile?.owned_brands ?? []);
+  }, [profile?.owned_brands]);
+
+  // Persist helper — debounced-ish: fire-and-forget, but disable UI while in flight.
+  const persist = async (next: string[]) => {
+    setSaving(true);
+    const { error } = await update({ owned_brands: next });
+    setSaving(false);
+    if (error) toast.error("Couldn't save brands");
+  };
+
+  const addBrand = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (brands.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
+      setQuery(""); setOpen(false); return;
+    }
+    const next = [...brands, trimmed];
+    setBrands(next);
+    setQuery(""); setOpen(false);
+    void persist(next);
+  };
+
+  const removeBrand = (name: string) => {
+    const next = brands.filter(b => b !== name);
+    setBrands(next);
+    void persist(next);
+  };
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const owned = new Set(brands.map(b => b.toLowerCase()));
+    return BRAND_NAMES.filter(b => b.toLowerCase().includes(q) && !owned.has(b.toLowerCase())).slice(0, 8);
+  }, [query, brands]);
+
+  const canAddCustom =
+    query.trim().length > 0 &&
+    !suggestions.some(s => s.toLowerCase() === query.trim().toLowerCase()) &&
+    !brands.some(b => b.toLowerCase() === query.trim().toLowerCase());
+
+  // Wardrobe-driven auto-suggestion.
+  const checkWardrobeSuggestion = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("wardrobe_items").select("brand").eq("user_id", user.id);
+    if (error || !data || data.length < 3) return;
+
+    const counts = new Map<string, number>();
+    for (const row of data) {
+      const b = (row.brand ?? "").trim();
+      if (!b) continue;
+      counts.set(b, (counts.get(b) ?? 0) + 1);
+    }
+    const owned = new Set((profile?.owned_brands ?? []).map(b => b.toLowerCase()));
+    const total = data.length;
+
+    let best: Suggestion = null;
+    for (const [brand, count] of counts.entries()) {
+      const pct = count / total;
+      if (pct < 0.1) continue;
+      if (owned.has(brand.toLowerCase())) continue;
+      if (dismissed.has(brand.toLowerCase())) continue;
+      if (!best || count > best.count) best = { brand, count, pct };
+    }
+    setSuggestion(best);
+  };
+
+  useEffect(() => {
+    void checkWardrobeSuggestion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, profile?.owned_brands, dismissed]);
+
+  useEffect(() => {
+    const handler = () => { void checkWardrobeSuggestion(); };
+    window.addEventListener("aura:wardrobe-item-created", handler);
+    return () => window.removeEventListener("aura:wardrobe-item-created", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, profile?.owned_brands, dismissed]);
+
+  return (
+    <section className="mx-6 mt-6 animate-fade-up">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My brands</p>
+        {saving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+      </div>
+
+      {/* Smart suggestion banner */}
+      {suggestion && (
+        <div className="mb-3 rounded-2xl border border-[var(--champagne)]/60 bg-[var(--champagne)]/10 p-3 flex items-start gap-3 animate-fade-up">
+          <Sparkles size={14} className="mt-0.5 shrink-0" />
+          <div className="flex-1 text-xs leading-relaxed">
+            You have {suggestion.count} {suggestion.brand} piece{suggestion.count === 1 ? "" : "s"} —
+            add <span className="font-medium">{suggestion.brand}</span> to your brands?
+          </div>
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={() => { addBrand(suggestion.brand); setSuggestion(null); }}
+              className="h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"
+              aria-label="Accept suggestion"
+            ><Check size={12} /></button>
+            <button
+              onClick={() => {
+                setDismissed(prev => new Set(prev).add(suggestion.brand.toLowerCase()));
+                setSuggestion(null);
+              }}
+              className="h-7 w-7 rounded-full border border-border flex items-center justify-center active:scale-90"
+              aria-label="Dismiss suggestion"
+            ><X size={12} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Pills */}
+      <div className="flex flex-wrap gap-2">
+        {brands.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">No brands yet — search below to add your favourites.</p>
+        )}
+        {brands.map(b => (
+          <span key={b} className="group inline-flex items-center gap-1.5 rounded-full bg-foreground text-background pl-3 pr-1.5 py-1.5 text-xs">
+            {b}
+            <button
+              onClick={() => removeBrand(b)}
+              className="h-5 w-5 rounded-full bg-background/20 flex items-center justify-center active:scale-90"
+              aria-label={`Remove ${b}`}
+            ><X size={10} /></button>
+          </span>
+        ))}
+      </div>
+
+      {/* Search / autocomplete */}
+      <div className="mt-3 relative">
+        <div className="flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5">
+          <Search size={14} className="text-muted-foreground" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (suggestions[0]) addBrand(suggestions[0]);
+                else if (canAddCustom) addBrand(query);
+              } else if (e.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder="Search brands or add your own…"
+            className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+          />
+          {query && (
+            <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label="Clear">
+              <X size={14} className="text-muted-foreground" />
+            </button>
+          )}
+        </div>
+
+        {open && (suggestions.length > 0 || canAddCustom) && (
+          <div className="absolute z-30 left-0 right-0 mt-2 rounded-2xl border border-border bg-card shadow-luxe overflow-hidden max-h-72 overflow-y-auto">
+            {suggestions.map(s => (
+              <button
+                key={s}
+                onClick={() => addBrand(s)}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-secondary/60 active:bg-secondary/80 transition flex items-center justify-between"
+              >
+                <span>{s}</span>
+                <Plus size={12} className="text-muted-foreground" />
+              </button>
+            ))}
+            {canAddCustom && (
+              <button
+                onClick={() => addBrand(query)}
+                className="w-full text-left px-4 py-2.5 text-sm border-t border-border hover:bg-secondary/60 flex items-center gap-2"
+              >
+                <Plus size={12} />
+                <span>Add "<span className="font-medium">{query.trim()}</span>"</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
