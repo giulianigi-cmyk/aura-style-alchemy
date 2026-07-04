@@ -132,7 +132,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         : jsonLd?.brand && typeof jsonLd.brand === "object"
         ? jsonLd.brand.name ?? ""
         : "";
-    const brand = (brandFromLd || brandFromHost(target.host) || "").trim();
+    const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
     const title = (jsonLd?.name || ogTitle || "").trim();
 
     let price: string | null = null;
