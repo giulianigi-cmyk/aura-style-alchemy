@@ -9,6 +9,7 @@ export type Profile = {
   gender: string | null;
   style_preferences: string[] | null;
   favorite_brands: string[] | null;
+  owned_brands: string[] | null;
   avatar_url: string | null;
   profile_image: string | null; // storage path in the "avatars" bucket
   bio: string | null;
