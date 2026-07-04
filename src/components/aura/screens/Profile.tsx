@@ -6,6 +6,7 @@ import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
+import { MyBrands } from "../MyBrands";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
