@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      outfit_plans: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          item_ids: string[]
+          notes: string | null
+          occasion: string | null
+          user_id: string
+          weather_condition: string | null
+          weather_temp: number | null
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          item_ids?: string[]
+          notes?: string | null
+          occasion?: string | null
+          user_id?: string
+          weather_condition?: string | null
+          weather_temp?: number | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          item_ids?: string[]
+          notes?: string | null
+          occasion?: string | null
+          user_id?: string
+          weather_condition?: string | null
+          weather_temp?: number | null
+        }
+        Relationships: []
+      }
       outfits: {
         Row: {
           cover_url: string | null
@@ -117,6 +153,7 @@ export type Database = {
           size: string | null
           style: string | null
           user_id: string
+          worn_count: number
         }
         Insert: {
           brand?: string | null
@@ -133,6 +170,7 @@ export type Database = {
           size?: string | null
           style?: string | null
           user_id?: string
+          worn_count?: number
         }
         Update: {
           brand?: string | null
@@ -149,6 +187,7 @@ export type Database = {
           size?: string | null
           style?: string | null
           user_id?: string
+          worn_count?: number
         }
         Relationships: []
       }
