@@ -5,7 +5,7 @@ const tabs: { id: Screen; label: string; Icon: typeof Home }[] = [
   { id: "home", label: "Home", Icon: Home },
   { id: "wardrobe", label: "Closet", Icon: Shirt },
   { id: "ai", label: "Stylist", Icon: Sparkles },
-  { id: "planner", label: "Plan", Icon: Calendar },
+  { id: "planner", label: "Calendar", Icon: Calendar },
   { id: "profile", label: "You", Icon: User },
 ];
 
