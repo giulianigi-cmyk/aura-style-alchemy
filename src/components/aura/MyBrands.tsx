@@ -189,7 +189,7 @@ export function MyBrands() {
         </div>
 
         {open && (suggestions.length > 0 || canAddCustom) && (
-          <div className="absolute z-30 left-0 right-0 mt-2 rounded-2xl border border-border bg-card shadow-luxe overflow-hidden max-h-72 overflow-y-auto">
+          <div className="absolute z-50 left-0 right-0 mt-2 rounded-2xl border border-border bg-card shadow-luxe overflow-hidden max-h-72 overflow-y-auto">
             {suggestions.map(s => (
               <button
                 key={s}
