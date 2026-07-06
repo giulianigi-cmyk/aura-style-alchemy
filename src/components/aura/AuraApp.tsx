@@ -61,6 +61,17 @@ function Inner() {
       return;
     }
     if (user && ["auth"].includes(screen)) {
+      // If the user was sent to sign in from an MCP consent URL, return them now.
+      if (typeof window !== "undefined") {
+        try {
+          const back = window.localStorage.getItem("aura:mcp_consent_return");
+          if (back && back.startsWith("/.lovable/oauth/consent")) {
+            window.localStorage.removeItem("aura:mcp_consent_return");
+            window.location.replace(back);
+            return;
+          }
+        } catch { /* ignore */ }
+      }
       if (!profileLoading && profile && !profile.setup_complete) setScreen("profile-setup");
       else if (!profileLoading) setScreen("home");
     }

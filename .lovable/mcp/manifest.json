@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://nwoxhkuxtyjzjghjpryd.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "aura-mcp",
+      "version": "0.1.0",
+      "title": "AURA Wardrobe"
+    },
+    "tools": [
+      {
+        "name": "list_wardrobe_items",
+        "title": "List wardrobe items",
+        "description": "List the signed-in user's wardrobe items with category, colors, brand, season, price, and worn count. Optionally filter by category, brand, or season.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "category": {
+              "description": "Filter by category, e.g. Tops, Shoes, Bags.",
+              "type": "string"
+            },
+            "brand": {
+              "description": "Filter by brand name (case-insensitive contains).",
+              "type": "string"
+            },
+            "season": {
+              "description": "Filter by season, e.g. Winter, Summer, All Seasons.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Max rows to return, default 100.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_profile",
+        "title": "Get profile",
+        "description": "Return the signed-in user's style profile: name, style preferences, favorite and owned brands, city, and season.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_outfit_plans",
+        "title": "List outfit plans",
+        "description": "List the signed-in user's planned or logged outfits between two dates (inclusive, YYYY-MM-DD).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Start date, YYYY-MM-DD."
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "End date, YYYY-MM-DD."
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_outfit_plan",
+        "title": "Plan an outfit",
+        "description": "Create a planned or logged outfit for a given date, composed of wardrobe item IDs. Occasion and notes are optional.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date the outfit is for (YYYY-MM-DD)."
+            },
+            "item_ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "description": "Wardrobe item IDs composing the outfit."
+            },
+            "occasion": {
+              "description": "Optional occasion label, e.g. Work, Evening.",
+              "type": "string"
+            },
+            "notes": {
+              "description": "Optional free-form note.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "date",
+            "item_ids"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
