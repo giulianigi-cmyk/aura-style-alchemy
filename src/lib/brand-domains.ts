@@ -593,6 +593,14 @@ export const BRAND_DOMAINS: Record<string, string> = {
   "triangl.com": "Triangl",
   "seafolly.com": "Seafolly",
   "itsalittlefishy.com": "It's a Little Fishy",
+  "coach.com": "Coach",
+  "toryburch.com": "Tory Burch",
+  "katespade.com": "Kate Spade",
+  "rebeccaminkoff.com": "Rebecca Minkoff",
+  "calvinklein.com": "Calvin Klein",
+  "li-vy.com": "Livy",
+  "intimissimi.com": "Intimissimi",
+  "calzedonia.com": "Calzedonia",
   // ─── EYEWEAR ──────────────────────────────────────────────────────
   "rayban.com": "Ray-Ban",
   "oakley.com": "Oakley",
@@ -613,6 +621,7 @@ export const BRAND_DOMAINS: Record<string, string> = {
   "ic-berlin.com": "ic! berlin",
   "safilo.com": "Safilo",
   "luxottica.com": "Luxottica",
+  "marchon.com": "Marchon",
   // ─── MULTI-BRAND / DEPARTMENT STORES ──────────────────────────────
   "net-a-porter.com": "NET-A-PORTER",
   "mrporter.com": "MR PORTER",
