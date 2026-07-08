@@ -13,7 +13,7 @@ import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
-export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
+export function AIStylist({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
