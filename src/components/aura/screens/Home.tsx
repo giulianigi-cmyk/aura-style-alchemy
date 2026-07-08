@@ -33,9 +33,10 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     void (async () => {
       const [itemsRes, outfitsCountRes] = await Promise.all([
         supabase.from("wardrobe_items")
-          .select("id,worn_count,image_url,category,brand,color,colors,season,style,user_id,created_at,ai_analysis,currency,notes,price,size", { count: "exact" })
+          .select("*", { count: "exact" })
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
+
         supabase.from("outfits").select("id", { count: "exact", head: true }).eq("user_id", user.id),
       ]);
       const items = (itemsRes.data ?? []) as WardrobeItem[];
