@@ -156,6 +156,22 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     setSelectedKey(null);
   }, [selectedKey]);
 
+  // Desktop: Delete / Backspace clears the currently selected canvas item.
+  // Skips when focus is in an input/textarea/select so typing isn't hijacked.
+  useEffect(() => {
+    if (!selectedKey) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      e.preventDefault();
+      removeSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedKey, removeSelected]);
+
   const bringForward = useCallback(() => {
     if (!selectedKey) return;
     zSeqRef.current += 1;
