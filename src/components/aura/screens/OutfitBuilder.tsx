@@ -505,7 +505,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none`}
+          className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none"
           style={{ background: "#FFFFFF", containerType: "size" }}
         >
           {placed
