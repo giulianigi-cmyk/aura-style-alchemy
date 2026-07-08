@@ -615,7 +615,6 @@ export const BRAND_DOMAINS: Record<string, string> = {
   "ic-berlin.com": "ic! berlin",
   "safilo.com": "Safilo",
   "luxottica.com": "Luxottica",
-  "marchon.com": "Marchon",
   // ─── MULTI-BRAND / DEPARTMENT STORES ──────────────────────────────
   "net-a-porter.com": "NET-A-PORTER",
   "mrporter.com": "MR PORTER",
