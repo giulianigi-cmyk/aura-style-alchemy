@@ -139,7 +139,7 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
           <span className="text-xs uppercase tracking-[0.3em]">AI suggest</span>
         </button>
         <button
-          onClick={() => { setSelected([]); setAiExplanation(""); setCreating(true); }}
+          onClick={() => go("builder")}
           className="flex-1 h-12 rounded-full border border-foreground text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98]"
         >Build manually</button>
       </div>
