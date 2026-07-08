@@ -168,10 +168,16 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
               >{v}</button>
             ))}
           </div>
-          <button
-            onClick={() => setAnchor(startOfDay(new Date()))}
-            className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
-          >Today</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => go("builder")}
+              className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95 inline-flex items-center gap-1"
+            ><Sparkles size={11} /> Create outfit</button>
+            <button
+              onClick={() => setAnchor(startOfDay(new Date()))}
+              className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
+            >Today</button>
+          </div>
         </div>
       </header>
 
