@@ -282,21 +282,23 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
 
     // 4. Structured hints
+    const ld: ProductJson | null = jsonLd;
     const brandFromLd =
-      typeof jsonLd?.brand === "string"
-        ? jsonLd.brand
-        : jsonLd?.brand && typeof jsonLd.brand === "object"
-        ? jsonLd.brand.name ?? ""
+      typeof ld?.brand === "string"
+        ? ld.brand
+        : ld?.brand && typeof ld.brand === "object"
+        ? ld.brand.name ?? ""
         : "";
     const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
-    const title = (jsonLd?.name || ogTitle || "").trim();
+    const title = (ld?.name || ogTitle || "").trim();
 
     let price: string | null = null;
-    const offer = Array.isArray(jsonLd?.offers) ? jsonLd?.offers[0] : jsonLd?.offers;
+    const offer = Array.isArray(ld?.offers) ? ld?.offers[0] : ld?.offers;
     if (offer?.price) {
       const currency = offer.priceCurrency ? ` ${offer.priceCurrency}` : "";
       price = `${offer.price}${currency}`;
     }
+
 
     return {
       ok: true as const,
