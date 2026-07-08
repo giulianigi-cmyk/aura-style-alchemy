@@ -151,10 +151,13 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
 
     const imageUrl = new URL(imageUrlRaw, target).toString();
 
-    // 3. Download the image
+    // 3. Download the image (8s hard timeout)
     let imageDataUrl: string;
+    const imgCtl = new AbortController();
+    const imgTimer = setTimeout(() => imgCtl.abort(), 8000);
     try {
       const imgResp = await fetch(imageUrl, {
+        signal: imgCtl.signal,
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
@@ -166,7 +169,6 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }
       const contentType = imgResp.headers.get("content-type") || "image/jpeg";
       const buf = new Uint8Array(await imgResp.arrayBuffer());
-      // Encode to base64 (Uint8Array → base64) without Node Buffer dependency.
       let binary = "";
       for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
       const b64 = btoa(binary);
@@ -174,6 +176,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     } catch (err) {
       console.warn("[AURA import-url] image download failed", err);
       return { ok: false as const, error: "Could not download the product image." };
+    } finally {
+      clearTimeout(imgTimer);
     }
 
     // 4. Assemble structured hints
