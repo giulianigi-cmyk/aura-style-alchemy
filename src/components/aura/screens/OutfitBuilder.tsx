@@ -388,6 +388,11 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
           </button>
         </div>
       )}
+      {aiExplanation && (
+        <p className="mx-6 mt-2 text-xs text-muted-foreground italic leading-relaxed">
+          {aiExplanation}
+        </p>
+      )}
 
       {/* Ratio + occasion */}
       <div className="mx-6 mt-3 flex items-center justify-between gap-2">
