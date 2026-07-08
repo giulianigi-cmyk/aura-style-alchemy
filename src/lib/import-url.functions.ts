@@ -282,7 +282,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
 
     // 4. Structured hints
-    const ld: ProductJson | null = jsonLd;
+    const ld = jsonLd as ProductJson | null;
     const brandFromLd =
       typeof ld?.brand === "string"
         ? ld.brand
