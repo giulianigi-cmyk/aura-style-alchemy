@@ -170,17 +170,22 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </button>
       </section>
 
-      {/* Stats */}
+      {/* Stats — real counts */}
       <section className="px-6 mt-5 grid grid-cols-3 gap-3">
         {[
-          { n: "184", l: "Pieces" },
-          { n: "47", l: "Outfits" },
-          { n: "92%", l: "Wear rate" },
+          { n: String(stats.pieces), l: "Pieces", to: "wardrobe" as Screen },
+          { n: String(stats.outfits), l: "Outfits", to: "saved-outfits" as Screen },
+          { n: `${stats.wearRate}%`, l: "Wear rate", to: null as Screen | null },
         ].map(s => (
-          <div key={s.l} className="rounded-2xl bg-card border border-border/60 p-4">
+          <button
+            key={s.l}
+            onClick={() => s.to && go(s.to)}
+            disabled={!s.to}
+            className="text-left rounded-2xl bg-card border border-border/60 p-4 active:scale-[0.98] transition disabled:active:scale-100 disabled:cursor-default"
+          >
             <p className="font-serif text-3xl">{s.n}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{s.l}</p>
-          </div>
+          </button>
         ))}
       </section>
 
@@ -207,20 +212,41 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </div>
       </section>
 
-      {/* Recently added */}
+      {/* From your wardrobe — real signed items */}
       <section className="px-6 mt-10 animate-fade-up" style={{ animationDelay: "0.15s" }}>
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-serif text-2xl italic">Recently added</h2>
+          <h2 className="font-serif text-2xl italic">From your wardrobe</h2>
           <TrendingUp size={14} className="text-muted-foreground" />
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[item1, item3, item5].map((src, i) => (
-            <div key={i} className="rounded-xl overflow-hidden bg-secondary/40 aspect-square">
-              <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
-            </div>
-          ))}
-        </div>
+        {recent.length === 0 ? (
+          <button
+            onClick={() => go("wardrobe")}
+            className="w-full text-left rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"
+          >Add your first pieces to see them here.</button>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {recent.map((it) => {
+              const path = toStoragePath(it.image_url);
+              const src = path ? recentSigned[path] : null;
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => go("wardrobe")}
+                  className="rounded-xl overflow-hidden aspect-square active:scale-[0.98]"
+                  style={{ background: "#FFFFFF" }}
+                >
+                  {src ? (
+                    <img src={src} alt={it.category ?? "wardrobe item"} className="h-full w-full object-contain p-1.5" loading="lazy" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">No image</div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
+
   );
 }
