@@ -67,7 +67,7 @@ function itemMatchesKeywords(it: WardrobeItem, keywords: string[]): boolean {
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 
-export function Planner({ go: _go }: { go: (s: Screen) => void }) {
+export function Planner({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
