@@ -28,13 +28,38 @@ export type Screen =
   | "insights" | "saved-outfits" | "notifications" | "invite" | "builder";
 
 
+export type BuilderInit = {
+  itemIds: string[];
+  name?: string;
+  occasion?: string;
+  notes?: string;
+  outfitId?: string;
+} | null;
+
 function Inner() {
   const { user, loading, recovery } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
   const [screen, setScreen] = useState<Screen>("splash");
+  const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
+
+  // go() wrapper that resets builderInit unless the caller explicitly opens the
+  // builder with a preloaded outfit via openBuilder().
+  const go = (s: Screen) => {
+    if (s !== "builder") setBuilderInit(null);
+    else if (s === "builder") {
+      // navigating to builder from tab bar / planner → clean canvas
+      setBuilderInit(null);
+    }
+    setScreen(s);
+  };
+
+  const openBuilder = (init: BuilderInit) => {
+    setBuilderInit(init);
+    setScreen("builder");
+  };
 
   // Recovery flow always wins
   useEffect(() => {
@@ -101,25 +126,26 @@ function Inner() {
           {screen === "auth" && <Auth />}
           {screen === "reset" && <ResetPassword onDone={() => setScreen(user ? "home" : "auth")} />}
           {screen === "profile-setup" && <ProfileSetup onDone={() => setScreen("home")} />}
-          {screen === "home" && <Home go={setScreen} />}
-          {screen === "wardrobe" && <Wardrobe go={setScreen} />}
-          {screen === "add" && <AddItem onClose={() => setScreen("wardrobe")} />}
-          {screen === "ai" && <AIStylist go={setScreen} />}
-          {screen === "planner" && <Planner go={setScreen} />}
-          {screen === "shop" && <Shop go={setScreen} />}
-          {screen === "community" && <Community go={setScreen} />}
-          {screen === "profile" && <Profile go={setScreen} />}
-          {screen === "insights" && <Insights go={setScreen} />}
-          {screen === "saved-outfits" && <SavedOutfits go={setScreen} />}
-          {screen === "notifications" && <Notifications go={setScreen} />}
-          {screen === "invite" && <Invite go={setScreen} />}
-          {screen === "builder" && <OutfitBuilder go={setScreen} />}
+          {screen === "home" && <Home go={go} />}
+          {screen === "wardrobe" && <Wardrobe go={go} />}
+          {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
+          {screen === "ai" && <AIStylist go={go} />}
+          {screen === "planner" && <Planner go={go} />}
+          {screen === "shop" && <Shop go={go} />}
+          {screen === "community" && <Community go={go} />}
+          {screen === "profile" && <Profile go={go} />}
+          {screen === "insights" && <Insights go={go} />}
+          {screen === "saved-outfits" && <SavedOutfits go={go} openBuilder={openBuilder} />}
+          {screen === "notifications" && <Notifications go={go} />}
+          {screen === "invite" && <Invite go={go} />}
+          {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
         </div>
-        {showTabs && <TabBar current={screen} go={setScreen} />}
+        {showTabs && <TabBar current={screen} go={go} />}
       </div>
     </PhoneFrame>
   );
 }
+
 
 export function AuraApp() {
   return (
