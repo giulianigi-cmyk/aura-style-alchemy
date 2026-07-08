@@ -133,9 +133,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     try {
       const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
       if (bg.ok) {
-        const pngFile = await dataUrlToFile(bg.imageDataUrl, `item-${Date.now()}.png`);
-        setFile(pngFile);
-        setPreview(URL.createObjectURL(pngFile));
+        // Flatten the transparent PNG onto solid white so the stored file
+        // never renders with a checkerboard anywhere in the app.
+        const flatFile = await flattenPngOnWhite(bg.imageDataUrl, `item-${Date.now()}.png`);
+        setFile(flatFile);
+        setPreview(URL.createObjectURL(flatFile));
         setTransparent(true);
       }
     } catch (e) {
