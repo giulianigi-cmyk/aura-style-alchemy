@@ -19,6 +19,7 @@ import {
   AURA_APP_URL, AURA_SHARE_CAPTION, downloadBlob, dataUrlToBlob,
   nativeShareFile, shareLinks,
 } from "@/lib/aura-share";
+import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
