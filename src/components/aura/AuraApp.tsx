@@ -90,7 +90,7 @@ function Inner() {
     else setScreen("home");
   };
 
-  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add"].includes(screen);
+  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add", "builder"].includes(screen);
 
   return (
     <PhoneFrame>
