@@ -1,4 +1,5 @@
-import { Plus, Filter, Search, Loader2 } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
