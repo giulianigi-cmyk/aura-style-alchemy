@@ -214,11 +214,13 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     let ogTitle = "";
 
     const parsePick = (source: string): string => {
-      jsonLd = parseJsonLd(source);
+      const parsed: ProductJson | null = parseJsonLd(source);
+      jsonLd = parsed;
       ogTitle = pickMeta(source, "og:title") || pickMeta(source, "twitter:title");
-      const candidates = collectImages(source, target, jsonLd);
+      const candidates = collectImages(source, target, parsed);
       return pickBestImage(candidates) ?? "";
     };
+
 
     if (html) imageUrlRaw = parsePick(html);
 
