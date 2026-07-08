@@ -62,8 +62,8 @@ function decodeHtml(s: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-/** Remove <script>/<style>/<noscript>/<template>/<svg> and any element whose
- *  opening tag contains an excluded keyword in class/id/data-*/aria-label. */
+/** Remove script/style/noscript/template/svg and any element whose
+ *  opening tag contains an excluded keyword in class, id, data-* or aria-label. */
 function stripExcludedSections(html: string): string {
   let out = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
