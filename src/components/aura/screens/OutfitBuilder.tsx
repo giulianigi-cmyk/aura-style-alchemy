@@ -56,6 +56,7 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
     | { blob: Blob; dataUrl: string; signedUrl: string | null }
   >(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<string>("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const zSeqRef = useRef(1);
