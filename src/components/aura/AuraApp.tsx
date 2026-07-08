@@ -16,10 +16,16 @@ import { Insights } from "./screens/Insights";
 import { SavedOutfits } from "./screens/SavedOutfits";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
+import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { TabBar } from "./TabBar";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+
+export type Screen =
+  | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
+  | "ai" | "planner" | "shop" | "community" | "profile"
+  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder";
 
 export type Screen =
   | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
