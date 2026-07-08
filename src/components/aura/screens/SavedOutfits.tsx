@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus } from "lucide-react";
-import type { Screen } from "../AuraApp";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Outfit = Tables<"outfits">;
 
-export function SavedOutfits({ go }: { go: (s: Screen) => void }) {
+export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
+
   const { user } = useAuth();
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
