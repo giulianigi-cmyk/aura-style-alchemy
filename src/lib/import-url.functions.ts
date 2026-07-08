@@ -61,16 +61,48 @@ function parseJsonLd(html: string): ProductJson | null {
   return null;
 }
 
+const HARD_BLOCK_STATUSES = new Set([401, 403, 503]);
+
+async function firecrawlScrape(url: string): Promise<string | null> {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      signal: ctl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ url, formats: ["rawHtml", "html"], onlyMainContent: false }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json() as { data?: { rawHtml?: string; html?: string } };
+    return data.data?.rawHtml || data.data?.html || null;
+  } catch (e) {
+    console.warn("[AURA import-url] firecrawl failed", e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const target = new URL(data.url);
 
-    // 1. Fetch the page. Impersonate a real browser to reduce trivial blocks.
-    let html: string;
+    // 1. Try direct fetch with an 8s hard timeout.
+    let html: string | null = null;
+    let hardBlocked = false;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     try {
       const resp = await fetch(target.toString(), {
         redirect: "follow",
+        signal: ctl.signal,
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
@@ -78,13 +110,32 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
           "Accept-Language": "en-US,en;q=0.9",
         },
       });
-      if (!resp.ok) {
+      if (resp.ok) {
+        html = await resp.text();
+      } else if (HARD_BLOCK_STATUSES.has(resp.status)) {
+        hardBlocked = true;
+      } else {
         return { ok: false as const, error: `Site returned ${resp.status}. It may be blocking scraping.` };
       }
-      html = await resp.text();
     } catch (err) {
       console.warn("[AURA import-url] fetch failed", err);
-      return { ok: false as const, error: "Could not reach that URL." };
+      // fall through to Firecrawl fallback
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // 2. Fallback to Firecrawl on block/timeout/error.
+    if (!html) {
+      const fc = await firecrawlScrape(target.toString());
+      if (!fc) {
+        return {
+          ok: false as const,
+          error: hardBlocked
+            ? "This site blocks automated imports. Try a different URL or add the item manually."
+            : "Could not reach that URL. Try a different link or add the item manually.",
+        };
+      }
+      html = fc;
     }
 
     // 2. Extract metadata
