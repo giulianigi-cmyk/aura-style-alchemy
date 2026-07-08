@@ -180,65 +180,82 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
 
   const onPointerUp = () => { dragRef.current = null; };
 
-  // AI Suggest: pick 1 top, 1 bottom or dress, 1 shoes ---------------------
-  const aiSuggest = useCallback(() => {
+  // AI Suggest: call Lovable AI Gateway (google/gemini-2.5-flash) for a coherent outfit.
+  const aiSuggest = useCallback(async () => {
     if (!items.length) { toast.error("Add wardrobe items first"); return; }
     setAiBusy(true);
+    setAiExplanation("");
     try {
-      const wxSug = weather ? suggestOutfit(weather.current) : null;
-      const eligible = weather ? items.filter(weatherOk) : items;
-      const src = eligible.length >= 3 ? eligible : items;
+      const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
+      const res = await suggestOutfitAI({
+        data: {
+          temperature: weather?.current.temperature ?? null,
+          condition: desc,
+          occasion: occasion || null,
+          items: items.map((it) => ({
+            id: it.id,
+            category: it.category,
+            colors: it.colors ?? (it.color ? [it.color] : []),
+            style: it.style ? [it.style] : [],
+            season: it.season,
+            brand: it.brand,
+          })),
+        },
+      });
+      if (!res.ok || !res.item_ids.length) {
+        toast.error("AI couldn't compose a look — try again");
+        return;
+      }
+      const byId = new Map(items.map((it) => [it.id, it]));
+      const picks = res.item_ids
+        .map((id) => byId.get(id))
+        .filter((it): it is WardrobeItem => Boolean(it));
 
-      const bucketOf = (it: WardrobeItem): "top" | "bottom" | "dress" | "shoes" | null => {
+      const bucketOf = (it: WardrobeItem): "top" | "bottom" | "dress" | "shoes" | "outer" | "acc" => {
         const c = `${it.category ?? ""} ${it.style ?? ""}`.toLowerCase();
         if (/dress|gown|jumpsuit/.test(c)) return "dress";
         if (/shoe|boot|sneaker|sandal|loafer|heel/.test(c)) return "shoes";
         if (/pant|trouser|jean|short|skirt|bottom/.test(c)) return "bottom";
-        if (/shirt|top|tee|blouse|knit|sweater|jacket|coat|blazer|outerwear/.test(c)) return "top";
-        return null;
+        if (/coat|jacket|blazer|outerwear/.test(c)) return "outer";
+        if (/shirt|top|tee|blouse|knit|sweater/.test(c)) return "top";
+        return "acc";
       };
-      const kwScore = (it: WardrobeItem): number => {
-        if (!wxSug) return 0;
-        const hay = `${it.category ?? ""} ${it.style ?? ""} ${it.season ?? ""}`.toLowerCase();
-        return wxSug.categories.reduce((n, k) => n + (hay.includes(k) ? 1 : 0), 0);
-      };
+      const layoutY = { outer: 0.28, top: 0.34, dress: 0.5, bottom: 0.6, shoes: 0.85, acc: 0.45 };
+      const zByBucket = { outer: 2, top: 3, dress: 3, bottom: 2, shoes: 1, acc: 4 };
 
-      const buckets: Record<string, WardrobeItem[]> = { top: [], bottom: [], dress: [], shoes: [] };
-      src.forEach((it) => { const b = bucketOf(it); if (b) buckets[b].push(it); });
-      Object.values(buckets).forEach((arr) => arr.sort((a, b) => kwScore(b) - kwScore(a)));
-
-      const picks: WardrobeItem[] = [];
-      if (buckets.dress.length && (!buckets.top.length || !buckets.bottom.length)) {
-        picks.push(buckets.dress[0]);
-      } else {
-        if (buckets.top[0]) picks.push(buckets.top[0]);
-        if (buckets.bottom[0]) picks.push(buckets.bottom[0]);
-      }
-      if (buckets.shoes[0]) picks.push(buckets.shoes[0]);
-      if (!picks.length) { picks.push(...src.slice(0, 3)); }
-
-      // Clear current layout and place picks
-      const zs = { top: 3, dress: 3, bottom: 2, shoes: 1 };
-      const layoutY = { top: 0.32, dress: 0.5, bottom: 0.62, shoes: 0.85 };
-      setPlaced(picks.map((it, i) => {
-        const b = bucketOf(it) ?? "top";
+      const placedNext: Placed[] = [];
+      picks.forEach((it, i) => {
         const path = toStoragePath(it.image_url);
         const url = path ? signed[path] : "";
+        if (!url) return;
+        const b = bucketOf(it);
         zSeqRef.current += 1;
-        return {
+        placedNext.push({
           key: `${it.id}-ai-${i}-${Date.now()}`,
-          itemId: it.id, imgUrl: url,
-          x: 0.5, y: layoutY[b as keyof typeof layoutY] ?? 0.5,
-          scale: b === "shoes" ? 0.28 : 0.42,
+          itemId: it.id,
+          imgUrl: url,
+          x: b === "acc" ? 0.75 : 0.5,
+          y: layoutY[b],
+          scale: b === "shoes" ? 0.28 : b === "acc" ? 0.24 : 0.42,
           rotation: 0,
-          z: zs[b as keyof typeof zs] ?? 1,
-        };
-      }));
-      toast.success("Starter outfit added — tweak away");
+          z: zByBucket[b] ?? 1,
+        });
+      });
+
+      if (!placedNext.length) {
+        toast.error("Selected items are missing images");
+        return;
+      }
+      setPlaced(placedNext);
+      setAiExplanation(res.explanation);
+      toast.success("AI outfit ready — tweak away");
+    } catch (e) {
+      console.error(e);
+      toast.error("AI suggest failed");
     } finally {
       setAiBusy(false);
     }
-  }, [items, weather, weatherOk, signed]);
+  }, [items, weather, occasion, signed]);
 
   // Export & save ---------------------------------------------------------
   const exportCanvas = useCallback(async (): Promise<{ blob: Blob; dataUrl: string } | null> => {
