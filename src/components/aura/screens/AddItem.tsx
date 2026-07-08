@@ -38,12 +38,32 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
 }
 
 /**
- * Flatten a (potentially transparent) PNG onto a solid white background and
- * return a PNG File. This is what actually solves the "checkerboard" issue:
- * every image stored in the wardrobe bucket has real white pixels wherever
- * the AI bg-removal left transparency, so nothing in the UI has to work
- * around alpha rendering.
+ * Flatten a (potentially transparent) PNG onto a solid white background.
+ *
+ * Handles TWO failure modes from the AI bg-removal step:
+ *  1. Real alpha transparency — fillWhite + drawImage drops the alpha
+ *     channel and produces a clean white background.
+ *  2. Baked-in checkerboard pixels — some image models (Gemini flash-image
+ *     included, intermittently) return an RGB PNG where the "transparent"
+ *     background is rasterised as a grey/white checker pattern. In that
+ *     case a simple composite does nothing because the checker pixels are
+ *     fully opaque. We detect it by sampling corner pixels (a foreground
+ *     subject cannot fill the frame corners) and, when they look like
+ *     checker greys/whites, replace every matching pixel with white before
+ *     compositing.
+ *
+ * Search logs for "[AURA flatten]" for diagnostics (dims, alpha stats,
+ * corner RGBA, whether the baked-checker path fired).
  */
+function isCheckerPixel(r: number, g: number, b: number): boolean {
+  // Near-neutral grey/white covering common checker palettes:
+  // Photoshop-style (#CCCCCC / #FFFFFF) and darker Gemini variant
+  // (~#B0B0B0 / ~#E0E0E0). Chroma-key range only, not saturated colors.
+  const grey = Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && Math.abs(r - b) < 10;
+  if (!grey) return false;
+  return r >= 235 || (r >= 175 && r <= 225);
+}
+
 async function flattenPngOnWhite(dataUrl: string, filename: string): Promise<File> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
@@ -51,17 +71,76 @@ async function flattenPngOnWhite(dataUrl: string, filename: string): Promise<Fil
     el.onerror = () => reject(new Error("flatten: image failed to load"));
     el.src = dataUrl;
   });
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("flatten: no 2d context");
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+
+  const src = document.createElement("canvas");
+  src.width = w;
+  src.height = h;
+  const sctx = src.getContext("2d");
+  if (!sctx) throw new Error("flatten: no 2d context");
+  sctx.drawImage(img, 0, 0);
+
+  let mutated = false;
+  try {
+    const imgData = sctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+
+    let hasAlpha = false;
+    for (let i = 3; i < d.length; i += 4) {
+      if (d[i] < 250) { hasAlpha = true; break; }
+    }
+
+    const corner = (x: number, y: number) => {
+      const o = (y * w + x) * 4;
+      return [d[o], d[o + 1], d[o + 2], d[o + 3]] as const;
+    };
+    const tl = corner(0, 0);
+    const tr = corner(w - 1, 0);
+    const bl = corner(0, h - 1);
+    const br = corner(w - 1, h - 1);
+    const checkerCorners = [tl, tr, bl, br]
+      .filter((p) => isCheckerPixel(p[0], p[1], p[2])).length;
+
+    console.log(
+      "[AURA flatten] dims", w, "x", h,
+      "hasAlpha", hasAlpha,
+      "checkerCorners", checkerCorners,
+      "corners", { tl, tr, bl, br },
+    );
+
+    // ≥3 of 4 corners looking like checker background AND essentially
+    // opaque image → the model rasterised the checker. Wipe every checker
+    // pixel to white.
+    if (!hasAlpha && checkerCorners >= 3) {
+      console.warn("[AURA flatten] baked checkerboard detected — replacing checker pixels with white");
+      for (let i = 0; i < d.length; i += 4) {
+        if (isCheckerPixel(d[i], d[i + 1], d[i + 2])) {
+          d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+        }
+      }
+      sctx.putImageData(imgData, 0, 0);
+      mutated = true;
+    }
+  } catch (e) {
+    // Data URLs shouldn't taint the canvas, but log if getImageData fails.
+    console.warn("[AURA flatten] pixel inspection failed", e);
+  }
+
+  // Final composite onto white — removes any remaining alpha channel.
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const octx = out.getContext("2d");
+  if (!octx) throw new Error("flatten: no output 2d context");
+  octx.fillStyle = "#FFFFFF";
+  octx.fillRect(0, 0, w, h);
+  octx.drawImage(src, 0, 0);
+
   const blob: Blob = await new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("flatten: toBlob null"))), "image/png"),
+    out.toBlob((b) => (b ? resolve(b) : reject(new Error("flatten: toBlob null"))), "image/png"),
   );
+  console.log("[AURA flatten] output bytes", blob.size, "mutatedChecker", mutated);
   return new File([blob], filename, { type: "image/png" });
 }
 
