@@ -94,6 +94,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const zSeqRef = useRef(1);
+  const initAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -102,10 +103,29 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       const { data } = await supabase.from("wardrobe_items").select("*").eq("user_id", user.id);
       const list = (data ?? []) as WardrobeItem[];
       setItems(list);
-      setSigned(await resolveWardrobeUrls(list));
+      const signedMap = await resolveWardrobeUrls(list);
+      setSigned(signedMap);
       setLoading(false);
+
+      // If opened from a saved outfit, place its items on the canvas.
+      if (init && !initAppliedRef.current && init.itemIds.length) {
+        initAppliedRef.current = true;
+        const byId = new Map(list.map((it) => [it.id, it]));
+        const picks = init.itemIds
+          .map((id) => byId.get(id))
+          .filter((it): it is WardrobeItem => Boolean(it));
+        const nextPlaced = autoPlace(picks, signedMap);
+        if (nextPlaced.length) {
+          zSeqRef.current = Math.max(zSeqRef.current, ...nextPlaced.map((p) => p.z)) + 1;
+          setPlaced(nextPlaced);
+        }
+        if (init.name) setName(init.name);
+        if (init.occasion) setOccasion(init.occasion);
+        if (init.notes) setNotes(init.notes);
+      }
     })();
-  }, [user]);
+  }, [user, init]);
+
 
   const season = useMemo(() => currentSeason(), []);
   const weatherOk = useCallback(
