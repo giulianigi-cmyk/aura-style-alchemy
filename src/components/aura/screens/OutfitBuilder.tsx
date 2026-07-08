@@ -5,7 +5,7 @@ import {
   ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus,
   Loader2, Share2, Download, Copy, Mail, Instagram, Facebook, Music2, MessageCircle,
 } from "lucide-react";
-import type { Screen } from "../AuraApp";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
