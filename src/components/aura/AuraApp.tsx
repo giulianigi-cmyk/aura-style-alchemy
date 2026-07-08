@@ -27,10 +27,6 @@ export type Screen =
   | "ai" | "planner" | "shop" | "community" | "profile"
   | "insights" | "saved-outfits" | "notifications" | "invite" | "builder";
 
-export type Screen =
-  | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
-  | "ai" | "planner" | "shop" | "community" | "profile"
-  | "insights" | "saved-outfits" | "notifications" | "invite";
 
 function Inner() {
   const { user, loading, recovery } = useAuth();
