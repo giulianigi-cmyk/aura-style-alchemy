@@ -490,7 +490,14 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         </select>
       </div>
 
-      {/* Canvas */}
+      {/* Canvas.
+          `containerType: size` enables cqmin units used by placed items
+          and the AURA watermark below. Without it, cqmin resolves to 0
+          and items/watermark collapse to invisible.
+          The visible border + drop shadow make the composition area
+          clearly distinguishable from the near-white app background
+          (previously #FFFFFF on oklch(0.975...) blended together and
+          users reported the canvas as "not visible"). */}
       <div className="mx-4 mt-4">
         <div
           ref={canvasRef}
@@ -498,8 +505,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-soft select-none touch-none`}
-          style={{ background: "#FFFFFF" }}
+          className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none`}
+          style={{ background: "#FFFFFF", containerType: "size" }}
         >
           {placed
             .slice()
