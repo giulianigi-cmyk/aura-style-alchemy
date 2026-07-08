@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import {
-  describeWeather, classifyTemp, suggestOutfit,
+  describeWeather, classifyTemp,
 } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath, currentSeason, itemMatchesSeason } from "@/lib/wardrobe-image";
