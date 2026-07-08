@@ -4,15 +4,54 @@ import type { Screen } from "../AuraApp";
 import outfit1 from "@/assets/outfit-1.jpg";
 import outfit2 from "@/assets/outfit-2.jpg";
 import outfit3 from "@/assets/outfit-3.jpg";
-import item1 from "@/assets/item-1.jpg";
-import item3 from "@/assets/item-3.jpg";
-import item5 from "@/assets/item-5.jpg";
 import { useProfile } from "@/hooks/use-profile";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, suggestOutfit } from "@/lib/weather";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import type { WardrobeItem } from "@/lib/aura-types";
+import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 
 export function Home({ go }: { go: (s: Screen) => void }) {
+  const { user } = useAuth();
+  const { profile } = useProfile();
+  const { city, latitude, longitude, status, detect, setManual } = useLocation();
+  const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualCity, setManualCity] = useState("");
+  const [autoTried, setAutoTried] = useState(false);
+  const [stats, setStats] = useState<{ pieces: number; outfits: number; wearRate: number }>({
+    pieces: 0, outfits: 0, wearRate: 0,
+  });
+  const [recent, setRecent] = useState<WardrobeItem[]>([]);
+  const [recentSigned, setRecentSigned] = useState<Record<string, string>>({});
+
+  // Load real stats + recent wardrobe items
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      const [itemsRes, outfitsCountRes] = await Promise.all([
+        supabase.from("wardrobe_items")
+          .select("id,worn_count,image_url,category,brand,color,colors,season,style,user_id,created_at,ai_analysis,currency,notes,price,size", { count: "exact" })
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase.from("outfits").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      ]);
+      const items = (itemsRes.data ?? []) as WardrobeItem[];
+      const pieces = itemsRes.count ?? items.length;
+      const worn = items.filter((i) => (i.worn_count ?? 0) > 0).length;
+      setStats({
+        pieces,
+        outfits: outfitsCountRes.count ?? 0,
+        wearRate: pieces ? Math.round((worn / pieces) * 100) : 0,
+      });
+      const top = items.slice(0, 3);
+      setRecent(top);
+      setRecentSigned(await resolveWardrobeUrls(top));
+    })();
+  }, [user]);
+
   const { profile } = useProfile();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
