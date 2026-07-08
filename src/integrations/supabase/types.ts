@@ -52,27 +52,39 @@ export type Database = {
       }
       outfits: {
         Row: {
+          canvas_image_url: string | null
           cover_url: string | null
           created_at: string
           id: string
           item_ids: string[]
           name: string
+          notes: string | null
+          occasion: string[]
+          season: string[]
           user_id: string
         }
         Insert: {
+          canvas_image_url?: string | null
           cover_url?: string | null
           created_at?: string
           id?: string
           item_ids?: string[]
           name?: string
+          notes?: string | null
+          occasion?: string[]
+          season?: string[]
           user_id?: string
         }
         Update: {
+          canvas_image_url?: string | null
           cover_url?: string | null
           created_at?: string
           id?: string
           item_ids?: string[]
           name?: string
+          notes?: string | null
+          occasion?: string[]
+          season?: string[]
           user_id?: string
         }
         Relationships: []
