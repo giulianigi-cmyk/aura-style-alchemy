@@ -11,17 +11,27 @@ const HARD_BLOCK_DOMAINS = new Set([
   "zalando.com", "zalando.it", "zara.com", "hm.com", "asos.com", "farfetch.com",
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
   "louisvuitton.com", "dior.com", "chanel.com", "ssense.com", "matchesfashion.com",
-  "revolve.com", "shopbop.com", "nordstrom.com", "about.com",
+  "revolve.com", "shopbop.com", "nordstrom.com", "victoriabeckham.com",
 ]);
 
 const RETRY_STATUSES = new Set([401, 403, 429, 503]);
 
-const MODEL_KEYWORDS = /(model|look|worn|outfit|person|lifestyle|editorial|campaign|onbody|on-body)/i;
-const PRODUCT_KEYWORDS = /(flat|back|detail|still|product|front|packshot|closeup|close-up)/i;
-const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumb|swatch|badge|banner)/i;
+// Section identifiers we always strip from HTML before DOM-scanning for images.
+// These regexes match class, id, data-testid, aria-label — any attribute that
+// hints the block is unrelated to the current product.
+const EXCLUDED_SECTION_KEYWORDS = [
+  "related", "recommend", "similar", "complete-the-look", "complete_the_look",
+  "you-may-also", "you-might-also", "recently-viewed", "recently_viewed",
+  "cross-sell", "cross_sell", "upsell", "up-sell", "also-bought", "also_bought",
+  "shop-the-look", "shop_the_look", "editorial", "carousel-recommend",
+  "product-recommendations", "product_recommendations", "suggestions",
+  "footer", "site-header", "site_header", "site-nav", "site_nav",
+];
 
 const FIRECRAWL_MISSING_MSG =
   "This site requires enhanced import — add your Firecrawl key in settings to enable it.";
+
+// ---------- helpers ---------------------------------------------------------
 
 function rootDomain(u: URL): string {
   const host = u.hostname.replace(/^www\d*\./, "");
@@ -52,38 +62,139 @@ function decodeHtml(s: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-type ProductJson = {
-  name?: string;
-  brand?: string | { name?: string };
-  image?: string | string[];
-  offers?: { price?: string | number; priceCurrency?: string } | Array<{ price?: string | number; priceCurrency?: string }>;
-};
+/** Remove <script>/<style>/<noscript>/<template>/<svg> and any element whose
+ *  opening tag contains an excluded keyword in class/id/data-*/aria-label. */
+function stripExcludedSections(html: string): string {
+  let out = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<template[\s\S]*?<\/template>/gi, "")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "");
 
-function parseJsonLd(html: string): ProductJson | null {
-  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    try {
-      const parsed = JSON.parse(m[1].trim());
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      for (const it of items) {
-        const type = it?.["@type"];
-        if (type === "Product" || (Array.isArray(type) && type.includes("Product"))) {
-          return it as ProductJson;
-        }
-        if (Array.isArray(it?.["@graph"])) {
-          for (const g of it["@graph"]) {
-            const t = g?.["@type"];
-            if (t === "Product" || (Array.isArray(t) && t.includes("Product"))) return g as ProductJson;
-          }
-        }
-      }
-    } catch { /* ignore malformed JSON-LD blocks */ }
+  // Aggressive: for each excluded keyword, drop the containing element
+  // (best-effort — matches simple, non-nested cases; a related block that
+  // survives still gets penalised in scoring below).
+  for (const kw of EXCLUDED_SECTION_KEYWORDS) {
+    const re = new RegExp(
+      `<(section|div|aside|ul|ol)[^>]*(?:class|id|data-[a-z-]+|aria-label)=["'][^"']*${kw}[^"']*["'][^>]*>[\\s\\S]*?<\\/\\1>`,
+      "gi",
+    );
+    // Repeat until stable — some sites have nested wrappers.
+    let prev = "";
+    while (prev !== out) {
+      prev = out;
+      out = out.replace(re, "");
+    }
   }
-  return null;
+  return out;
 }
 
-function collectImages(html: string, base: URL, jsonLd: ProductJson | null): string[] {
+// ---------- JSON-LD ---------------------------------------------------------
+
+type ProductJson = {
+  "@type"?: string | string[];
+  name?: string;
+  sku?: string;
+  productID?: string;
+  url?: string;
+  brand?: string | { name?: string };
+  image?: string | string[] | { url?: string } | Array<{ url?: string }>;
+  offers?:
+    | { price?: string | number; priceCurrency?: string; url?: string }
+    | Array<{ price?: string | number; priceCurrency?: string; url?: string }>;
+};
+
+function isProductType(t: unknown): boolean {
+  if (typeof t === "string") return t.toLowerCase().includes("product");
+  if (Array.isArray(t)) return t.some((x) => typeof x === "string" && x.toLowerCase().includes("product"));
+  return false;
+}
+
+/** Collect every JSON-LD Product node in document order. Includes @graph and
+ *  nested arrays. Ignores non-Product entities. */
+function collectProductNodes(html: string): ProductJson[] {
+  const nodes: ProductJson[] = [];
+  const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  const walk = (node: unknown) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    if (isProductType(obj["@type"])) nodes.push(obj as ProductJson);
+    if (Array.isArray(obj["@graph"])) obj["@graph"].forEach(walk);
+    // Some sites nest a Product inside "mainEntity" / "hasVariant".
+    if (obj.mainEntity) walk(obj.mainEntity);
+    if (obj.hasVariant) walk(obj.hasVariant);
+  };
+  while ((m = re.exec(html)) !== null) {
+    try { walk(JSON.parse(m[1].trim())); }
+    catch { /* ignore malformed JSON-LD */ }
+  }
+  return nodes;
+}
+
+/** Slug tokens from the URL path — used to match the Product node that
+ *  corresponds to the URL when the page ships multiple Product nodes. */
+function urlSlugTokens(u: URL): string[] {
+  const parts = u.pathname.toLowerCase().split(/[/_-]+/).filter(Boolean);
+  return parts.filter((p) => p.length >= 3 && !/^\d+$/.test(p));
+}
+
+function nodeMatchesUrl(node: ProductJson, target: URL): boolean {
+  const canonicals: string[] = [];
+  if (typeof node.url === "string") canonicals.push(node.url);
+  const offers = Array.isArray(node.offers) ? node.offers : node.offers ? [node.offers] : [];
+  offers.forEach((o) => { if (o?.url) canonicals.push(o.url); });
+  for (const c of canonicals) {
+    try {
+      const cu = new URL(c, target);
+      if (cu.pathname === target.pathname) return true;
+    } catch { /* ignore */ }
+  }
+  const slug = urlSlugTokens(target);
+  if (!slug.length) return false;
+  const name = (node.name ?? "").toLowerCase();
+  if (!name) return false;
+  const overlap = slug.filter((tok) => name.includes(tok)).length;
+  return overlap >= Math.min(2, slug.length);
+}
+
+function jsonLdImages(node: ProductJson): string[] {
+  const img = node.image;
+  if (!img) return [];
+  const out: string[] = [];
+  const push = (v: unknown) => {
+    if (typeof v === "string") out.push(v);
+    else if (v && typeof v === "object" && typeof (v as { url?: string }).url === "string") {
+      out.push((v as { url: string }).url);
+    }
+  };
+  if (Array.isArray(img)) img.forEach(push);
+  else push(img);
+  return out;
+}
+
+/** Pick the Product node most likely to represent the URL. */
+function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | null {
+  if (!nodes.length) return null;
+  if (nodes.length === 1) return nodes[0];
+  const matched = nodes.find((n) => nodeMatchesUrl(n, target));
+  return matched ?? nodes[0];
+}
+
+// ---------- DOM image fallback ---------------------------------------------
+
+const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook)/i;
+const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary)/i;
+const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumbnail|swatch|badge|banner|arrow|chevron|pixel\.gif|tracking)/i;
+const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|editorial|carousel|thumbnail|swatch)/i;
+
+function collectDomImages(html: string, base: URL): string[] {
   const set = new Set<string>();
   const push = (v?: string | null) => {
     if (!v) return;
@@ -91,13 +202,6 @@ function collectImages(html: string, base: URL, jsonLd: ProductJson | null): str
     if (!t || t.startsWith("data:")) return;
     try { set.add(new URL(t, base).toString()); } catch { /* ignore */ }
   };
-  push(pickMeta(html, "og:image"));
-  push(pickMeta(html, "og:image:secure_url"));
-  push(pickMeta(html, "twitter:image"));
-  if (jsonLd?.image) {
-    if (Array.isArray(jsonLd.image)) jsonLd.image.forEach(push);
-    else push(jsonLd.image);
-  }
   const imgRe = /<img[^>]+>/gi;
   let m: RegExpExecArray | null;
   while ((m = imgRe.exec(html))) {
@@ -110,34 +214,60 @@ function collectImages(html: string, base: URL, jsonLd: ProductJson | null): str
     push(attr("data-src"));
     push(attr("data-lazy-src"));
     push(attr("data-original"));
+    push(attr("data-zoom-image"));
     const srcset = attr("srcset") ?? attr("data-srcset");
     if (srcset) {
-      srcset.split(",").forEach((part) => push(part.trim().split(/\s+/)[0]));
+      // Pick the widest candidate in the srcset.
+      const parts = srcset.split(",").map((s) => s.trim()).filter(Boolean);
+      let bestUrl: string | null = null;
+      let bestW = -1;
+      for (const p of parts) {
+        const [u, w] = p.split(/\s+/);
+        const width = w?.endsWith("w") ? parseInt(w) : 0;
+        if (width > bestW) { bestW = width; bestUrl = u; }
+      }
+      push(bestUrl);
     }
   }
   return Array.from(set);
 }
 
-function scoreImage(url: string): number {
+function scoreImage(url: string, productTokens: string[]): number {
   const u = url.toLowerCase();
   let s = 0;
-  if (JUNK_KEYWORDS.test(u)) s -= 20;
-  if (MODEL_KEYWORDS.test(u)) s -= 6;
-  if (PRODUCT_KEYWORDS.test(u)) s += 4;
+  if (JUNK_KEYWORDS.test(u)) s -= 30;
+  if (RELATED_URL_KEYWORDS.test(u)) s -= 15;
+  if (PRODUCT_KEYWORDS.test(u)) s += 5;
+  if (MODEL_KEYWORDS.test(u)) s -= 2;
   if (/\.(png|jpe?g|webp)(\?|$)/i.test(u)) s += 1;
+  // Boost if URL references the product slug.
+  for (const tok of productTokens) {
+    if (tok.length >= 4 && u.includes(tok)) { s += 4; break; }
+  }
+  // Prefer larger declared widths (query params like ?w=1200 or _1200_).
+  const wMatch = u.match(/[_?&](?:w|width)[=_]?(\d{3,4})/);
+  if (wMatch) {
+    const w = parseInt(wMatch[1]);
+    if (w >= 1000) s += 3;
+    else if (w >= 600) s += 1;
+  }
   return s;
 }
 
-function pickBestImage(candidates: string[]): string | null {
+function pickBestImage(candidates: string[], productTokens: string[]): string | null {
   if (!candidates.length) return null;
   const scored = candidates
-    .map((u) => ({ u, s: scoreImage(u) }))
-    .filter((x) => x.s > -10)
+    .map((u) => ({ u, s: scoreImage(u, productTokens) }))
+    .filter((x) => x.s > -20)
     .sort((a, b) => b.s - a.s);
   return scored[0]?.u ?? null;
 }
 
-async function firecrawlScrape(url: string): Promise<string | null> {
+// ---------- Fallback scraper (pluggable) -----------------------------------
+
+type FallbackScraper = (url: string) => Promise<string | null>;
+
+const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return null;
   const ctl = new AbortController();
@@ -146,10 +276,7 @@ async function firecrawlScrape(url: string): Promise<string | null> {
     const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       signal: ctl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ url, formats: ["rawHtml", "html"], onlyMainContent: false }),
     });
     if (!r.ok) return null;
@@ -161,7 +288,12 @@ async function firecrawlScrape(url: string): Promise<string | null> {
   } finally {
     clearTimeout(timer);
   }
-}
+};
+
+const fallbackScraper: FallbackScraper = firecrawlScrape;
+const fallbackScraperAvailable = () => Boolean(process.env.FIRECRAWL_API_KEY);
+
+// ---------- Direct fetch ----------------------------------------------------
 
 async function directFetch(target: URL): Promise<{ html: string | null; blocked: boolean }> {
   const ctl = new AbortController();
@@ -188,45 +320,90 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
   }
 }
 
+// ---------- Extraction orchestrator ----------------------------------------
+
+type ExtractionMethod = "json-ld" | "og-image" | "dom" | "none";
+type Extracted = {
+  imageUrl: string;
+  method: ExtractionMethod;
+  productNode: ProductJson | null;
+  ogTitle: string;
+};
+
+function extractFromHtml(html: string, target: URL): Extracted {
+  // Step 1 — JSON-LD Product entity. This is the highest-fidelity signal
+  // because it explicitly binds an image to a specific Product.
+  const productNodes = collectProductNodes(html);
+  const productNode = selectProductNode(productNodes, target);
+
+  if (productNode) {
+    const imgs = jsonLdImages(productNode)
+      .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
+      .filter((u): u is string => Boolean(u) && !JUNK_KEYWORDS.test(u.toLowerCase()));
+    if (imgs.length) {
+      return { imageUrl: imgs[0], method: "json-ld", productNode, ogTitle: pickMeta(html, "og:title") };
+    }
+  }
+
+  const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
+
+  // Step 2 — OG image, but only if it looks like a product image (not a
+  // generic site OG). We validate by checking it isn't obviously junk and
+  // that a Product entity exists on the page (or the URL slug matches).
+  const og = pickMeta(html, "og:image") || pickMeta(html, "og:image:secure_url") || pickMeta(html, "twitter:image");
+  if (og) {
+    try {
+      const abs = new URL(og, target).toString();
+      const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase());
+      const looksLikeProduct = productNodes.length > 0 ||
+        urlSlugTokens(target).some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
+      if (!junky && looksLikeProduct) {
+        return { imageUrl: abs, method: "og-image", productNode, ogTitle };
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Step 3 — DOM scan, after stripping related/recommendation/nav sections.
+  const cleaned = stripExcludedSections(html);
+  const candidates = collectDomImages(cleaned, target);
+  const tokens = urlSlugTokens(target);
+  const best = pickBestImage(candidates, tokens);
+  if (best) return { imageUrl: best, method: "dom", productNode, ogTitle };
+
+  return { imageUrl: "", method: "none", productNode, ogTitle };
+}
+
+// ---------- Main handler ---------------------------------------------------
+
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const target = new URL(data.url);
     const domain = rootDomain(target);
-    const hasFirecrawl = Boolean(process.env.FIRECRAWL_API_KEY);
-    const forceFirecrawl = HARD_BLOCK_DOMAINS.has(domain);
+    const hasFallback = fallbackScraperAvailable();
+    const forceFallback = HARD_BLOCK_DOMAINS.has(domain);
 
     let html: string | null = null;
     let blocked = false;
+    let usedFallback = false;
 
-    if (forceFirecrawl) {
-      if (!hasFirecrawl) return { ok: false as const, error: FIRECRAWL_MISSING_MSG };
-      html = await firecrawlScrape(target.toString());
+    if (forceFallback) {
+      if (!hasFallback) return { ok: false as const, error: FIRECRAWL_MISSING_MSG };
+      html = await fallbackScraper(target.toString());
+      usedFallback = true;
     } else {
       const direct = await directFetch(target);
       html = direct.html;
       blocked = direct.blocked;
     }
 
-    // 2. Parse & pick the best product image; fallback to Firecrawl if nothing usable.
-    let imageUrlRaw = "";
-    let jsonLd: ProductJson | null = null;
-    let ogTitle = "";
+    let extracted: Extracted = { imageUrl: "", method: "none", productNode: null, ogTitle: "" };
+    if (html) extracted = extractFromHtml(html, target);
 
-    const parsePick = (source: string): string => {
-      const parsed: ProductJson | null = parseJsonLd(source);
-      jsonLd = parsed;
-      ogTitle = pickMeta(source, "og:title") || pickMeta(source, "twitter:title");
-      const candidates = collectImages(source, target, parsed);
-      return pickBestImage(candidates) ?? "";
-    };
-
-
-    if (html) imageUrlRaw = parsePick(html);
-
-    if (!imageUrlRaw && !forceFirecrawl) {
-      // Direct fetch didn't yield a usable image (blocked, empty, or only model shots) — try Firecrawl.
-      if (!hasFirecrawl) {
+    // If direct fetch yielded nothing usable and we haven't tried the
+    // fallback yet, try it now — never stop after failing OG.
+    if (!extracted.imageUrl && !usedFallback) {
+      if (!hasFallback) {
         return {
           ok: false as const,
           error: blocked
@@ -234,14 +411,15 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
             : "No product image found on that page. Try a different link or add the item manually.",
         };
       }
-      const fc = await firecrawlScrape(target.toString());
+      const fc = await fallbackScraper(target.toString());
       if (fc) {
         html = fc;
-        imageUrlRaw = parsePick(fc);
+        usedFallback = true;
+        extracted = extractFromHtml(fc, target);
       }
     }
 
-    if (!imageUrlRaw) {
+    if (!extracted.imageUrl) {
       return {
         ok: false as const,
         error: blocked
@@ -250,9 +428,18 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       };
     }
 
-    const imageUrl = new URL(imageUrlRaw, target).toString();
+    const imageUrl = new URL(extracted.imageUrl, target).toString();
+    console.log(
+      "[AURA import-url] extraction",
+      JSON.stringify({
+        domain,
+        method: extracted.method,
+        fallback: usedFallback,
+        picked: imageUrl,
+      }),
+    );
 
-    // 3. Download the image with a 12s timeout (some CDNs are slow).
+    // Download the image (12s timeout for slow CDNs).
     let imageDataUrl: string;
     const imgCtl = new AbortController();
     const imgTimer = setTimeout(() => imgCtl.abort(), 12000);
@@ -281,8 +468,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       clearTimeout(imgTimer);
     }
 
-    // 4. Structured hints
-    const ld = jsonLd as ProductJson | null;
+    // Structured hints (brand/title/price) — from Product node when available.
+    const ld = extracted.productNode;
     const brandFromLd =
       typeof ld?.brand === "string"
         ? ld.brand
@@ -290,7 +477,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         ? ld.brand.name ?? ""
         : "";
     const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
-    const title = (ld?.name || ogTitle || "").trim();
+    const title = (ld?.name || extracted.ogTitle || "").trim();
 
     let price: string | null = null;
     const offer = Array.isArray(ld?.offers) ? ld?.offers[0] : ld?.offers;
@@ -299,7 +486,6 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       price = `${offer.price}${currency}`;
     }
 
-
     return {
       ok: true as const,
       imageDataUrl,
@@ -307,5 +493,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       title,
       price,
       sourceUrl: target.toString(),
+      extractionMethod: extracted.method,
+      usedFallback,
     };
   });
