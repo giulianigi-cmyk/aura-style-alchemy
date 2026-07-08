@@ -362,28 +362,31 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       if (up.error) throw up.error;
 
       const seasonTag = weather ? [season] : [];
-      const { error } = await supabase.from("outfits").insert({
-        user_id: user.id,
+      const payload = {
         name: name.trim() || `Outfit ${new Date().toLocaleDateString()}`,
         item_ids: placed.map((p) => p.itemId),
         canvas_image_url: path,
         occasion: occasion ? [occasion] : [],
         season: seasonTag,
         notes: notes.trim() || null,
-      });
+      };
+      const { error } = init?.outfitId
+        ? await supabase.from("outfits").update(payload).eq("id", init.outfitId).eq("user_id", user.id)
+        : await supabase.from("outfits").insert({ user_id: user.id, ...payload });
       if (error) throw error;
 
       const signedUrl = (await supabase.storage.from("outfits")
         .createSignedUrl(path, 60 * 60 * 24 * 7)).data?.signedUrl ?? null;
       setShareState({ blob: exported.blob, dataUrl: exported.dataUrl, signedUrl });
-      toast.success("Outfit saved");
+      toast.success(init?.outfitId ? "Outfit updated" : "Outfit saved");
     } catch (e: unknown) {
       console.error("[AURA] save outfit", e);
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  }, [user, placed, exportCanvas, name, occasion, notes, season, weather]);
+  }, [user, placed, exportCanvas, name, occasion, notes, season, weather, init]);
+
 
   const doNativeShare = async () => {
     if (!shareState) return;
