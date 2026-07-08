@@ -5,7 +5,7 @@ import {
   ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus,
   Loader2, Share2, Download, Copy, Mail, Instagram, Facebook, Music2, MessageCircle,
 } from "lucide-react";
-import type { Screen } from "../AuraApp";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
@@ -35,7 +35,41 @@ type Placed = {
   z: number;
 };
 
-export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
+type Bucket = "top" | "bottom" | "dress" | "shoes" | "outer" | "acc";
+const LAYOUT_Y: Record<Bucket, number> = { outer: 0.28, top: 0.34, dress: 0.5, bottom: 0.6, shoes: 0.85, acc: 0.45 };
+const Z_BY_BUCKET: Record<Bucket, number> = { outer: 2, top: 3, dress: 3, bottom: 2, shoes: 1, acc: 4 };
+function bucketOf(it: WardrobeItem): Bucket {
+  const c = `${it.category ?? ""} ${it.style ?? ""}`.toLowerCase();
+  if (/dress|gown|jumpsuit/.test(c)) return "dress";
+  if (/shoe|boot|sneaker|sandal|loafer|heel/.test(c)) return "shoes";
+  if (/pant|trouser|jean|short|skirt|bottom/.test(c)) return "bottom";
+  if (/coat|jacket|blazer|outerwear/.test(c)) return "outer";
+  if (/shirt|top|tee|blouse|knit|sweater/.test(c)) return "top";
+  return "acc";
+}
+function autoPlace(items: WardrobeItem[], signed: Record<string, string>): Placed[] {
+  const placed: Placed[] = [];
+  items.forEach((it, i) => {
+    const path = toStoragePath(it.image_url);
+    const url = path ? signed[path] : "";
+    if (!url) return;
+    const b = bucketOf(it);
+    placed.push({
+      key: `${it.id}-init-${i}-${Date.now()}`,
+      itemId: it.id,
+      imgUrl: url,
+      x: b === "acc" ? 0.75 : 0.5,
+      y: LAYOUT_Y[b],
+      scale: b === "shoes" ? 0.28 : b === "acc" ? 0.24 : 0.42,
+      rotation: 0,
+      z: Z_BY_BUCKET[b] ?? 1,
+    });
+  });
+  return placed;
+}
+
+export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: BuilderInit }) {
+
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -60,6 +94,7 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const zSeqRef = useRef(1);
+  const initAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -68,10 +103,29 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
       const { data } = await supabase.from("wardrobe_items").select("*").eq("user_id", user.id);
       const list = (data ?? []) as WardrobeItem[];
       setItems(list);
-      setSigned(await resolveWardrobeUrls(list));
+      const signedMap = await resolveWardrobeUrls(list);
+      setSigned(signedMap);
       setLoading(false);
+
+      // If opened from a saved outfit, place its items on the canvas.
+      if (init && !initAppliedRef.current && init.itemIds.length) {
+        initAppliedRef.current = true;
+        const byId = new Map(list.map((it) => [it.id, it]));
+        const picks = init.itemIds
+          .map((id) => byId.get(id))
+          .filter((it): it is WardrobeItem => Boolean(it));
+        const nextPlaced = autoPlace(picks, signedMap);
+        if (nextPlaced.length) {
+          zSeqRef.current = Math.max(zSeqRef.current, ...nextPlaced.map((p) => p.z)) + 1;
+          setPlaced(nextPlaced);
+        }
+        if (init.name) setName(init.name);
+        if (init.occasion) setOccasion(init.occasion);
+        if (init.notes) setNotes(init.notes);
+      }
     })();
-  }, [user]);
+  }, [user, init]);
+
 
   const season = useMemo(() => currentSeason(), []);
   const weatherOk = useCallback(
@@ -281,7 +335,7 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
         height: rect.height,
         canvasWidth: targetW,
         canvasHeight: targetH,
-        backgroundColor: "#F5F5F5",
+        backgroundColor: "#FFFFFF",
       });
       const blob = dataUrlToBlob(dataUrl);
       return { blob, dataUrl };
@@ -308,28 +362,31 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
       if (up.error) throw up.error;
 
       const seasonTag = weather ? [season] : [];
-      const { error } = await supabase.from("outfits").insert({
-        user_id: user.id,
+      const payload = {
         name: name.trim() || `Outfit ${new Date().toLocaleDateString()}`,
         item_ids: placed.map((p) => p.itemId),
         canvas_image_url: path,
         occasion: occasion ? [occasion] : [],
         season: seasonTag,
         notes: notes.trim() || null,
-      });
+      };
+      const { error } = init?.outfitId
+        ? await supabase.from("outfits").update(payload).eq("id", init.outfitId).eq("user_id", user.id)
+        : await supabase.from("outfits").insert({ user_id: user.id, ...payload });
       if (error) throw error;
 
       const signedUrl = (await supabase.storage.from("outfits")
         .createSignedUrl(path, 60 * 60 * 24 * 7)).data?.signedUrl ?? null;
       setShareState({ blob: exported.blob, dataUrl: exported.dataUrl, signedUrl });
-      toast.success("Outfit saved");
+      toast.success(init?.outfitId ? "Outfit updated" : "Outfit saved");
     } catch (e: unknown) {
       console.error("[AURA] save outfit", e);
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  }, [user, placed, exportCanvas, name, occasion, notes, season, weather]);
+  }, [user, placed, exportCanvas, name, occasion, notes, season, weather, init]);
+
 
   const doNativeShare = async () => {
     if (!shareState) return;
@@ -426,7 +483,7 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-soft select-none touch-none`}
-          style={{ background: "#F5F5F5" }}
+          style={{ background: "#FFFFFF" }}
         >
           {placed
             .slice()

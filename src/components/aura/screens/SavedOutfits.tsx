@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus } from "lucide-react";
-import type { Screen } from "../AuraApp";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Outfit = Tables<"outfits">;
 
-export function SavedOutfits({ go }: { go: (s: Screen) => void }) {
+export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
+
   const { user } = useAuth();
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
@@ -90,20 +91,31 @@ export function SavedOutfits({ go }: { go: (s: Screen) => void }) {
         <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
           {outfits.map((o) => {
             const url = o.canvas_image_url ? signed[o.canvas_image_url] : null;
+            const open = () => openBuilder({
+              itemIds: o.item_ids,
+              name: o.name,
+              occasion: o.occasion?.[0],
+              notes: o.notes ?? undefined,
+              outfitId: o.id,
+            });
             return (
               <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft">
-                <div className="aspect-square" style={{ background: "#F5F5F5" }}>
-                  {url ? (
-                    <img src={url} alt={o.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No preview</div>
-                  )}
-                </div>
+                <button onClick={open} className="block w-full text-left active:scale-[0.98]">
+                  <div className="aspect-square" style={{ background: "#FFFFFF" }}>
+                    {url ? (
+                      <img src={url} alt={o.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">Open canvas</div>
+                    )}
+                  </div>
+                </button>
                 <div className="p-3 space-y-2">
-                  <p className="font-serif italic text-sm truncate">{o.name}</p>
-                  {o.occasion?.length ? (
-                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
-                  ) : null}
+                  <button onClick={open} className="w-full text-left">
+                    <p className="font-serif italic text-sm truncate">{o.name}</p>
+                    {o.occasion?.length ? (
+                      <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
+                    ) : null}
+                  </button>
                   <button
                     onClick={() => setAssignFor(o)}
                     className="w-full h-8 rounded-full bg-foreground text-background text-[9px] uppercase tracking-[0.25em] inline-flex items-center justify-center gap-1 active:scale-95"
@@ -113,6 +125,7 @@ export function SavedOutfits({ go }: { go: (s: Screen) => void }) {
             );
           })}
         </div>
+
       )}
 
       {assignFor && (

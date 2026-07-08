@@ -78,8 +78,12 @@
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.01em;
   }
+  /* Global: transparent PNGs (wardrobe items, product shots) render on white,
+     never on the browser's default checkerboard. */
+  img { background-color: #FFFFFF; }
   .font-serif { font-family: var(--font-serif); letter-spacing: -0.02em; }
 }
+
 
 @layer utilities {
   .text-balance { text-wrap: balance; }
