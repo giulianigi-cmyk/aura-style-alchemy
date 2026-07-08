@@ -52,12 +52,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     })();
   }, [user]);
 
-  const { profile } = useProfile();
-  const { city, latitude, longitude, status, detect, setManual } = useLocation();
-  const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualCity, setManualCity] = useState("");
-  const [autoTried, setAutoTried] = useState(false);
+
+
 
   // Try geolocation once on first visit if no location stored yet.
   useEffect(() => {
