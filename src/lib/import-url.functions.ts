@@ -339,7 +339,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
   if (productNode) {
     const imgs = jsonLdImages(productNode)
       .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
-      .filter((u): u is string => Boolean(u) && !JUNK_KEYWORDS.test(u.toLowerCase()));
+      .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()));
     if (imgs.length) {
       return { imageUrl: imgs[0], method: "json-ld", productNode, ogTitle: pickMeta(html, "og:title") };
     }
