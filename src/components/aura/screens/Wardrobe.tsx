@@ -22,6 +22,32 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
   const [seasonOnly, setSeasonOnly] = useState(true);
+  const [detail, setDetail] = useState<WardrobeItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteItem = async () => {
+    if (!detail) return;
+    setDeleting(true);
+    try {
+      const path = toStoragePath(detail.image_url);
+      // Delete DB row first (RLS-scoped); best-effort clean up the file after.
+      const { error } = await supabase.from("wardrobe_items").delete().eq("id", detail.id);
+      if (error) throw error;
+      if (path) {
+        await supabase.storage.from("wardrobe").remove([path]).catch(() => { /* ignore */ });
+      }
+      setItems((prev) => prev.filter((it) => it.id !== detail.id));
+      toast.success("Item deleted");
+      setConfirmDelete(false);
+      setDetail(null);
+    } catch (e) {
+      console.error("[AURA wardrobe] delete", e);
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const season = useMemo(() => currentSeason(), []);
 
