@@ -78,9 +78,8 @@
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.01em;
   }
-  /* Global: transparent PNGs (wardrobe items, product shots) render on white,
-     never on the browser's default checkerboard. */
-  img { background-color: #FFFFFF; }
+  /* Wardrobe images are flattened onto white at upload time (see AddItem.tsx),
+     so image elements no longer need a global background-color safety net. */
   .font-serif { font-family: var(--font-serif); letter-spacing: -0.02em; }
 }
 

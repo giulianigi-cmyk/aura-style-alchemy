@@ -1,4 +1,5 @@
-import { Plus, Filter, Search, Loader2 } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +22,32 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
   const [seasonOnly, setSeasonOnly] = useState(true);
+  const [detail, setDetail] = useState<WardrobeItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteItem = async () => {
+    if (!detail) return;
+    setDeleting(true);
+    try {
+      const path = toStoragePath(detail.image_url);
+      // Delete DB row first (RLS-scoped); best-effort clean up the file after.
+      const { error } = await supabase.from("wardrobe_items").delete().eq("id", detail.id);
+      if (error) throw error;
+      if (path) {
+        await supabase.storage.from("wardrobe").remove([path]).catch(() => { /* ignore */ });
+      }
+      setItems((prev) => prev.filter((it) => it.id !== detail.id));
+      toast.success("Item deleted");
+      setConfirmDelete(false);
+      setDetail(null);
+    } catch (e) {
+      console.error("[AURA wardrobe] delete", e);
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const season = useMemo(() => currentSeason(), []);
 
@@ -161,7 +188,12 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             const src = path ? (signed[path] ?? "") : "";
             const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
             return (
-            <div key={it.id} className="group animate-fade-up" style={{ animationDelay: `${i * 0.04}s` }}>
+            <button
+              key={it.id}
+              onClick={() => { setDetail(it); setConfirmDelete(false); }}
+              className="group animate-fade-up text-left"
+              style={{ animationDelay: `${i * 0.04}s` }}
+            >
               <div className="overflow-hidden rounded-2xl shadow-soft" style={{ background: "#FFFFFF" }}>
                 {src ? (
                   <img
@@ -177,9 +209,76 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.brand ?? it.category}</p>
                 <p className="font-serif text-base leading-tight">{[label, it.category].filter(Boolean).join(" ")}</p>
               </div>
-            </div>
+            </button>
             );
           })}
+        </div>
+      )}
+
+      {detail && (
+        <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur flex items-end sm:items-center justify-center" onClick={() => setDetail(null)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 relative"
+          >
+            <button
+              onClick={() => setDetail(null)}
+              className="absolute top-4 left-4 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+              aria-label="Close"
+            ><X size={16} /></button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="absolute top-4 right-4 h-9 w-9 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90"
+              aria-label="Delete item"
+            ><Trash2 size={16} /></button>
+
+            <div className="mt-6 rounded-2xl overflow-hidden mx-auto aspect-square max-w-[240px]" style={{ background: "#FFFFFF" }}>
+              {(() => {
+                const path = toStoragePath(detail.image_url);
+                const src = path ? signed[path] : "";
+                return src ? (
+                  <img src={src} alt="" className="h-full w-full object-contain p-3" />
+                ) : (
+                  <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
+                );
+              })()}
+            </div>
+
+            <div className="mt-4 text-center">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
+              <p className="font-serif text-2xl mt-1">{[detail.colors?.[0] ?? detail.color, detail.category].filter(Boolean).join(" ")}</p>
+              {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
+            </div>
+
+            {confirmDelete ? (
+              <div className="mt-5 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+                <p className="font-serif text-lg text-center">Delete this item?</p>
+                <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+                  >Cancel</button>
+                  <button
+                    onClick={deleteItem}
+                    disabled={deleting}
+                    className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {deleting && <Loader2 size={12} className="animate-spin" />}
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="mt-5 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
+              >
+                <Trash2 size={12} /> Delete item
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

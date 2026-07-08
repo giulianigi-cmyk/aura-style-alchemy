@@ -37,6 +37,34 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
   return new File([blob], filename, { type: blob.type || "image/png" });
 }
 
+/**
+ * Flatten a (potentially transparent) PNG onto a solid white background and
+ * return a PNG File. This is what actually solves the "checkerboard" issue:
+ * every image stored in the wardrobe bucket has real white pixels wherever
+ * the AI bg-removal left transparency, so nothing in the UI has to work
+ * around alpha rendering.
+ */
+async function flattenPngOnWhite(dataUrl: string, filename: string): Promise<File> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("flatten: image failed to load"));
+    el.src = dataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("flatten: no 2d context");
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  const blob: Blob = await new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("flatten: toBlob null"))), "image/png"),
+  );
+  return new File([blob], filename, { type: "image/png" });
+}
+
 type Stage = "idle" | "bgremove" | "analyze";
 
 export function AddItem({ onClose }: { onClose: () => void }) {
@@ -105,9 +133,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     try {
       const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
       if (bg.ok) {
-        const pngFile = await dataUrlToFile(bg.imageDataUrl, `item-${Date.now()}.png`);
-        setFile(pngFile);
-        setPreview(URL.createObjectURL(pngFile));
+        // Flatten the transparent PNG onto solid white so the stored file
+        // never renders with a checkerboard anywhere in the app.
+        const flatFile = await flattenPngOnWhite(bg.imageDataUrl, `item-${Date.now()}.png`);
+        setFile(flatFile);
+        setPreview(URL.createObjectURL(flatFile));
         setTransparent(true);
       }
     } catch (e) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus,
+  ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus, X,
   Loader2, Share2, Download, Copy, Mail, Instagram, Facebook, Music2, MessageCircle,
 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
@@ -155,6 +155,22 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     setPlaced((p) => p.filter((x) => x.key !== selectedKey));
     setSelectedKey(null);
   }, [selectedKey]);
+
+  // Desktop: Delete / Backspace clears the currently selected canvas item.
+  // Skips when focus is in an input/textarea/select so typing isn't hijacked.
+  useEffect(() => {
+    if (!selectedKey) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      e.preventDefault();
+      removeSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedKey, removeSelected]);
 
   const bringForward = useCallback(() => {
     if (!selectedKey) return;
@@ -515,6 +531,32 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                   {isSel && (
                     <>
                       <div className="absolute inset-0 border-2 border-dashed border-foreground/60 pointer-events-none" />
+                      {/* Floating toolbar — remove from canvas / bring forward / send backward.
+                          "Remove" here only clears this composition; the wardrobe item stays. */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 -top-11 flex items-center gap-1 rounded-full bg-foreground text-background px-2 py-1 shadow-md"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => { setPlaced((arr) => arr.filter((x) => x.key !== p.key)); setSelectedKey(null); }}
+                          aria-label="Remove from canvas"
+                          title="Remove from canvas"
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><X size={13} /></button>
+                        <button
+                          onClick={bringForward}
+                          aria-label="Bring forward"
+                          title="Bring forward"
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><ChevronUp size={14} /></button>
+                        <button
+                          onClick={sendBackward}
+                          aria-label="Send backward"
+                          title="Send backward"
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><ChevronDown size={14} /></button>
+                      </div>
                       {/* resize handle */}
                       <button
                         onPointerDown={onPointerDown("resize", p.key)}
@@ -527,12 +569,6 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                         aria-label="Rotate"
                         className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] shadow-md"
                       >⟳</button>
-                      {/* delete */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setPlaced((arr) => arr.filter((x) => x.key !== p.key)); setSelectedKey(null); }}
-                        aria-label="Remove"
-                        className="absolute -right-3 -top-3 h-6 w-6 rounded-full bg-background border border-border flex items-center justify-center shadow-md"
-                      ><Trash2 size={11} /></button>
                     </>
                   )}
                 </div>
