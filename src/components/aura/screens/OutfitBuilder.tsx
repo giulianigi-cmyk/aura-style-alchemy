@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus,
+  ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus, X,
   Loader2, Share2, Download, Copy, Mail, Instagram, Facebook, Music2, MessageCircle,
 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
