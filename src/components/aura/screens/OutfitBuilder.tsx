@@ -335,7 +335,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         height: rect.height,
         canvasWidth: targetW,
         canvasHeight: targetH,
-        backgroundColor: "#F5F5F5",
+        backgroundColor: "#FFFFFF",
       });
       const blob = dataUrlToBlob(dataUrl);
       return { blob, dataUrl };
@@ -483,7 +483,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-soft select-none touch-none`}
-          style={{ background: "#F5F5F5" }}
+          style={{ background: "#FFFFFF" }}
         >
           {placed
             .slice()
