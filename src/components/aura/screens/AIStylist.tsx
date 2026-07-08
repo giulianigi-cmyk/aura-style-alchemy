@@ -13,7 +13,7 @@ import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
-export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
+export function AIStylist({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -139,7 +139,7 @@ export function AIStylist({ go: _go }: { go: (s: Screen) => void }) {
           <span className="text-xs uppercase tracking-[0.3em]">AI suggest</span>
         </button>
         <button
-          onClick={() => { setSelected([]); setAiExplanation(""); setCreating(true); }}
+          onClick={() => go("builder")}
           className="flex-1 h-12 rounded-full border border-foreground text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98]"
         >Build manually</button>
       </div>
