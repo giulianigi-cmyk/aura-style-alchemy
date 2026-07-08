@@ -265,6 +265,15 @@ export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
     const rect = canvasRef.current.getBoundingClientRect();
     const pixelRatio = targetW / rect.width;
     try {
+      // Wait for every <img> in the canvas to finish loading before capture.
+      const imgs = Array.from(canvasRef.current.querySelectorAll("img"));
+      await Promise.all(imgs.map((img) => img.complete
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          })
+      ));
       const dataUrl = await toPng(canvasRef.current, {
         pixelRatio,
         cacheBust: true,
