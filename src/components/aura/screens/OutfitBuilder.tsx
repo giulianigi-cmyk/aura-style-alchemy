@@ -35,7 +35,41 @@ type Placed = {
   z: number;
 };
 
-export function OutfitBuilder({ go }: { go: (s: Screen) => void }) {
+type Bucket = "top" | "bottom" | "dress" | "shoes" | "outer" | "acc";
+const LAYOUT_Y: Record<Bucket, number> = { outer: 0.28, top: 0.34, dress: 0.5, bottom: 0.6, shoes: 0.85, acc: 0.45 };
+const Z_BY_BUCKET: Record<Bucket, number> = { outer: 2, top: 3, dress: 3, bottom: 2, shoes: 1, acc: 4 };
+function bucketOf(it: WardrobeItem): Bucket {
+  const c = `${it.category ?? ""} ${it.style ?? ""}`.toLowerCase();
+  if (/dress|gown|jumpsuit/.test(c)) return "dress";
+  if (/shoe|boot|sneaker|sandal|loafer|heel/.test(c)) return "shoes";
+  if (/pant|trouser|jean|short|skirt|bottom/.test(c)) return "bottom";
+  if (/coat|jacket|blazer|outerwear/.test(c)) return "outer";
+  if (/shirt|top|tee|blouse|knit|sweater/.test(c)) return "top";
+  return "acc";
+}
+function autoPlace(items: WardrobeItem[], signed: Record<string, string>): Placed[] {
+  const placed: Placed[] = [];
+  items.forEach((it, i) => {
+    const path = toStoragePath(it.image_url);
+    const url = path ? signed[path] : "";
+    if (!url) return;
+    const b = bucketOf(it);
+    placed.push({
+      key: `${it.id}-init-${i}-${Date.now()}`,
+      itemId: it.id,
+      imgUrl: url,
+      x: b === "acc" ? 0.75 : 0.5,
+      y: LAYOUT_Y[b],
+      scale: b === "shoes" ? 0.28 : b === "acc" ? 0.24 : 0.42,
+      rotation: 0,
+      z: Z_BY_BUCKET[b] ?? 1,
+    });
+  });
+  return placed;
+}
+
+export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: BuilderInit }) {
+
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
