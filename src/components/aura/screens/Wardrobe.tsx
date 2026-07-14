@@ -1,3 +1,4 @@
+import { ColorWheelPicker } from "@/components/aura/ColorWheelPicker";
 import { Plus, Filter, Search, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +25,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [seasonOnly, setSeasonOnly] = useState(true);
   const [detail, setDetail] = useState<WardrobeItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [colorWheelOpen, setColorWheelOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const deleteItem = async () => {
@@ -232,17 +234,32 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
               aria-label="Delete item"
             ><Trash2 size={16} /></button>
 
-            <div className="mt-6 rounded-2xl overflow-hidden mx-auto aspect-square max-w-[240px]" style={{ background: "#FFFFFF" }}>
-              {(() => {
-                const path = toStoragePath(detail.image_url);
-                const src = path ? signed[path] : "";
-                return src ? (
-                  <img src={src} alt="" className="h-full w-full object-contain p-3" />
-                ) : (
-                  <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
-                );
-              })()}
-            </div>
+            {(() => {
+              const path = toStoragePath(detail.image_url);
+              const src = path ? signed[path] : "";
+              return (
+                <>
+                  <div className="mt-6 rounded-2xl overflow-hidden mx-auto aspect-square max-w-[240px]" style={{ background: "#FFFFFF" }}>
+                    {src ? (
+                      <img src={src} alt="" className="h-full w-full object-contain p-3" />
+                    ) : (
+                      <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
+                    )}
+                  </div>
+                  {src && (
+                    <button
+                      onClick={() => setColorWheelOpen(true)}
+                      className="mx-auto mt-3 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
+                    >
+                      🎨 Analizza colore
+                    </button>
+                  )}
+                  {colorWheelOpen && src && (
+                    <ColorWheelPicker imageUrl={src} onClose={() => setColorWheelOpen(false)} />
+                  )}
+                </>
+              );
+            })()}
 
             <div className="mt-4 text-center">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
