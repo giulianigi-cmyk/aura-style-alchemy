@@ -64,26 +64,47 @@ function isCheckerPixel(r: number, g: number, b: number): boolean {
   return r >= 235 || (r >= 175 && r <= 225);
 }
 
-async function flattenPngOnWhite(dataUrl: string, filename: string): Promise<File> {
+/**
+ * Ensure the AI-removed-background PNG has a REAL alpha channel.
+ *
+ * Handles the one real failure mode from the AI bg-removal step: some image
+ * models (Gemini flash-image included, intermittently) return an opaque RGB
+ * PNG where the "transparent" background is rasterised as a grey/white
+ * checker pattern instead of true alpha=0 pixels. We detect that case by
+ * sampling the four frame corners (a foreground subject cannot fill them)
+ * and, when they look like checker greys/whites AND the image has no real
+ * alpha variance, we zero out the ALPHA channel on every matching checker
+ * pixel — producing genuine transparency instead of baking anything to
+ * white.
+ *
+ * When the model already returned proper alpha, this function changes
+ * nothing and returns the original bytes untouched.
+ *
+ * Search logs for "[AURA transparency]" for diagnostics.
+ */
+async function ensureTransparentPng(
+  dataUrl: string,
+  filename: string,
+): Promise<{ file: File; isTransparent: boolean }> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("flatten: image failed to load"));
+    el.onerror = () => reject(new Error("transparency check: image failed to load"));
     el.src = dataUrl;
   });
   const w = img.naturalWidth;
   const h = img.naturalHeight;
 
-  const src = document.createElement("canvas");
-  src.width = w;
-  src.height = h;
-  const sctx = src.getContext("2d");
-  if (!sctx) throw new Error("flatten: no 2d context");
-  sctx.drawImage(img, 0, 0);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("transparency check: no 2d context");
+  ctx.drawImage(img, 0, 0);
 
-  let mutated = false;
+  let isTransparent = false;
   try {
-    const imgData = sctx.getImageData(0, 0, w, h);
+    const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
 
     let hasAlpha = false;
@@ -99,49 +120,43 @@ async function flattenPngOnWhite(dataUrl: string, filename: string): Promise<Fil
     const tr = corner(w - 1, 0);
     const bl = corner(0, h - 1);
     const br = corner(w - 1, h - 1);
-    const checkerCorners = [tl, tr, bl, br]
-      .filter((p) => isCheckerPixel(p[0], p[1], p[2])).length;
+    const checkerCorners = [tl, tr, bl, br].filter((p) => isCheckerPixel(p[0], p[1], p[2])).length;
 
     console.log(
-      "[AURA flatten] dims", w, "x", h,
+      "[AURA transparency] dims", w, "x", h,
       "hasAlpha", hasAlpha,
       "checkerCorners", checkerCorners,
       "corners", { tl, tr, bl, br },
     );
 
-    // ≥3 of 4 corners looking like checker background AND essentially
-    // opaque image → the model rasterised the checker. Wipe every checker
-    // pixel to white.
-    if (!hasAlpha && checkerCorners >= 3) {
-      console.warn("[AURA flatten] baked checkerboard detected — replacing checker pixels with white");
+    if (hasAlpha) {
+      // Model already gave us real transparency — leave pixels untouched.
+      isTransparent = true;
+    } else if (checkerCorners >= 3) {
+      // Baked-in checkerboard: zero the ALPHA on matching pixels so they
+      // become genuinely transparent, instead of painting them white.
+      console.warn("[AURA transparency] baked checkerboard detected — zeroing alpha on checker pixels");
       for (let i = 0; i < d.length; i += 4) {
         if (isCheckerPixel(d[i], d[i + 1], d[i + 2])) {
-          d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+          d[i + 3] = 0;
         }
       }
-      sctx.putImageData(imgData, 0, 0);
-      mutated = true;
+      ctx.putImageData(imgData, 0, 0);
+      isTransparent = true;
+    } else {
+      // Neither real alpha nor a recognisable checker — nothing safe to do,
+      // ship the image as-is rather than guessing.
+      console.warn("[AURA transparency] no alpha and no recognisable checker — leaving image untouched");
     }
   } catch (e) {
-    // Data URLs shouldn't taint the canvas, but log if getImageData fails.
-    console.warn("[AURA flatten] pixel inspection failed", e);
+    console.warn("[AURA transparency] pixel inspection failed", e);
   }
 
-  // Final composite onto white — removes any remaining alpha channel.
-  const out = document.createElement("canvas");
-  out.width = w;
-  out.height = h;
-  const octx = out.getContext("2d");
-  if (!octx) throw new Error("flatten: no output 2d context");
-  octx.fillStyle = "#FFFFFF";
-  octx.fillRect(0, 0, w, h);
-  octx.drawImage(src, 0, 0);
-
   const blob: Blob = await new Promise((resolve, reject) =>
-    out.toBlob((b) => (b ? resolve(b) : reject(new Error("flatten: toBlob null"))), "image/png"),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("transparency check: toBlob null"))), "image/png"),
   );
-  console.log("[AURA flatten] output bytes", blob.size, "mutatedChecker", mutated);
-  return new File([blob], filename, { type: "image/png" });
+  console.log("[AURA transparency] output bytes", blob.size, "isTransparent", isTransparent);
+  return { file: new File([blob], filename, { type: "image/png" }), isTransparent };
 }
 
 type Stage = "idle" | "bgremove" | "analyze";
