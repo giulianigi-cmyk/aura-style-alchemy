@@ -85,7 +85,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
   const [name, setName] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
-const [shareState, setShareState] = useState
+  const [shareState, setShareState] = useState<
     | null
     | { blob: Blob; dataUrl: string; signedUrl: string | null }
   >(null);
