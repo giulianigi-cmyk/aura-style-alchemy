@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
-import { ColorWheelPicker } from "@/components/aura/ColorWheelPicker";
+import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 
 /**
  * Dedicated, discoverable entry point for color analysis — separate from
