@@ -158,7 +158,7 @@ export function findColorByName(name: string): PaletteColor | undefined {
 }
 
 // Nearest palette match from an arbitrary hex (used by AI suggestions).
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
   const v = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
   const n = parseInt(v, 16);
