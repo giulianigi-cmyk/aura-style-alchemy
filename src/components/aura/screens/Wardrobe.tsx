@@ -217,9 +217,9 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
 
       {detail && (
         <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur flex items-end sm:items-center justify-center" onClick={() => setDetail(null)}>
-          <div
+         <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 relative"
+            className="w-full max-w-md max-h-[85dvh] overflow-y-auto bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] relative"
           >
             <button
               onClick={() => setDetail(null)}
