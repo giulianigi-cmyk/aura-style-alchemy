@@ -227,12 +227,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     try {
       const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
       if (bg.ok) {
-        // Flatten the transparent PNG onto solid white so the stored file
-        // never renders with a checkerboard anywhere in the app.
-        const flatFile = await flattenPngOnWhite(bg.imageDataUrl, `item-${Date.now()}.png`);
-        setFile(flatFile);
-        setPreview(URL.createObjectURL(flatFile));
-        setTransparent(true);
+        const { file: cleanFile, isTransparent } = await ensureTransparentPng(
+          bg.imageDataUrl,
+          `item-${Date.now()}.png`,
+        );
+        setFile(cleanFile);
+        setPreview(URL.createObjectURL(cleanFile));
+        setTransparent(isTransparent);
       }
     } catch (e) {
       console.warn("[AURA] bg removal failed", e);
