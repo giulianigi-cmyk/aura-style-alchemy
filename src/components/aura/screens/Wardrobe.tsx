@@ -1,4 +1,4 @@
-import { ColorWheelPicker } from "@/components/aura/ColorWheelPicker";
+import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { Plus, Filter, Search, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
