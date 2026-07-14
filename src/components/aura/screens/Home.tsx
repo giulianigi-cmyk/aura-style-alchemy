@@ -158,7 +158,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </button>
       </section>
 
-      {/* Quick nav */}
+    {/* Quick nav */}
       <section className="px-6 mt-7 grid grid-cols-2 gap-3">
         <button onClick={() => go("shop")} className="text-left rounded-2xl bg-[var(--champagne)]/30 border border-[var(--champagne)]/50 p-4 active:scale-[0.98] transition">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The edit</p>
@@ -167,6 +167,18 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         <button onClick={() => go("community")} className="text-left rounded-2xl bg-secondary/60 p-4 active:scale-[0.98] transition">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
           <p className="font-serif text-lg mt-1">Community</p>
+        </button>
+      </section>
+
+      {/* Color Lab — dedicated entry point, distinct from the per-item shortcut */}
+      <section className="px-6 mt-3">
+        <button
+          onClick={() => go("color-lab")}
+          className="w-full text-left rounded-2xl p-4 active:scale-[0.98] transition border border-border/60"
+          style={{ background: "linear-gradient(135deg, #F2C6C2 0%, #B0E0E6 50%, #F6E27A 100%)" }}
+        >
+          <p className="text-[10px] uppercase tracking-[0.3em] text-background/80 mix-blend-difference">Color Lab</p>
+          <p className="font-serif text-lg mt-1 text-background mix-blend-difference">Analizza un colore</p>
         </button>
       </section>
 
