@@ -328,25 +328,54 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
   }, [items, weather, occasion, signed]);
 
   // Export & save ---------------------------------------------------------
+
+  /** Fetch a (possibly cross-origin, signed) image URL and inline it as a
+   *  data URL. html-to-image's own cross-origin fetch is unreliable with
+   *  tokenised/signed URLs (silently drops the image instead of throwing),
+   *  so we do the fetch ourselves and hand toPng() a self-contained DOM. */
+  async function toDataUrl(url: string): Promise<string> {
+    const resp = await fetch(url, { mode: "cors", cache: "no-store" });
+    if (!resp.ok) throw new Error(`image fetch failed: ${resp.status}`);
+    const blob = await resp.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+
   const exportCanvas = useCallback(async (): Promise<{ blob: Blob; dataUrl: string } | null> => {
     if (!canvasRef.current) return null;
     const targetW = ratio === "1:1" ? 1080 : 1080;
     const targetH = ratio === "1:1" ? 1080 : 1920;
     const rect = canvasRef.current.getBoundingClientRect();
     const pixelRatio = targetW / rect.width;
+
+    const imgs = Array.from(canvasRef.current.querySelectorAll("img"));
+    const originalSrcs = imgs.map((img) => img.src);
+
     try {
-      // Wait for every <img> in the canvas to finish loading before capture.
-      const imgs = Array.from(canvasRef.current.querySelectorAll("img"));
-      await Promise.all(imgs.map((img) => img.complete
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-            img.addEventListener("load", () => resolve(), { once: true });
-            img.addEventListener("error", () => resolve(), { once: true });
-          })
-      ));
+      // Inline every canvas image as a data URL BEFORE capture so toPng()
+      // never needs to fetch a signed/cross-origin URL itself.
+      await Promise.all(
+        imgs.map(async (img) => {
+          try {
+            const dataUrl = await toDataUrl(img.src);
+            img.src = dataUrl;
+            await new Promise<void>((resolve) => {
+              if (img.complete) return resolve();
+              img.addEventListener("load", () => resolve(), { once: true });
+              img.addEventListener("error", () => resolve(), { once: true });
+            });
+          } catch (e) {
+            console.error("[AURA export] failed to inline image, it will be missing from the export", img.src, e);
+          }
+        }),
+      );
+
       const dataUrl = await toPng(canvasRef.current, {
         pixelRatio,
-        cacheBust: true,
         width: rect.width,
         height: rect.height,
         canvasWidth: targetW,
@@ -359,6 +388,10 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       console.error("[AURA] export", e);
       toast.error("Couldn't export the canvas");
       return null;
+    } finally {
+      // Restore original signed URLs so the live canvas keeps working
+      // normally (drag/resize/rotate) after export.
+      imgs.forEach((img, i) => { img.src = originalSrcs[i]; });
     }
   }, [ratio]);
 
