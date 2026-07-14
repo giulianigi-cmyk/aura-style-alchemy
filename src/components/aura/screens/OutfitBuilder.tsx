@@ -85,10 +85,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
   const [name, setName] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [shareState, setShareState] = useState<
+const [shareState, setShareState] = useState
     | null
     | { blob: Blob; dataUrl: string; signedUrl: string | null }
   >(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<string>("");
 
@@ -427,6 +428,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       const signedUrl = (await supabase.storage.from("outfits")
         .createSignedUrl(path, 60 * 60 * 24 * 7)).data?.signedUrl ?? null;
       setShareState({ blob: exported.blob, dataUrl: exported.dataUrl, signedUrl });
+      // Save no longer forces the share sheet open — the user opens it
+      // explicitly via the "Share" button once they're ready.
       toast.success(init?.outfitId ? "Outfit updated" : "Outfit saved");
     } catch (e: unknown) {
       console.error("[AURA] save outfit", e);
@@ -664,7 +667,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           rows={2}
           className="w-full bg-secondary/60 rounded-2xl px-4 py-2.5 text-sm outline-none resize-none"
         />
-        <button
+       <button
           onClick={save}
           disabled={saving || loading || !placed.length}
           className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2 disabled:opacity-50"
@@ -672,6 +675,14 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
           Save outfit
         </button>
+        {shareState && (
+          <button
+            onClick={() => setShareOpen(true)}
+            className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
+          >
+            <Share2 size={12} /> Share this look
+          </button>
+        )}
       </div>
 
       {/* Item picker */}
@@ -716,12 +727,12 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       )}
 
       {/* Share sheet */}
-      {shareState && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setShareState(null)}>
+     {shareOpen && shareState && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setShareOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="font-serif italic text-lg">Share your look</p>
-              <button className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground" onClick={() => setShareState(null)}>Close</button>
+              <button className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground" onClick={() => setShareOpen(false)}>Close</button>
             </div>
             <img src={shareState.dataUrl} alt="preview" className="max-h-40 w-auto mx-auto rounded-xl mb-4" />
             <div className="grid grid-cols-4 gap-3">
