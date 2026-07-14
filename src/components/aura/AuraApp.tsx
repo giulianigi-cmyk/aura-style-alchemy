@@ -10,6 +10,7 @@ import { AddItem } from "./screens/AddItem";
 import { AIStylist } from "./screens/AIStylist";
 import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
+import { ColorLab } from "./screens/ColorLab";
 import { Community } from "./screens/Community";
 import { Profile } from "./screens/Profile";
 import { Insights } from "./screens/Insights";
@@ -25,7 +26,7 @@ import { useProfile } from "@/hooks/use-profile";
 export type Screen =
   | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
   | "ai" | "planner" | "shop" | "community" | "profile"
-  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder";
+  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab";
 
 
 export type BuilderInit = {
@@ -132,6 +133,7 @@ function Inner() {
           {screen === "ai" && <AIStylist go={go} />}
           {screen === "planner" && <Planner go={go} />}
           {screen === "shop" && <Shop go={go} />}
+          {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} />}
           {screen === "profile" && <Profile go={go} />}
           {screen === "insights" && <Insights go={go} />}
