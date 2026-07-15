@@ -447,6 +447,21 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     if (!ok) toast.message("Native share not available — use the buttons below");
   };
 
+  /** WhatsApp's wa.me links can only pre-fill TEXT, never attach an image
+   *  file — that's a hard limitation of that API, not something a URL
+   *  tweak can fix. So we try the native OS share sheet first (it lists
+   *  WhatsApp as an option and attaches the real image); only if that's
+   *  unsupported (e.g. some desktop browsers) do we fall back to a
+   *  plain wa.me text link. */
+  const shareToWhatsApp = async () => {
+    if (!shareState) return;
+    const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+    const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+    if (!ok) {
+      window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).whatsapp, "_blank");
+    }
+  };
+
   const copyLink = async () => {
     if (!shareState?.signedUrl) { toast.error("No shareable link yet"); return; }
     try {
@@ -739,7 +754,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               <ShareBtn icon={<Share2 size={16} />} label="Share" onClick={doNativeShare} />
               <ShareBtn icon={<Download size={16} />} label="Save" onClick={() => downloadBlob(shareState.blob, "aura-outfit.png")} />
               <ShareBtn icon={<Copy size={16} />} label="Copy link" onClick={copyLink} />
-              <ShareBtn icon={<MessageCircle size={16} />} label="WhatsApp" onClick={() => window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).whatsapp, "_blank")} />
+              <ShareBtn icon={<MessageCircle size={16} />} label="WhatsApp" onClick={shareToWhatsApp} />
               <ShareBtn icon={<Instagram size={16} />} label="Instagram" onClick={() => {
                 downloadBlob(shareState.blob, "aura-outfit.png");
                 window.location.href = shareLinks("", "").instagram;
