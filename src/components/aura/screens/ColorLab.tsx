@@ -53,15 +53,16 @@ export function ColorLab({ go }: { go: (s: Screen) => void }) {
         >
           <ArrowLeft size={16} />
         </button>
-        <div>
+      <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Color Lab</p>
-          <p className="font-serif text-2xl">Analizza un colore</p>
+          <p className="font-serif text-2xl">Color Harmony</p>
         </div>
       </header>
 
       <p className="px-6 mt-3 text-sm text-muted-foreground">
-        Scegli un capo dal tuo guardaroba per campionarne il colore e vedere
-        gli abbinamenti sulla ruota di Itten.
+        Choose a piece from your wardrobe to sample its color and see matching
+        pairings on the Johannes Itten color wheel. This is about colors that
+        work well together — not your personal color season.
       </p>
 
       {loading ? (
@@ -74,7 +75,7 @@ export function ColorLab({ go }: { go: (s: Screen) => void }) {
         <div className="px-6 mt-10 text-center">
           <Palette size={28} className="mx-auto text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            Aggiungi qualche capo al guardaroba per iniziare.
+            Add a few pieces to your wardrobe to get started.
           </p>
         </div>
       ) : (
