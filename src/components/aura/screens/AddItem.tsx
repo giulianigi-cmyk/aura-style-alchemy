@@ -410,7 +410,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Import from URL</p>
             <p className="font-serif text-2xl italic mt-2">Paste a product link</p>
             <p className="text-xs text-muted-foreground mt-2">
-              Works with Zara, H&amp;M, ASOS, Mango, COS, Uniqlo and most fashion stores.
+              Works with most fashion stores.
               We'll extract the product photo, clean it up and pre-fill the details.
             </p>
             <div className="mt-5 rounded-full bg-background border border-border flex items-center px-4 py-2.5">
