@@ -5,6 +5,7 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, suggestOutfit } from "@/lib/weather";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
+import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { useAuth } from "@/hooks/use-auth";
 
 const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
@@ -21,6 +22,7 @@ export function WeatherPanel() {
   const { data, loading, error: wErr, reload } = useWeather(latitude, longitude);
   const [manual, setManualVal] = useState("");
   const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [signed, setSigned] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -33,6 +35,17 @@ export function WeatherPanel() {
         setItems((data as WardrobeItem[]) ?? []);
       });
   }, [user]);
+
+  // image_url is a private-bucket storage path, not a fetchable URL —
+  // resolve it to a signed URL, same as every other screen does.
+  useEffect(() => {
+    if (!items.length) { setSigned({}); return; }
+    let cancelled = false;
+    void resolveWardrobeUrls(items).then((map) => {
+      if (!cancelled) setSigned((prev) => ({ ...prev, ...map }));
+    });
+    return () => { cancelled = true; };
+  }, [items]);
 
   const suggestion = data ? suggestOutfit(data.current) : null;
   const matched = suggestion
@@ -166,13 +179,19 @@ export function WeatherPanel() {
                 <>
                   <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">From your wardrobe</p>
                   <div className="mt-2 grid grid-cols-3 gap-2">
-                    {matched.map((it) => (
-                      <div key={it.id} className="rounded-xl overflow-hidden bg-secondary/40 aspect-square">
-                        {it.image_url && (
-                          <img src={it.image_url} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`} className="h-full w-full object-cover" loading="lazy" />
-                        )}
-                      </div>
-                    ))}
+                   {matched.map((it) => {
+                      const path = toStoragePath(it.image_url);
+                      const src = path ? signed[path] : null;
+                      return (
+                        <div key={it.id} className="rounded-xl overflow-hidden bg-secondary/40 aspect-square">
+                          {src ? (
+                            <img src={src} alt={`${it.brand ?? it.color ?? it.category ?? "Wardrobe"} piece`} className="h-full w-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               )}
