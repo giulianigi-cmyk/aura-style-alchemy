@@ -11,7 +11,7 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { currentSeason, itemMatchesSeason, resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 
-const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
+const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
 
 export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
