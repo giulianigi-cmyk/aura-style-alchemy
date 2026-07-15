@@ -265,6 +265,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
               <p className="font-serif text-2xl mt-1">{[detail.colors?.[0] ?? detail.color, detail.category].filter(Boolean).join(" ")}</p>
               {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
+              {detail.price != null && (
+                <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
+                  {detail.worn_count ? (
+                    <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toFixed(2)} per wear</span>
+                  ) : (
+                    <span>Not worn yet</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {confirmDelete ? (
