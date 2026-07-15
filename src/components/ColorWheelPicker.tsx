@@ -92,7 +92,7 @@ export function ColorWheelPicker({
         className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] relative"
       >
         <div className="flex items-center justify-between">
-          <p className="font-serif italic text-lg">Analisi colore</p>
+          <p className="font-serif italic text-lg">Color Harmony</p>
           <button onClick={onClose} aria-label="Chiudi" className="h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90">
             <X size={16} />
           </button>
@@ -104,8 +104,12 @@ export function ColorWheelPicker({
           </p>
         ) : (
           <>
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
-              <Pipette size={13} /> Tocca il capo per campionare un colore
+          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
+              <Pipette size={13} /> Tap the garment to sample a color
+            </p>
+            <p className="text-[11px] text-muted-foreground/80 mt-1">
+              Based on the Johannes Itten color wheel — this shows which colors pair well
+              with each other, not your personal color season.
             </p>
             <canvas
               ref={canvasRef}
@@ -152,8 +156,8 @@ export function ColorWheelPicker({
                   })}
                 </div>
 
-                <div className="mt-5 space-y-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Abbinamenti consigliati</p>
+<div className="mt-5 space-y-2">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Suggested pairings</p>
                   {harmonies.map((h, i) => {
                     const named = nearestPaletteColor(h.hex);
                     return (
