@@ -178,7 +178,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           style={{ background: "linear-gradient(135deg, #F2C6C2 0%, #B0E0E6 50%, #F6E27A 100%)" }}
         >
           <p className="text-[10px] uppercase tracking-[0.3em] text-background/80 mix-blend-difference">Color Lab</p>
-          <p className="font-serif text-lg mt-1 text-background mix-blend-difference">Analizza un colore</p>
+          <p className="font-serif text-lg mt-1 text-background mix-blend-difference">Color Harmony</p>
         </button>
       </section>
 
