@@ -291,7 +291,14 @@ const firecrawlScrape: FallbackScraper = async (url) => {
 };
 
 const fallbackScraper: FallbackScraper = firecrawlScrape;
-const fallbackScraperAvailable = () => Boolean(process.env.FIRECRAWL_API_KEY);
+const fallbackScraperAvailable = () => {
+  const key = process.env.FIRECRAWL_API_KEY;
+  // Temporary diagnostic — tells us whether the key is truly missing from
+  // this runtime, or present but somehow rejected downstream. Safe to log:
+  // only the length is printed, never the key itself. Remove once confirmed.
+  console.log("[AURA import-url] FIRECRAWL_API_KEY present:", Boolean(key), "length:", key?.length ?? 0);
+  return Boolean(key);
+};
 
 // ---------- Direct fetch ----------------------------------------------------
 
