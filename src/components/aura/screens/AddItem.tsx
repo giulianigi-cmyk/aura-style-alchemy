@@ -11,7 +11,7 @@ import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { importProductFromUrl } from "@/lib/import-url.functions";
 
-const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories"];
+const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
