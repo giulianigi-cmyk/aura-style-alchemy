@@ -55,8 +55,16 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
   const toggle = (id: string) =>
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
 
-  const aiPick = async () => {
-    if (items.length < 2) { toast.error("Add more items to your closet first"); return; }
+const aiPick = async () => {
+    if (items.length < 3) {
+      toast.error("Add at least 3 pieces (e.g. a top, a bottom, and shoes) to generate an AI outfit.");
+      return;
+    }
+    const categoryCount = new Set(items.map((it) => it.category).filter(Boolean)).size;
+    if (categoryCount < 2) {
+      toast.error("Your wardrobe needs more variety — add pieces from at least 2 categories (e.g. tops and bottoms) for a complete outfit.");
+      return;
+    }
     setAiBusy(true);
     setAiExplanation("");
     try {
@@ -76,8 +84,8 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
           })),
         },
       });
-      if (!res.ok || !res.item_ids.length) {
-        toast.error("AI couldn't compose a look — try again");
+    if (!res.ok || !res.item_ids.length) {
+        toast.error("Not enough matching pieces in your wardrobe yet for a complete outfit — try adding more items.");
         return;
       }
       setSelected(res.item_ids);
