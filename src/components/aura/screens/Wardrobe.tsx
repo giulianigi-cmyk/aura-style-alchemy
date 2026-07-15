@@ -247,11 +247,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     )}
                   </div>
                   {src && (
-                    <button
+                   <button
                       onClick={() => setColorWheelOpen(true)}
                       className="mx-auto mt-3 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
                     >
-                      🎨 Analizza colore
+                      🎨 Color Harmony
                     </button>
                   )}
                   {colorWheelOpen && src && (
