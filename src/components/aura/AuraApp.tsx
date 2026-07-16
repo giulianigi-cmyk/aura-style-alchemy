@@ -18,6 +18,7 @@ import { SavedOutfits } from "./screens/SavedOutfits";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
+import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
 import { TabBar } from "./TabBar";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
