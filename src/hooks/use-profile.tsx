@@ -17,6 +17,9 @@ export type Profile = {
   latitude: number | null;
   longitude: number | null;
   season: string | null;
+  undertone: string | null;
+  value: string | null;
+  clarity: string | null;
   setup_complete: boolean;
   created_at: string;
   updated_at: string;

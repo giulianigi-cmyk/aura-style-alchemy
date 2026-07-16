@@ -19,14 +19,6 @@ const BRANDS = [
 ];
 const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
 
-const seasonPalette = [
-  { name: "Cream", hex: "#f5ead6" },
-  { name: "Champagne", hex: "#d9bf94" },
-  { name: "Camel", hex: "#b59169" },
-  { name: "Taupe", hex: "#8a6f5a" },
-  { name: "Cocoa", hex: "#4d3b2c" },
-  { name: "Ivory", hex: "#ece3d2" },
-];
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
@@ -251,29 +243,30 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
 
           {/* Color analysis */}
-          <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-6 shadow-soft animate-fade-up">
-            <div className="flex items-start justify-between">
+          <button
+            onClick={() => _go("color-analysis")}
+            className="mx-6 mt-6 w-[calc(100%-3rem)] text-left rounded-3xl gradient-warm border border-border/60 p-6 shadow-soft animate-fade-up active:scale-[0.99] transition"
+          >
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Color analysis</p>
-                <h2 className="font-serif text-3xl italic mt-1">Warm Autumn</h2>
+                <h2 className="font-serif text-3xl italic mt-1">
+                  {profile?.season || "Discover your season"}
+                </h2>
+                {profile?.season ? (
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Estimated{[profile?.value, profile?.clarity].filter(Boolean).length ? ` · ${[profile?.value, profile?.clarity].filter(Boolean).join(" · ")}` : ""}
+                  </p>
+                ) : null}
               </div>
-              <button className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-                Retake <ChevronRight size={12} />
-              </button>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1 shrink-0">
+                {profile?.season ? "Retake" : "Start"} <ChevronRight size={12} />
+              </span>
             </div>
             <p className="text-xs leading-relaxed text-foreground/70 mt-3">
-              Your complexion glows with rich, earth-toned hues. Lean into golden undertones and avoid icy or jewel-cool shades.
+              A quick, camera-based estimate of the color season that flatters you — never a verified verdict.
             </p>
-            <p className="mt-5 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your palette</p>
-            <div className="mt-2 grid grid-cols-6 gap-1.5">
-              {seasonPalette.map(c => (
-                <div key={c.name} className="flex flex-col items-center gap-1">
-                  <div className="h-10 w-10 rounded-full shadow-soft border border-white/40" style={{ background: c.hex }} />
-                  <span className="text-[8px] tracking-wider text-muted-foreground">{c.name}</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          </button>
 
           <WeatherPanel />
 

@@ -95,6 +95,7 @@ export type Database = {
           bio: string | null
           birth_date: string | null
           city: string | null
+          clarity: string | null
           created_at: string
           favorite_brands: string[] | null
           full_name: string | null
@@ -107,13 +108,16 @@ export type Database = {
           season: string | null
           setup_complete: boolean
           style_preferences: string[] | null
+          undertone: string | null
           updated_at: string
+          value: string | null
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
           birth_date?: string | null
           city?: string | null
+          clarity?: string | null
           created_at?: string
           favorite_brands?: string[] | null
           full_name?: string | null
@@ -126,13 +130,16 @@ export type Database = {
           season?: string | null
           setup_complete?: boolean
           style_preferences?: string[] | null
+          undertone?: string | null
           updated_at?: string
+          value?: string | null
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
           birth_date?: string | null
           city?: string | null
+          clarity?: string | null
           created_at?: string
           favorite_brands?: string[] | null
           full_name?: string | null
@@ -145,7 +152,9 @@ export type Database = {
           season?: string | null
           setup_complete?: boolean
           style_preferences?: string[] | null
+          undertone?: string | null
           updated_at?: string
+          value?: string | null
         }
         Relationships: []
       }
