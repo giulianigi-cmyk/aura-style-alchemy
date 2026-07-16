@@ -556,7 +556,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none"
+          className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none`}
           style={{ background: "#FFFFFF", containerType: "size" }}
         >
           {placed
@@ -752,15 +752,26 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             <img src={shareState.dataUrl} alt="preview" className="max-h-40 w-auto mx-auto rounded-xl mb-4" />
             <div className="grid grid-cols-4 gap-3">
               <ShareBtn icon={<Share2 size={16} />} label="Share" onClick={doNativeShare} />
-              <ShareBtn icon={<Download size={16} />} label="Save" onClick={() => downloadBlob(shareState.blob, "aura-outfit.png")} />
+             <ShareBtn icon={<Download size={16} />} label="Save" onClick={async () => {
+                // A plain <a download> lands in iOS's Files/Downloads, not
+                // the Camera Roll. The native share sheet's "Save Image"
+                // option is the only web-safe way to reach Photos.
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
+              }} />
               <ShareBtn icon={<Copy size={16} />} label="Copy link" onClick={copyLink} />
               <ShareBtn icon={<MessageCircle size={16} />} label="WhatsApp" onClick={shareToWhatsApp} />
-              <ShareBtn icon={<Instagram size={16} />} label="Instagram" onClick={() => {
-                downloadBlob(shareState.blob, "aura-outfit.png");
+            <ShareBtn icon={<Instagram size={16} />} label="Instagram" onClick={async () => {
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
                 window.location.href = shareLinks("", "").instagram;
               }} />
-              <ShareBtn icon={<Music2 size={16} />} label="TikTok" onClick={() => {
-                downloadBlob(shareState.blob, "aura-outfit.png");
+              <ShareBtn icon={<Music2 size={16} />} label="TikTok" onClick={async () => {
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
                 window.location.href = shareLinks("", "").tiktok;
               }} />
               <ShareBtn icon={<Facebook size={16} />} label="Facebook" onClick={() => window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).facebook, "_blank")} />
