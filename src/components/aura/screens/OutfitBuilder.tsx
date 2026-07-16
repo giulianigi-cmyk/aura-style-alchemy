@@ -633,12 +633,12 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               );
             })}
 
-          {/* AURA watermark */}
+          {/* AURA watermark — matches the wordmark style used on the Splash screen exactly */}
           <div className="absolute bottom-3 right-4 pointer-events-none select-none">
             <span
-              className="font-serif italic tracking-[0.4em] text-black/70"
-              style={{ fontSize: "clamp(10px, 2.2cqmin, 22px)" }}
-            >AURA</span>
+              className="font-serif italic tracking-tight text-black/70"
+              style={{ fontSize: "clamp(12px, 3cqmin, 28px)" }}
+            >aura</span>
           </div>
 
           {placed.length === 0 && (
