@@ -8,7 +8,7 @@ import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { useAuth } from "@/hooks/use-auth";
 
-const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,created_at";
+const wardrobeColumns = "id,user_id,image_url,category,brand,color,season,style,occasion,material,created_at";
 
 const dayLabel = (iso: string, i: number) => {
   if (i === 0) return "Today";
@@ -52,7 +52,10 @@ export function WeatherPanel() {
     ? items
         .filter((it) => {
           const hay = `${it.category ?? ""} ${it.brand ?? ""} ${it.color ?? ""} ${it.style ?? ""} ${it.occasion ?? ""} ${it.season ?? ""}`.toLowerCase();
-          return suggestion.categories.some((c) => hay.includes(c));
+          const categoryMatch = suggestion.categories.some((c) => hay.includes(c));
+          if (categoryMatch) return true;
+          const itemMaterials = (it.material ?? []).map((m) => m.toLowerCase());
+          return suggestion.materials.some((m) => itemMaterials.includes(m.toLowerCase()));
         })
         .slice(0, 6)
     : [];
@@ -165,7 +168,7 @@ export function WeatherPanel() {
 
           {/* Outfit suggestion */}
           {suggestion && (
-            <div className="mt-6 rounded-2xl gradient-warm border border-border/60 p-4">
+            <div className="mt-6 rounded-2xl border border-border/60 p-4">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Today's recommendation</p>
               <h3 className="font-serif text-xl italic mt-1">{suggestion.headline}</h3>
               <div className="mt-3 flex flex-wrap gap-1.5">
