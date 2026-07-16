@@ -19,14 +19,6 @@ const BRANDS = [
 ];
 const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
 
-const seasonPalette = [
-  { name: "Cream", hex: "#f5ead6" },
-  { name: "Champagne", hex: "#d9bf94" },
-  { name: "Camel", hex: "#b59169" },
-  { name: "Taupe", hex: "#8a6f5a" },
-  { name: "Cocoa", hex: "#4d3b2c" },
-  { name: "Ivory", hex: "#ece3d2" },
-];
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
