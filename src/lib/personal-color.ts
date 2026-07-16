@@ -1,4 +1,5 @@
-import { hexToHsl, hexToRgb } from "./color-palette";
+import { hexToRgb } from "./color-palette";
+import { hexToHsl } from "./itten-wheel";
 
 export type ColorSeason = "Spring" | "Summer" | "Autumn" | "Winter";
 
