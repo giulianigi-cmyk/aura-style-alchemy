@@ -257,9 +257,14 @@ function scoreImage(url: string, productTokens: string[]): number {
 function pickBestImage(candidates: string[], productTokens: string[]): string | null {
   if (!candidates.length) return null;
   const scored = candidates
-    .map((u) => ({ u, s: scoreImage(u, productTokens) }))
+    .map((u, i) => ({ u, s: scoreImage(u, productTokens), i }))
     .filter((x) => x.s > -20)
-    .sort((a, b) => b.s - a.s);
+    // On sites with no descriptive filenames (e.g. Zara), everything ties
+    // near 0 and the gallery's FIRST image is usually the on-model hero
+    // shot, not the flat product photo — which tends to appear a little
+    // further into the gallery. So on ties, prefer images that appear
+    // slightly later rather than defaulting to the very first one.
+    .sort((a, b) => (b.s - a.s) || (a.i === 0 ? 1 : b.i === 0 ? -1 : a.i - b.i));
   return scored[0]?.u ?? null;
 }
 
