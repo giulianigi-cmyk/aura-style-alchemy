@@ -142,6 +142,7 @@ function Inner() {
           {screen === "notifications" && <Notifications go={go} />}
           {screen === "invite" && <Invite go={go} />}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
+          {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
         </div>
         {showTabs && <TabBar current={screen} go={go} />}
       </div>
