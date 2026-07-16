@@ -104,48 +104,44 @@ export type OutfitSuggestion = {
   tips: string[];
   /** wardrobe category keywords to match against the user's pieces */
   categories: string[];
+  /** preferred fabrics for this weather band, used to boost/filter matches */
+  materials: string[];
 };
 
-export function suggestOutfit(current: CurrentWeather): OutfitSuggestion {
-  const band = classifyTemp(current.apparentTemperature ?? current.temperature);
-  const rainy =
-    current.precipitationProbability >= 50 ||
-    (current.weatherCode >= 51 && current.weatherCode <= 67) ||
-    (current.weatherCode >= 80 && current.weatherCode <= 82) ||
-    current.weatherCode >= 95;
-
-  const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> = {
-    cold: {
-      headline: "Wrap up — layered tailoring weather",
-      tips: ["Wool coat", "Cashmere knit", "Boots", "Scarf"],
-      categories: ["coat", "knit", "sweater", "boots", "scarf"],
-    },
-    cool: {
-      headline: "Crisp air — soft layering",
-      tips: ["Trench or blazer", "Fine knit", "Trousers", "Ankle boots"],
-      categories: ["jacket", "blazer", "knit", "trousers", "boots"],
-    },
-    mild: {
-      headline: "Mild day — easy elegance",
-      tips: ["Light jacket", "Jeans or trousers", "Sneakers or loafers"],
-      categories: ["jacket", "shirt", "jeans", "trousers", "sneakers"],
-    },
-    warm: {
-      headline: "Warm — breathable pieces",
-      tips: ["Linen shirt", "Midi skirt or chinos", "Loafers"],
-      categories: ["shirt", "skirt", "dress", "linen", "loafers"],
-    },
-    hot: {
-      headline: "Hot — keep it airy",
-      tips: ["Slip dress", "Shorts", "Sandals", "Sun hat"],
-      categories: ["dress", "shorts", "sandals", "tee"],
-    },
-  };
-  const base = baseByBand[band];
-  const tips = rainy
-    ? ["Waterproof jacket", "Closed shoes", "Umbrella reminder", ...base.tips.slice(0, 1)]
-    : base.tips;
-  const categories = rainy ? ["raincoat", "trench", "boots", ...base.categories] : base.categories;
-  const headline = rainy ? "Rain expected — go water-ready" : base.headline;
-  return { band, rainy, headline, tips, categories };
-}
+/**
+ * Per-band outfit guidance. Each band lists a broader set of pieces (not just
+ * one silhouette) plus the fabrics that suit that temperature range, so
+ * "hot" isn't limited to slip dresses/shorts and "warm"/"mild"/"cool"/"cold"
+ * each get their own material logic instead of only categories.
+ */
+const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> = {
+  cold: {
+    headline: "Wrap up — layered tailoring weather",
+    tips: ["Wool coat", "Cashmere knit", "Boots", "Scarf", "Wool trousers", "Leather gloves"],
+    categories: ["coat", "knit", "sweater", "boots", "scarf", "trousers", "gloves", "puffer"],
+    materials: ["Wool", "Cashmere", "Leather", "Knit", "Suede"],
+  },
+  cool: {
+    headline: "Crisp air — soft layering",
+    tips: ["Trench or blazer", "Fine knit", "Trousers", "Ankle boots", "Denim jacket"],
+    categories: ["jacket", "blazer", "knit", "trousers", "boots", "denim", "sweater"],
+    materials: ["Wool", "Knit", "Denim", "Cotton", "Leather"],
+  },
+  mild: {
+    headline: "Mild day — easy elegance",
+    tips: ["Light jacket", "Jeans or trousers", "Sneakers or loafers", "Cotton shirt", "Light knit"],
+    categories: ["jacket", "shirt", "jeans", "trousers", "sneakers", "loafers", "knit"],
+    materials: ["Cotton", "Denim", "Knit", "Suede"],
+  },
+  warm: {
+    headline: "Warm — breathable pieces",
+    tips: ["Linen shirt", "Midi skirt or chinos", "Loafers", "Cotton dress", "Light trousers"],
+    categories: ["shirt", "skirt", "dress", "trousers", "loafers", "top"],
+    materials: ["Linen", "Cotton", "Silk"],
+  },
+  hot: {
+    headline: "Hot — keep it airy",
+    tips: [
+      "Slip dress", "Shorts", "Sandals", "Sun hat", "Tank top", "Camisole",
+      "Midi skirt", "Mini skirt", "Silk shirt", "Linen shirt", "Wide-leg trousers",
+    ],
