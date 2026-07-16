@@ -27,7 +27,7 @@ import { useProfile } from "@/hooks/use-profile";
 export type Screen =
   | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
   | "ai" | "planner" | "shop" | "community" | "profile"
-  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab";
+  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis";
 
 
 export type BuilderInit = {
