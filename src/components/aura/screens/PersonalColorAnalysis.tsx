@@ -3,10 +3,13 @@ import { ArrowLeft, Camera, RotateCcw, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { classifyColorSeason, type SeasonResult } from "@/lib/personal-color";
+import { autoSampleFromCanvas } from "@/lib/face-analyze";
 import { useProfile } from "@/hooks/use-profile";
 
 type Step = "instructions" | "sampling" | "result";
 type TapIndex = 0 | 1 | 2;
+
+
 
 const TAP_PROMPTS = [
   "Tap a spot on your skin (cheek or forehead)",
@@ -38,15 +41,17 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
   const [activeTap, setActiveTap] = useState<TapIndex>(0);
   const [result, setResult] = useState<SeasonResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const autoRanRef = useRef<string | null>(null);
 
-  // Draw the photo onto the canvas
+  // Draw the photo onto the canvas, then attempt automatic face-based sampling.
   useEffect(() => {
     if (step !== "sampling" || !imageUrl || !canvasRef.current) return;
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const size = 640;
@@ -60,10 +65,30 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+
+      // Run auto-detection once per loaded image.
+      if (autoRanRef.current === imageUrl) return;
+      autoRanRef.current = imageUrl;
+      setAnalyzing(true);
+      try {
+        const auto = await autoSampleFromCanvas(canvas);
+        if (auto) {
+          setSamples([auto.skin, auto.hair, auto.eye]);
+          setActiveTap(0);
+        } else {
+          toast("Couldn't detect your face automatically. Tap the three points manually.");
+        }
+      } catch (err) {
+        console.error("[AURA] auto face analysis failed", err);
+        toast("Couldn't detect your face automatically. Tap the three points manually.");
+      } finally {
+        setAnalyzing(false);
+      }
     };
     img.onerror = () => toast.error("Couldn't load photo");
     img.src = imageUrl;
   }, [step, imageUrl]);
+
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl); };
@@ -113,12 +138,15 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
 
   const restart = () => {
     if (imageUrl) URL.revokeObjectURL(imageUrl);
+    autoRanRef.current = null;
     setImageUrl(null);
     setSamples([null, null, null]);
     setActiveTap(0);
     setResult(null);
+    setAnalyzing(false);
     setStep("instructions");
   };
+
 
   const saveToProfile = async () => {
     if (!result) return;
@@ -183,13 +211,19 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       {step === "sampling" && (
         <section className="mx-6 mt-6 animate-fade-up">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-            Step {activeTap + 1} of 3
+            {analyzing ? "Please wait" : `Step ${activeTap + 1} of 3`}
           </p>
           <p className="mt-2 font-serif italic text-xl text-center">
-            {TAP_PROMPTS[activeTap]}
+            {analyzing ? "Analyzing your photo…" : TAP_PROMPTS[activeTap]}
           </p>
 
-          <div className="mt-5 rounded-3xl overflow-hidden border border-border/60 bg-secondary/40 shadow-soft">
+          <div className="mt-5 rounded-3xl overflow-hidden border border-border/60 bg-secondary/40 shadow-soft relative">
+            {analyzing && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/40 backdrop-blur-sm">
+                <Loader2 className="animate-spin" size={22} />
+              </div>
+            )}
+
             <canvas
               ref={canvasRef}
               onPointerDown={handleTap}

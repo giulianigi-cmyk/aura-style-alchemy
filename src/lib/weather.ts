@@ -145,3 +145,24 @@ const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> 
       "Slip dress", "Shorts", "Sandals", "Sun hat", "Tank top", "Camisole",
       "Midi skirt", "Mini skirt", "Silk shirt", "Linen shirt", "Wide-leg trousers",
     ],
+    categories: ["dress", "shorts", "skirt", "top", "sandals", "shirt", "trousers"],
+    materials: ["Linen", "Cotton", "Silk"],
+  },
+};
+
+export function suggestOutfit(current: CurrentWeather | { temperature: number; weatherCode: number }): OutfitSuggestion {
+  const tempC = current.temperature;
+  const code = current.weatherCode;
+  const band = classifyTemp(tempC);
+  const base = baseByBand[band];
+  const rainy = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
+  return {
+    band,
+    rainy,
+    headline: rainy ? `${base.headline} · rain-ready` : base.headline,
+    tips: rainy ? [...base.tips, "Trench or waterproof layer", "Weatherproof boots"] : base.tips,
+    categories: rainy ? [...base.categories, "trench", "boots"] : base.categories,
+    materials: rainy ? [...base.materials, "Waterproof"] : base.materials,
+  };
+}
+
