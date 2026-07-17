@@ -265,11 +265,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setImporting(true);
     try {
-      const result = await importUrl({ data: { url: parsed.toString() } });
+      // Session token lets the server enforce the per-user Firecrawl quota.
+      const { data: sess } = await supabase.auth.getSession();
+      const result = await importUrl({
+        data: { url: parsed.toString(), accessToken: sess.session?.access_token },
+      });
       if (!result.ok) { toast.error(result.error); return; }
       const file = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
       await runPipeline(file, { brand: result.brand || undefined, source: "url" });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
+      if (result.confidence === "low") {
+        toast.message("Double-check the photo", {
+          description: "We couldn't verify this image against the product page — make sure it's the right piece.",
+        });
+      }
     } catch (e) {
       console.error("[AURA import-url]", e);
       toast.error("Could not import from that URL");
