@@ -113,8 +113,12 @@
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-.animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+/* fill-mode "backwards" (not "both"): the final keyframe equals the natural
+   state, so keeping it applied only left a permanent transform on every
+   section — which created stacking contexts that trapped dropdown/popup
+   z-indexes below later siblings (e.g. the My Brands autocomplete). */
+.animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.22,1,0.36,1) backwards; }
 .animate-fade-in { animation: fade-in 0.5s ease-out both; }
-.animate-scale-in { animation: scale-in 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-scale-in { animation: scale-in 0.35s cubic-bezier(0.22,1,0.36,1) backwards; }
 .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.22,1,0.36,1) both; }
 .animate-float { animation: float 4s ease-in-out infinite; }
