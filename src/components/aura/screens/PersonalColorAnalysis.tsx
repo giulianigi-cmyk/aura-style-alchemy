@@ -138,12 +138,15 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
 
   const restart = () => {
     if (imageUrl) URL.revokeObjectURL(imageUrl);
+    autoRanRef.current = null;
     setImageUrl(null);
     setSamples([null, null, null]);
     setActiveTap(0);
     setResult(null);
+    setAnalyzing(false);
     setStep("instructions");
   };
+
 
   const saveToProfile = async () => {
     if (!result) return;
