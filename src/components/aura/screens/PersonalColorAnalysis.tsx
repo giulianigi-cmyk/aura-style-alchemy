@@ -3,7 +3,12 @@ import { ArrowLeft, Camera, RotateCcw, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { classifyColorSeason, type SeasonResult } from "@/lib/personal-color";
+import { autoSampleFromCanvas } from "@/lib/face-analyze";
 import { useProfile } from "@/hooks/use-profile";
+
+type Step = "instructions" | "sampling" | "result";
+type TapIndex = 0 | 1 | 2;
+
 
 type Step = "instructions" | "sampling" | "result";
 type TapIndex = 0 | 1 | 2;
