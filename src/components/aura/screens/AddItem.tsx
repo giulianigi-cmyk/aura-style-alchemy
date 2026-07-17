@@ -10,6 +10,7 @@ import { ColorPicker } from "@/components/aura/ColorPicker";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { importProductFromUrl } from "@/lib/import-url.functions";
+import { downloadImportImage } from "@/lib/import-image.functions";
 
 const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
@@ -167,6 +168,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const analyze = useServerFn(analyzeWardrobeImage);
   const bgRemove = useServerFn(removeBackground);
   const importUrl = useServerFn(importProductFromUrl);
+  const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -180,6 +182,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
+  // Alternative product shots from the last URL import ("pick another photo").
+  const [altImages, setAltImages] = useState<string[]>([]);
+  const [altLoading, setAltLoading] = useState<string | null>(null);
+  const [importReferer, setImportReferer] = useState<string>("");
 
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("Tops");
@@ -253,6 +259,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const onPick = async (f: File | null) => {
     if (!f) return;
     if (!isImageFile(f)) { toast.error("Please select an image"); return; }
+    setAltImages([]);
     await runPipeline(f);
   };
 
@@ -271,6 +278,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         data: { url: parsed.toString(), accessToken: sess.session?.access_token },
       });
       if (!result.ok) { toast.error(result.error); return; }
+      setAltImages(result.imageCandidates ?? []);
+      setImportReferer(parsed.origin);
       const file = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
       await runPipeline(file, { brand: result.brand || undefined, source: "url" });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
@@ -284,6 +293,24 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       toast.error("Could not import from that URL");
     } finally {
       setImporting(false);
+    }
+  };
+
+  /** User tapped an alternative shot from the URL import — download it
+   *  server-side (CORS/hotlink safe) and re-run the pipeline on it. */
+  const useAltImage = async (url: string) => {
+    if (altLoading) return;
+    setAltLoading(url);
+    try {
+      const res = await downloadImage({ data: { url, referer: importReferer || undefined } });
+      if (!res.ok) { toast.error(res.error); return; }
+      const f = await dataUrlToFile(res.imageDataUrl, `import-${Date.now()}.jpg`);
+      await runPipeline(f, { brand: brand || undefined, source: "url" });
+    } catch (e) {
+      console.error("[AURA import-alt]", e);
+      toast.error("Could not load that photo");
+    } finally {
+      setAltLoading(null);
     }
   };
 
@@ -472,6 +499,30 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               />
             )}
           </div>
+
+          {altImages.length > 1 && (
+            <div className="mt-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Wrong photo? Pick another</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {altImages.map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => void useAltImage(u)}
+                    disabled={altLoading !== null}
+                    className="relative h-20 w-16 shrink-0 rounded-xl overflow-hidden border border-border bg-secondary/40 active:scale-95 transition"
+                    aria-label="Use this photo"
+                  >
+                    <img src={u} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    {altLoading === u && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-background/60">
+                        <Loader2 size={14} className="animate-spin" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center gap-2 rounded-full bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-3.5 py-2 w-fit">
             {stage !== "idle" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
