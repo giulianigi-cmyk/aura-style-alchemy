@@ -15,6 +15,7 @@ const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", 
 const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
 const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
 const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
+const materialOptions = ["Silk", "Linen", "Cotton", "Wool", "Cashmere", "Denim", "Leather", "Suede", "Synthetic", "Knit"];
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 
 function isImageFile(file: File) {
@@ -186,10 +187,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [seasons, setSeasons] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
   const [occasions, setOccasions] = useState<string[]>([]);
+  const [materials, setMaterials] = useState<string[]>([]);
 
   const resetFields = () => {
     setBrand(""); setCategory("Tops"); setColors([]);
-    setSeasons([]); setStyles([]); setOccasions([]);
+    setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
   };
 
   /**
@@ -199,7 +201,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
    * 3. Attempt background removal; on success, swap file+preview to the PNG.
    *    On failure, keep the original image (non-blocking).
    */
-  const runPipeline = async (initialFile: File, opts?: { brand?: string }) => {
+  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url" }) => {
     setFile(initialFile);
     setPreview(URL.createObjectURL(initialFile));
     setTransparent(false);
@@ -218,6 +220,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
         if (result.seasons?.length) setSeasons(result.seasons);
+        // Material auto-detection only applies to photos (camera/gallery/upload).
+        // URL-imported product shots are left for manual selection, since the
+        // fabric read on catalog photography is less reliable and the person
+        // asked to always confirm materials by hand for that path.
+        if (opts?.source !== "url" && result.materials?.length) setMaterials(result.materials);
         // Don't overwrite a domain-derived brand with an empty AI result.
         if (result.brand && !opts?.brand) setBrand(result.brand);
       })
@@ -261,7 +268,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       const result = await importUrl({ data: { url: parsed.toString() } });
       if (!result.ok) { toast.error(result.error); return; }
       const file = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
-      await runPipeline(file, { brand: result.brand || undefined });
+      await runPipeline(file, { brand: result.brand || undefined, source: "url" });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
     } catch (e) {
       console.error("[AURA import-url]", e);
@@ -306,6 +313,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         season: seasons.filter((s) => seasonOptions.includes(s)).join(", ") || null,
         style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
+        material: materials.filter((m) => materialOptions.includes(m)),
       };
 
       const { data: inserted, error: insErr } = await supabase
@@ -483,6 +491,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
             <MultiChipGroup label="Style" options={styleOptions} values={styles} onToggle={(v: string) => toggle(styles, setStyles, v)} />
             <MultiChipGroup label="Occasion" options={occasionOptions} values={occasions} onToggle={(v: string) => toggle(occasions, setOccasions, v)} />
+            <MultiChipGroup label="Material" options={materialOptions} values={materials} onToggle={(v: string) => toggle(materials, setMaterials, v)} />
           </div>
 
           {err && <p className="mt-4 text-xs text-red-700">{err}</p>}
