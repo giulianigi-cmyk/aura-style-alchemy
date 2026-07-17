@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
-import { describeWeather, classifyTemp, suggestOutfit, type WeatherBand, type DailyForecast } from "@/lib/weather";
+import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
@@ -48,20 +48,13 @@ function weekGrid(anchor: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
-function categoriesForBand(band: WeatherBand, rainy: boolean): string[] {
-  const base: Record<WeatherBand, string[]> = {
-    cold: ["coat", "outerwear", "knit", "sweater", "boots", "scarf"],
-    cool: ["jacket", "blazer", "knit", "trousers", "boots"],
-    mild: ["jacket", "shirt", "jeans", "trousers", "sneakers"],
-    warm: ["shirt", "skirt", "dress", "linen", "loafers"],
-    hot: ["dress", "shorts", "sandals", "tee"],
-  };
-  return rainy ? ["raincoat", "trench", "boots", ...base[band]] : base[band];
-}
-
-function itemMatchesKeywords(it: WardrobeItem, keywords: string[]): boolean {
+function itemMatchesKeywords(it: WardrobeItem, keywords: string[], materials: string[] = []): boolean {
   const hay = `${it.category ?? ""} ${it.brand ?? ""} ${it.color ?? ""} ${it.style ?? ""} ${it.occasion ?? ""} ${it.season ?? ""}`.toLowerCase();
-  return keywords.some((k) => hay.includes(k));
+  const categoryMatch = keywords.some((k) => hay.includes(k));
+  if (categoryMatch) return true;
+  if (!materials.length) return false;
+  const itemMaterials = (it.material ?? []).map((m) => m.toLowerCase());
+  return materials.some((m) => itemMaterials.includes(m.toLowerCase()));
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -317,7 +310,6 @@ function DayDetail({
 
   // Weather suggestion basis (forecast for the day if available, otherwise current)
   const suggestTempC = weather ? (weather.tempMin + weather.tempMax) / 2 : currentTempC;
-  const rainy = weather ? weather.precipitationProbability >= 50 : false;
   const band = suggestTempC != null ? classifyTemp(suggestTempC) : null;
   const suggestion = band ? suggestOutfit({
     temperature: suggestTempC ?? 15,
@@ -328,10 +320,11 @@ function DayDetail({
     isDay: true,
   }) : null;
 
-  const suggestedKeywords = band ? categoriesForBand(band, rainy) : [];
+  const suggestedKeywords = suggestion?.categories ?? [];
+  const suggestedMaterials = suggestion?.materials ?? [];
   const suggestedItems = useMemo(
-    () => (suggestedKeywords.length ? items.filter((it) => itemMatchesKeywords(it, suggestedKeywords)) : []),
-    [items, suggestedKeywords],
+    () => (suggestedKeywords.length ? items.filter((it) => itemMatchesKeywords(it, suggestedKeywords, suggestedMaterials)) : []),
+    [items, suggestedKeywords, suggestedMaterials],
   );
   const visibleItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
 
