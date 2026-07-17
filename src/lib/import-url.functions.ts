@@ -492,10 +492,15 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     const title = (ld?.name || extracted.ogTitle || "").trim();
 
     let price: string | null = null;
+    let priceValue: number | null = null;
+    let priceCurrency: string | null = null;
     const offer = Array.isArray(ld?.offers) ? ld?.offers[0] : ld?.offers;
     if (offer?.price) {
-      const currency = offer.priceCurrency ? ` ${offer.priceCurrency}` : "";
-      price = `${offer.price}${currency}`;
+      const parsed = typeof offer.price === "number" ? offer.price : parseFloat(String(offer.price).replace(",", "."));
+      if (Number.isFinite(parsed)) priceValue = parsed;
+      priceCurrency = offer.priceCurrency ? String(offer.priceCurrency).toUpperCase() : null;
+      const currencySuffix = priceCurrency ? ` ${priceCurrency}` : "";
+      price = `${offer.price}${currencySuffix}`;
     }
 
     return {
@@ -504,6 +509,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       brand,
       title,
       price,
+      priceValue,
+      priceCurrency,
       sourceUrl: target.toString(),
       extractionMethod: extracted.method,
       usedFallback,
