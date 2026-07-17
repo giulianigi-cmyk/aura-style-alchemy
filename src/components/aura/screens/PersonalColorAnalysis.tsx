@@ -211,13 +211,19 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       {step === "sampling" && (
         <section className="mx-6 mt-6 animate-fade-up">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-            Step {activeTap + 1} of 3
+            {analyzing ? "Please wait" : `Step ${activeTap + 1} of 3`}
           </p>
           <p className="mt-2 font-serif italic text-xl text-center">
-            {TAP_PROMPTS[activeTap]}
+            {analyzing ? "Analyzing your photo…" : TAP_PROMPTS[activeTap]}
           </p>
 
-          <div className="mt-5 rounded-3xl overflow-hidden border border-border/60 bg-secondary/40 shadow-soft">
+          <div className="mt-5 rounded-3xl overflow-hidden border border-border/60 bg-secondary/40 shadow-soft relative">
+            {analyzing && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/40 backdrop-blur-sm">
+                <Loader2 className="animate-spin" size={22} />
+              </div>
+            )}
+
             <canvas
               ref={canvasRef}
               onPointerDown={handleTap}
