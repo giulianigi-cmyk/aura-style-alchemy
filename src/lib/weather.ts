@@ -150,7 +150,9 @@ const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> 
   },
 };
 
-export function suggestOutfit(tempC: number, code: number): OutfitSuggestion {
+export function suggestOutfit(current: CurrentWeather | { temperature: number; weatherCode: number }): OutfitSuggestion {
+  const tempC = current.temperature;
+  const code = current.weatherCode;
   const band = classifyTemp(tempC);
   const base = baseByBand[band];
   const rainy = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
