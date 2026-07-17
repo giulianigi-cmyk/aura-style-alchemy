@@ -168,6 +168,7 @@ export type Database = {
           currency: string | null
           id: string
           image_url: string
+          material: string | null
           occasion: string | null
           price: number | null
           season: string | null
@@ -185,6 +186,7 @@ export type Database = {
           currency?: string | null
           id?: string
           image_url: string
+          material?: string | null
           occasion?: string | null
           price?: number | null
           season?: string | null
@@ -202,6 +204,7 @@ export type Database = {
           currency?: string | null
           id?: string
           image_url?: string
+          material?: string | null
           occasion?: string | null
           price?: number | null
           season?: string | null
