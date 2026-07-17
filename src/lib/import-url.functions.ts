@@ -4,7 +4,20 @@ import { getBrandFromUrl } from "./brand-domains";
 
 const InputSchema = z.object({
   url: z.string().url(),
+  // Supabase session token — required only for Firecrawl-powered imports,
+  // where we enforce a per-user daily quota.
+  accessToken: z.string().optional(),
 });
+
+// Firecrawl is a paid, metered API: cap per-user usage. Direct fetches
+// (no Firecrawl involved) are never counted.
+const FIRECRAWL_DAILY_LIMIT = 10;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+const RATE_LIMIT_MSG =
+  "You've reached today's limit for enhanced imports. Try again tomorrow, or add the item manually.";
+const SIGNIN_FOR_FALLBACK_MSG =
+  "Sign in to use enhanced import on this site.";
 
 // Sites that block scraping or serve JS-rendered pages — go straight to Firecrawl.
 const HARD_BLOCK_DOMAINS = new Set([
@@ -60,6 +73,30 @@ function decodeHtml(s: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&nbsp;/g, " ");
+}
+
+/** <title> tag content, with the site-name suffix stripped
+ *  ("Linen midi skirt | COS" → "Linen midi skirt"). */
+function pickTitleTag(html: string): string {
+  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!m) return "";
+  return decodeHtml(m[1]).trim().split(/\s*[|–—·]\s*/)[0].trim();
+}
+
+/** Last resort: humanise the URL slug ("/linen-midi-skirt-p12345.html"
+ *  → "Linen Midi Skirt"). Skips numeric/product-code tokens. */
+function humanizeSlug(u: URL): string {
+  const segs = u.pathname.split("/").filter(Boolean);
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const clean = segs[i].replace(/\.(html?|php|aspx?)$/i, "");
+    const words = clean
+      .split(/[-_]+/)
+      .filter((w) => w && !/^\d+$/.test(w) && !/^p\d{4,}$/i.test(w) && w.length <= 20);
+    if (words.length >= 2) {
+      return words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
+  }
+  return "";
 }
 
 /** Remove script/style/noscript/template/svg and any element whose
@@ -296,6 +333,50 @@ const firecrawlScrape: FallbackScraper = async (url) => {
 };
 
 const fallbackScraper: FallbackScraper = firecrawlScrape;
+
+// ---------- Per-user Firecrawl quota ----------------------------------------
+
+type CreditResult =
+  | { ok: true; remaining: number }
+  | { ok: false; reason: "auth" | "limit" };
+
+/** Verify the user via their Supabase session token and atomically consume
+ *  one Firecrawl credit through the consume_firecrawl_credit RPC.
+ *  Fails open (allows) only on infrastructure errors — never on auth/limit. */
+async function consumeFirecrawlCredit(accessToken?: string): Promise<CreditResult> {
+  if (!accessToken) return { ok: false, reason: "auth" };
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    console.warn("[AURA import-url] Supabase env missing — skipping rate limit");
+    return { ok: true, remaining: -1 };
+  }
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/consume_firecrawl_credit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ p_daily_limit: FIRECRAWL_DAILY_LIMIT }),
+    });
+    if (r.status === 401 || r.status === 403) return { ok: false, reason: "auth" };
+    if (!r.ok) {
+      console.warn("[AURA import-url] credit RPC failed", r.status);
+      return { ok: true, remaining: -1 }; // fail open on infra errors
+    }
+    const rows = (await r.json()) as Array<{ allowed: boolean; remaining: number }>;
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+    if (!row) return { ok: true, remaining: -1 };
+    return row.allowed
+      ? { ok: true, remaining: row.remaining }
+      : { ok: false, reason: "limit" };
+  } catch (err) {
+    console.warn("[AURA import-url] credit RPC error", err);
+    return { ok: true, remaining: -1 };
+  }
+}
 const fallbackScraperAvailable = () => {
   const key = process.env.FIRECRAWL_API_KEY;
   // Temporary diagnostic — tells us whether the key is truly missing from
@@ -335,9 +416,11 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
 // ---------- Extraction orchestrator ----------------------------------------
 
 type ExtractionMethod = "json-ld" | "og-image" | "dom" | "none";
+export type ImportConfidence = "high" | "medium" | "low";
 type Extracted = {
   imageUrl: string;
   method: ExtractionMethod;
+  confidence: ImportConfidence;
   productNode: ProductJson | null;
   ogTitle: string;
 };
@@ -353,7 +436,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
       .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
       .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()));
     if (imgs.length) {
-      return { imageUrl: imgs[0], method: "json-ld", productNode, ogTitle: pickMeta(html, "og:title") };
+      return { imageUrl: imgs[0], method: "json-ld", confidence: "high", productNode, ogTitle: pickMeta(html, "og:title") };
     }
   }
 
@@ -370,7 +453,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
       const looksLikeProduct = productNodes.length > 0 ||
         urlSlugTokens(target).some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
       if (!junky && looksLikeProduct) {
-        return { imageUrl: abs, method: "og-image", productNode, ogTitle };
+        return { imageUrl: abs, method: "og-image", confidence: "medium", productNode, ogTitle };
       }
     } catch { /* ignore */ }
   }
@@ -380,9 +463,9 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const candidates = collectDomImages(cleaned, target);
   const tokens = urlSlugTokens(target);
   const best = pickBestImage(candidates, tokens);
-  if (best) return { imageUrl: best, method: "dom", productNode, ogTitle };
+  if (best) return { imageUrl: best, method: "dom", confidence: "low", productNode, ogTitle };
 
-  return { imageUrl: "", method: "none", productNode, ogTitle };
+  return { imageUrl: "", method: "none", confidence: "low", productNode, ogTitle };
 }
 
 // ---------- Main handler ---------------------------------------------------
@@ -401,6 +484,14 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
 
     if (forceFallback) {
       if (!hasFallback) return { ok: false as const, error: FIRECRAWL_MISSING_MSG };
+      const credit = await consumeFirecrawlCredit(data.accessToken);
+      if (!credit.ok) {
+        return {
+          ok: false as const,
+          error: credit.reason === "limit" ? RATE_LIMIT_MSG : SIGNIN_FOR_FALLBACK_MSG,
+          rateLimited: credit.reason === "limit",
+        };
+      }
       html = await fallbackScraper(target.toString());
       usedFallback = true;
     } else {
@@ -409,7 +500,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       blocked = direct.blocked;
     }
 
-    let extracted: Extracted = { imageUrl: "", method: "none", productNode: null, ogTitle: "" };
+    let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "" };
     if (html) extracted = extractFromHtml(html, target);
 
     // If direct fetch yielded nothing usable and we haven't tried the
@@ -421,6 +512,14 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
           error: blocked
             ? FIRECRAWL_MISSING_MSG
             : "No product image found on that page. Try a different link or add the item manually.",
+        };
+      }
+      const credit = await consumeFirecrawlCredit(data.accessToken);
+      if (!credit.ok) {
+        return {
+          ok: false as const,
+          error: credit.reason === "limit" ? RATE_LIMIT_MSG : SIGNIN_FOR_FALLBACK_MSG,
+          rateLimited: credit.reason === "limit",
         };
       }
       const fc = await fallbackScraper(target.toString());
@@ -451,33 +550,81 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }),
     );
 
-    // Download the image (12s timeout for slow CDNs).
+    // Download the image (12s timeout for slow CDNs, 8 MB hard cap).
+    // Some CDNs hotlink-protect and reject cross-site Referers — on 401/403
+    // we retry once without the Referer header before giving up.
+    const fetchImage = async (withReferer: boolean): Promise<Response> => {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 12000);
+      try {
+        return await fetch(imageUrl, {
+          signal: ctl.signal,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+            Accept: "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8",
+            ...(withReferer ? { Referer: target.origin } : {}),
+          },
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
     let imageDataUrl: string;
-    const imgCtl = new AbortController();
-    const imgTimer = setTimeout(() => imgCtl.abort(), 12000);
     try {
-      const imgResp = await fetch(imageUrl, {
-        signal: imgCtl.signal,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-          Referer: target.origin,
-        },
-      });
+      let imgResp = await fetchImage(true);
+      if (imgResp.status === 401 || imgResp.status === 403) {
+        imgResp = await fetchImage(false);
+      }
       if (!imgResp.ok) {
         return { ok: false as const, error: `Could not download the product image (${imgResp.status}).` };
       }
-      const contentType = imgResp.headers.get("content-type") || "image/jpeg";
-      const buf = new Uint8Array(await imgResp.arrayBuffer());
+
+      const declared = parseInt(imgResp.headers.get("content-length") ?? "", 10);
+      if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
+        return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
+      }
+
+      // Stream with a running byte cap — content-length can lie or be absent.
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      const reader = imgResp.body?.getReader();
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          if (received > MAX_IMAGE_BYTES) {
+            await reader.cancel();
+            return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
+          }
+          chunks.push(value);
+        }
+      } else {
+        const whole = new Uint8Array(await imgResp.arrayBuffer());
+        if (whole.byteLength > MAX_IMAGE_BYTES) {
+          return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
+        }
+        chunks.push(whole);
+        received = whole.byteLength;
+      }
+
+      const buf = new Uint8Array(received);
+      let offset = 0;
+      for (const c of chunks) { buf.set(c, offset); offset += c.byteLength; }
+
+      // Chunked base64 — the old byte-by-byte loop was O(n²) on string concat.
       let binary = "";
-      for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-      const b64 = btoa(binary);
-      imageDataUrl = `data:${contentType};base64,${b64}`;
+      const STEP = 0x8000;
+      for (let i = 0; i < buf.length; i += STEP) {
+        binary += String.fromCharCode(...buf.subarray(i, i + STEP));
+      }
+      const contentType = imgResp.headers.get("content-type") || "image/jpeg";
+      imageDataUrl = `data:${contentType};base64,${btoa(binary)}`;
     } catch (err) {
       console.warn("[AURA import-url] image download failed", err);
       return { ok: false as const, error: "Could not download the product image." };
-    } finally {
-      clearTimeout(imgTimer);
     }
 
     // Structured hints (brand/title/price) — from Product node when available.
@@ -489,7 +636,14 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         ? ld.brand.name ?? ""
         : "";
     const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
-    const title = (ld?.name || extracted.ogTitle || "").trim();
+    // Title cascade: JSON-LD name → og:title → <title> tag → humanised slug.
+    const title = (
+      ld?.name ||
+      extracted.ogTitle ||
+      pickTitleTag(html ?? "") ||
+      humanizeSlug(target) ||
+      ""
+    ).trim();
 
     let price: string | null = null;
     let priceValue: number | null = null;
@@ -513,6 +667,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       priceCurrency,
       sourceUrl: target.toString(),
       extractionMethod: extracted.method,
+      confidence: extracted.confidence,
       usedFallback,
     };
   });
