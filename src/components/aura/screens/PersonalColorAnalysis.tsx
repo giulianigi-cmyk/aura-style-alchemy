@@ -41,15 +41,17 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
   const [activeTap, setActiveTap] = useState<TapIndex>(0);
   const [result, setResult] = useState<SeasonResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const autoRanRef = useRef<string | null>(null);
 
-  // Draw the photo onto the canvas
+  // Draw the photo onto the canvas, then attempt automatic face-based sampling.
   useEffect(() => {
     if (step !== "sampling" || !imageUrl || !canvasRef.current) return;
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const size = 640;
@@ -63,10 +65,30 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+
+      // Run auto-detection once per loaded image.
+      if (autoRanRef.current === imageUrl) return;
+      autoRanRef.current = imageUrl;
+      setAnalyzing(true);
+      try {
+        const auto = await autoSampleFromCanvas(canvas);
+        if (auto) {
+          setSamples([auto.skin, auto.hair, auto.eye]);
+          setActiveTap(0);
+        } else {
+          toast("Couldn't detect your face automatically. Tap the three points manually.");
+        }
+      } catch (err) {
+        console.error("[AURA] auto face analysis failed", err);
+        toast("Couldn't detect your face automatically. Tap the three points manually.");
+      } finally {
+        setAnalyzing(false);
+      }
     };
     img.onerror = () => toast.error("Couldn't load photo");
     img.src = imageUrl;
   }, [step, imageUrl]);
+
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl); };
