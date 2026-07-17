@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getBrandFromUrl } from "./brand-domains";
+import { fetchImageAsDataUrl } from "./fetch-image";
 
 const InputSchema = z.object({
   url: z.string().url(),
@@ -12,12 +13,29 @@ const InputSchema = z.object({
 // Firecrawl is a paid, metered API: cap per-user usage. Direct fetches
 // (no Firecrawl involved) are never counted.
 const FIRECRAWL_DAILY_LIMIT = 10;
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 
 const RATE_LIMIT_MSG =
   "You've reached today's limit for enhanced imports. Try again tomorrow, or add the item manually.";
 const SIGNIN_FOR_FALLBACK_MSG =
   "Sign in to use enhanced import on this site.";
+const FIRECRAWL_FAILED_MSG =
+  "Enhanced import couldn't read this site right now. Try again in a minute or add the item manually.";
+
+/** Tracking params confuse some sites/scrapers and bloat cache keys —
+ *  strip the well-known ones before fetching. */
+const TRACKING_PARAM_RE =
+  /^(utm_|gclid$|gbraid$|wbraid$|gad_|fbclid$|msclkid$|mc_|dplink$|chn$|cmp$|slink_id$|src$|tarea$|tar$|ag$|ptyp$|feed_num$)/i;
+
+function stripTrackingParams(u: URL): URL {
+  const clean = new URL(u.toString());
+  const toDelete: string[] = [];
+  clean.searchParams.forEach((_v, k) => {
+    if (TRACKING_PARAM_RE.test(k)) toDelete.push(k);
+  });
+  toDelete.forEach((k) => clean.searchParams.delete(k));
+  clean.hash = "";
+  return clean;
+}
 
 // Sites that block scraping or serve JS-rendered pages — go straight to Firecrawl.
 const HARD_BLOCK_DOMAINS = new Set([
@@ -25,6 +43,7 @@ const HARD_BLOCK_DOMAINS = new Set([
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
   "louisvuitton.com", "dior.com", "chanel.com", "ssense.com", "matchesfashion.com",
   "revolve.com", "shopbop.com", "nordstrom.com", "victoriabeckham.com",
+  "sezane.com",
 ]);
 
 const RETRY_STATUSES = new Set([401, 403, 429, 503]);
@@ -307,26 +326,41 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
 
 // ---------- Fallback scraper (pluggable) -----------------------------------
 
-type FallbackScraper = (url: string) => Promise<string | null>;
+type FallbackResult = { html: string | null; errored: boolean };
+type FallbackScraper = (url: string) => Promise<FallbackResult>;
 
 const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) return null;
+  if (!key) return { html: null, errored: true };
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 20000);
+  // Heavy JS-rendered sites (Sezane, Mytheresa…) routinely need >20s to
+  // render — give Firecrawl 40s of its own budget plus network overhead.
+  const timer = setTimeout(() => ctl.abort(), 50000);
   try {
     const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       signal: ctl.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ url, formats: ["rawHtml", "html"], onlyMainContent: false }),
+      body: JSON.stringify({
+        url,
+        formats: ["rawHtml", "html"],
+        onlyMainContent: false,
+        timeout: 40000,
+        waitFor: 2000,
+      }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      console.warn("[AURA import-url] firecrawl non-ok", r.status, body.slice(0, 300));
+      return { html: null, errored: true };
+    }
     const data = await r.json() as { data?: { rawHtml?: string; html?: string } };
-    return data.data?.rawHtml || data.data?.html || null;
+    const html = data.data?.rawHtml || data.data?.html || null;
+    console.log("[AURA import-url] firecrawl ok, html length:", html?.length ?? 0);
+    return { html, errored: false };
   } catch (e) {
     console.warn("[AURA import-url] firecrawl failed", e);
-    return null;
+    return { html: null, errored: true };
   } finally {
     clearTimeout(timer);
   }
@@ -423,24 +457,47 @@ type Extracted = {
   confidence: ImportConfidence;
   productNode: ProductJson | null;
   ogTitle: string;
+  /** Ranked alternative image URLs (incl. the chosen one) so the client
+   *  can offer a "pick another photo" strip. */
+  candidates: string[];
 };
 
+const MAX_CANDIDATES = 6;
+
 function extractFromHtml(html: string, target: URL): Extracted {
+  const tokens = urlSlugTokens(target);
+  const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
+
   // Step 1 — JSON-LD Product entity. This is the highest-fidelity signal
   // because it explicitly binds an image to a specific Product.
   const productNodes = collectProductNodes(html);
   const productNode = selectProductNode(productNodes, target);
 
-  if (productNode) {
-    const imgs = jsonLdImages(productNode)
-      .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
-      .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()));
-    if (imgs.length) {
-      return { imageUrl: imgs[0], method: "json-ld", confidence: "high", productNode, ogTitle: pickMeta(html, "og:title") };
-    }
-  }
+  const ldImgs = productNode
+    ? jsonLdImages(productNode)
+        .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
+        .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()))
+    : [];
 
-  const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
+  // Alternative-image pool: JSON-LD gallery first, then DOM shots from the
+  // cleaned page. The client shows these as "pick another photo".
+  const domImgs = collectDomImages(stripExcludedSections(html), target)
+    .filter((u) => !JUNK_KEYWORDS.test(u.toLowerCase()));
+  const rankDom = (arr: string[]) =>
+    arr.map((u, i) => ({ u, s: scoreImage(u, tokens), i }))
+       .sort((a, b) => (b.s - a.s) || (a.i - b.i))
+       .map((x) => x.u);
+  const candidates = Array.from(new Set([...ldImgs, ...rankDom(domImgs)])).slice(0, MAX_CANDIDATES);
+
+  if (ldImgs.length) {
+    // Don't blindly take the FIRST gallery image: on fashion sites it's
+    // almost always the on-model hero shot, while the flat packshot sits
+    // further in. Score them (packshot keywords up, model keywords down,
+    // ties prefer non-first) and fall back to imgs[0] only if scoring
+    // rejects everything.
+    const best = pickBestImage(ldImgs, tokens) ?? ldImgs[0];
+    return { imageUrl: best, method: "json-ld", confidence: "high", productNode, ogTitle, candidates };
+  }
 
   // Step 2 — OG image, but only if it looks like a product image (not a
   // generic site OG). We validate by checking it isn't obviously junk and
@@ -451,21 +508,19 @@ function extractFromHtml(html: string, target: URL): Extracted {
       const abs = new URL(og, target).toString();
       const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase());
       const looksLikeProduct = productNodes.length > 0 ||
-        urlSlugTokens(target).some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
+        tokens.some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
       if (!junky && looksLikeProduct) {
-        return { imageUrl: abs, method: "og-image", confidence: "medium", productNode, ogTitle };
+        const withOg = Array.from(new Set([abs, ...candidates])).slice(0, MAX_CANDIDATES);
+        return { imageUrl: abs, method: "og-image", confidence: "medium", productNode, ogTitle, candidates: withOg };
       }
     } catch { /* ignore */ }
   }
 
   // Step 3 — DOM scan, after stripping related/recommendation/nav sections.
-  const cleaned = stripExcludedSections(html);
-  const candidates = collectDomImages(cleaned, target);
-  const tokens = urlSlugTokens(target);
-  const best = pickBestImage(candidates, tokens);
-  if (best) return { imageUrl: best, method: "dom", confidence: "low", productNode, ogTitle };
+  const best = pickBestImage(domImgs, tokens);
+  if (best) return { imageUrl: best, method: "dom", confidence: "low", productNode, ogTitle, candidates };
 
-  return { imageUrl: "", method: "none", confidence: "low", productNode, ogTitle };
+  return { imageUrl: "", method: "none", confidence: "low", productNode, ogTitle, candidates: [] };
 }
 
 // ---------- Main handler ---------------------------------------------------
@@ -473,7 +528,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const target = new URL(data.url);
+    const target = stripTrackingParams(new URL(data.url));
     const domain = rootDomain(target);
     const hasFallback = fallbackScraperAvailable();
     const forceFallback = HARD_BLOCK_DOMAINS.has(domain);
@@ -492,7 +547,11 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
           rateLimited: credit.reason === "limit",
         };
       }
-      html = await fallbackScraper(target.toString());
+      const fb = await fallbackScraper(target.toString());
+      if (fb.errored && !fb.html) {
+        return { ok: false as const, error: FIRECRAWL_FAILED_MSG };
+      }
+      html = fb.html;
       usedFallback = true;
     } else {
       const direct = await directFetch(target);
@@ -500,7 +559,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       blocked = direct.blocked;
     }
 
-    let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "" };
+    let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
     if (html) extracted = extractFromHtml(html, target);
 
     // If direct fetch yielded nothing usable and we haven't tried the
@@ -523,10 +582,13 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         };
       }
       const fc = await fallbackScraper(target.toString());
-      if (fc) {
-        html = fc;
+      if (fc.errored && !fc.html) {
+        return { ok: false as const, error: FIRECRAWL_FAILED_MSG };
+      }
+      if (fc.html) {
+        html = fc.html;
         usedFallback = true;
-        extracted = extractFromHtml(fc, target);
+        extracted = extractFromHtml(fc.html, target);
       }
     }
 
@@ -550,82 +612,13 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }),
     );
 
-    // Download the image (12s timeout for slow CDNs, 8 MB hard cap).
-    // Some CDNs hotlink-protect and reject cross-site Referers — on 401/403
-    // we retry once without the Referer header before giving up.
-    const fetchImage = async (withReferer: boolean): Promise<Response> => {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 12000);
-      try {
-        return await fetch(imageUrl, {
-          signal: ctl.signal,
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-            Accept: "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8",
-            ...(withReferer ? { Referer: target.origin } : {}),
-          },
-        });
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-
-    let imageDataUrl: string;
-    try {
-      let imgResp = await fetchImage(true);
-      if (imgResp.status === 401 || imgResp.status === 403) {
-        imgResp = await fetchImage(false);
-      }
-      if (!imgResp.ok) {
-        return { ok: false as const, error: `Could not download the product image (${imgResp.status}).` };
-      }
-
-      const declared = parseInt(imgResp.headers.get("content-length") ?? "", 10);
-      if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
-        return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
-      }
-
-      // Stream with a running byte cap — content-length can lie or be absent.
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-      const reader = imgResp.body?.getReader();
-      if (reader) {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          received += value.byteLength;
-          if (received > MAX_IMAGE_BYTES) {
-            await reader.cancel();
-            return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
-          }
-          chunks.push(value);
-        }
-      } else {
-        const whole = new Uint8Array(await imgResp.arrayBuffer());
-        if (whole.byteLength > MAX_IMAGE_BYTES) {
-          return { ok: false as const, error: "That image is too large to import (max 8 MB)." };
-        }
-        chunks.push(whole);
-        received = whole.byteLength;
-      }
-
-      const buf = new Uint8Array(received);
-      let offset = 0;
-      for (const c of chunks) { buf.set(c, offset); offset += c.byteLength; }
-
-      // Chunked base64 — the old byte-by-byte loop was O(n²) on string concat.
-      let binary = "";
-      const STEP = 0x8000;
-      for (let i = 0; i < buf.length; i += STEP) {
-        binary += String.fromCharCode(...buf.subarray(i, i + STEP));
-      }
-      const contentType = imgResp.headers.get("content-type") || "image/jpeg";
-      imageDataUrl = `data:${contentType};base64,${btoa(binary)}`;
-    } catch (err) {
-      console.warn("[AURA import-url] image download failed", err);
-      return { ok: false as const, error: "Could not download the product image." };
+    // Download via the shared hardened fetcher (8 MB cap, hotlink retry).
+    const dl = await fetchImageAsDataUrl(imageUrl, target.origin);
+    if (!dl.ok) {
+      console.warn("[AURA import-url] image download failed:", dl.error);
+      return { ok: false as const, error: dl.error };
     }
+    const imageDataUrl = dl.dataUrl;
 
     // Structured hints (brand/title/price) — from Product node when available.
     const ld = extracted.productNode;
@@ -668,6 +661,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       sourceUrl: target.toString(),
       extractionMethod: extracted.method,
       confidence: extracted.confidence,
+      imageCandidates: extracted.candidates,
       usedFallback,
     };
   });
