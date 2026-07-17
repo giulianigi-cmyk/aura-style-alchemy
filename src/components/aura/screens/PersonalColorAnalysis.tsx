@@ -10,8 +10,6 @@ type Step = "instructions" | "sampling" | "result";
 type TapIndex = 0 | 1 | 2;
 
 
-type Step = "instructions" | "sampling" | "result";
-type TapIndex = 0 | 1 | 2;
 
 const TAP_PROMPTS = [
   "Tap a spot on your skin (cheek or forehead)",
