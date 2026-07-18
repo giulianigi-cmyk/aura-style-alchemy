@@ -148,6 +148,62 @@ function stripExcludedSections(html: string): string {
   }
   return out;
 }
+// ---------- Materials -------------------------------------------------------
+
+/** Fiber name → canonical wardrobe material. Multi-language: product pages
+ *  come back in Italian, English, French, German, Spanish. */
+const FIBER_MAP: Array<[RegExp, string]> = [
+  [/\b(cotton|cotone|coton|baumwolle|algod[oó]n)\b/i, "Cotton"],
+  [/\b(linen|lino|leinen|lin)\b/i, "Linen"],
+  [/\b(silk|seta|soie|seide|seda)\b/i, "Silk"],
+  [/\b(cashmere|kaschmir|cachemire)\b/i, "Cashmere"],
+  [/\b(wool|lana|laine|wolle|merino|alpaca|mohair)\b/i, "Wool"],
+  [/\b(denim)\b/i, "Denim"],
+  [/\b(leather|pelle|cuir|leder|cuero)\b/i, "Leather"],
+  [/\b(suede|camoscio|daim|wildleder|ante)\b/i, "Suede"],
+  [/\b(polyester|poliestere|poliéster|polyamide|poliammide|nylon|elastane|elastan|elastanne|spandex|lycra|acrylic|acrilico|acrylique|viscose|viscosa|rayon|modal|lyocell|tencel|polyurethane|poliuretano)\b/i, "Synthetic"],
+];
+
+function canonicalFiber(word: string): string | null {
+  for (const [re, canon] of FIBER_MAP) if (re.test(word)) return canon;
+  return null;
+}
+
+/** Pull the real fabric composition from the product page — far more
+ *  reliable than guessing from the photo. Sources, in order:
+ *  1. JSON-LD Product.material / description
+ *  2. "52% viscosa 48% lino"-style percentage pairs anywhere in the page text
+ *  Returns up to 2 canonical materials, highest percentage first. */
+function extractMaterials(html: string | null, productNode: ProductJson | null): string[] {
+  const found: Array<{ canon: string; pct: number }> = [];
+  const push = (canon: string | null, pct: number) => {
+    if (!canon) return;
+    const existing = found.find((f) => f.canon === canon);
+    if (existing) existing.pct = Math.max(existing.pct, pct);
+    else found.push({ canon, pct });
+  };
+
+  // 1 — explicit schema.org material
+  const ldMat = productNode?.material;
+  for (const m of Array.isArray(ldMat) ? ldMat : ldMat ? [ldMat] : []) {
+    push(canonicalFiber(String(m)), 100);
+  }
+
+  // 2 — percentage pairs in JSON-LD description + raw page text
+  const sources = [productNode?.description ?? "", html ? decodeHtml(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, " ")) : ""];
+  const pairRe = /(\d{1,3})\s*%\s*([a-zA-Zà-üÀ-Ü]{3,20})/g;
+  for (const text of sources) {
+    let m: RegExpExecArray | null;
+    while ((m = pairRe.exec(text)) !== null) {
+      const pct = parseInt(m[1], 10);
+      if (pct < 1 || pct > 100) continue;
+      push(canonicalFiber(m[2]), pct); // non-fiber words ("50% off") map to null and are skipped
+    }
+    if (found.length) break; // trust the structured description before the whole page
+  }
+
+  return found.sort((a, b) => b.pct - a.pct).slice(0, 2).map((f) => f.canon);
+}
 
 // ---------- JSON-LD ---------------------------------------------------------
 
@@ -162,6 +218,8 @@ type ProductJson = {
   offers?:
     | { price?: string | number; priceCurrency?: string; url?: string }
     | Array<{ price?: string | number; priceCurrency?: string; url?: string }>;
+  material?: string | string[];
+  description?: string;
 };
 
 function isProductType(t: unknown): boolean {
@@ -242,8 +300,7 @@ function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | nul
   const matched = nodes.find((n) => nodeMatchesUrl(n, target));
   return matched ?? nodes[0];
 }
-
-// ---------- DOM image fallback ---------------------------------------------
+// ---------- DOM image fallback ----------------------------------------------
 
 const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook)/i;
 const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary)/i;
@@ -324,7 +381,7 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
   return scored[0]?.u ?? null;
 }
 
-// ---------- Fallback scraper (pluggable) -----------------------------------
+// ---------- Fallback scraper (pluggable) ------------------------------------
 
 type FallbackResult = { html: string | null; errored: boolean };
 type FallbackScraper = (url: string) => Promise<FallbackResult>;
@@ -367,7 +424,6 @@ const firecrawlScrape: FallbackScraper = async (url) => {
 };
 
 const fallbackScraper: FallbackScraper = firecrawlScrape;
-
 // ---------- Per-user Firecrawl quota ----------------------------------------
 
 type CreditResult =
@@ -447,7 +503,7 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
   }
 }
 
-// ---------- Extraction orchestrator ----------------------------------------
+// ---------- Extraction orchestrator -----------------------------------------
 
 type ExtractionMethod = "json-ld" | "og-image" | "dom" | "none";
 export type ImportConfidence = "high" | "medium" | "low";
@@ -522,8 +578,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
 
   return { imageUrl: "", method: "none", confidence: "low", productNode, ogTitle, candidates: [] };
 }
-
-// ---------- Main handler ---------------------------------------------------
+// ---------- Main handler -----------------------------------------------------
 
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
@@ -662,6 +717,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       extractionMethod: extracted.method,
       confidence: extracted.confidence,
       imageCandidates: extracted.candidates,
+      materials: extractMaterials(html, extracted.productNode),
       usedFallback,
     };
   });
