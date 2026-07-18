@@ -61,7 +61,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       seasons: splitCsv(detail.season),
       styles: splitCsv(detail.style),
       occasions: splitCsv(detail.occasion),
-      materials: Array.isArray(detail.material) ? detail.material : splitCsv(detail.material as string | null),
+      materials: Array.isArray(detail.material) ? detail.material : [],
       price: detail.price != null ? String(detail.price) : "",
       currency: (detail.currency && currencyOptions.includes(detail.currency)) ? detail.currency : "EUR",
     });
