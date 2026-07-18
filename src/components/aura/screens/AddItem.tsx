@@ -274,8 +274,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setStage("bgremove");
     try {
-      const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
+            const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
+      if (!bg.ok) toast.message("Background not removed", { description: bg.error });
       if (bg.ok) {
+
         const { file: cleanFile, isTransparent } = await ensureTransparentPng(
           bg.imageDataUrl,
           `item-${Date.now()}.png`,
