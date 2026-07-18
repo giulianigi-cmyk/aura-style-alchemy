@@ -424,7 +424,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to save wardrobe item.";
+            const msg = e instanceof Error ? e.message : (typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : "Failed to save wardrobe item.");
+    
+
       console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
