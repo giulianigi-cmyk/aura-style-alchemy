@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ColorPicker } from "@/components/aura/ColorPicker";
+import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackground } from "@/lib/ai-bgremove.functions";
-import { importProductFromUrl } from "@/lib/import-url.functions";
+import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 
 import {
@@ -222,11 +223,14 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [materials, setMaterials] = useState<string[]>([]);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  // Full fabric composition with percentages from URL imports
+  // (90% linen vs 90% wool decides summer vs winter downstream).
+  const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
     setBrand(""); setCategory("Tops"); setColors([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
-    setPrice(""); setCurrency("EUR");
+    setPrice(""); setCurrency("EUR"); setComposition([]);
   };
 
   /**
@@ -236,7 +240,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
    * 3. Attempt background removal; on success, swap file+preview to the PNG.
    *    On failure, keep the original image (non-blocking).
    */
-  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[] }) => {
+  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[]; composition?: CompositionEntry[] }) => {
     setFile(initialFile);
     setPreview(URL.createObjectURL(initialFile));
     setTransparent(false);
@@ -246,6 +250,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (opts?.price) setPrice(opts.price);
     if (opts?.currency) setCurrency(opts.currency);
     if (opts?.materials?.length) setMaterials(opts.materials);
+    if (opts?.composition?.length) setComposition(opts.composition);
 
     const dataUrl = await readFileAsDataUrl(initialFile);
 
@@ -293,7 +298,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setAltImages([]);
     await runPipeline(f);
   };
-
   const handleImportUrl = async () => {
     const raw = urlInput.trim();
     if (!raw) return;
@@ -319,6 +323,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         price: result.priceValue != null ? String(result.priceValue) : undefined,
         currency: result.priceCurrency || undefined,
         materials: result.materials?.length ? result.materials : undefined,
+        composition: result.composition?.length ? result.composition : undefined,
       });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
       if (result.confidence === "low") {
@@ -350,6 +355,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         price: price || undefined,
         currency,
         materials: materials.length ? materials : undefined,
+        composition: composition.length ? composition : undefined,
       });
     } catch (e) {
       console.error("[AURA import-alt]", e);
@@ -358,6 +364,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setAltLoading(null);
     }
   };
+
   const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
     setter(values.includes(value) ? values.filter((x) => x !== value) : [...values, value]);
 
@@ -400,9 +407,17 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         })(),
         currency: price.trim() ? currency : null,
       };
+      // New column not yet in generated types — attach with a safe cast.
+      const compositionToSave = composition.filter((c) => materials.includes(c.material));
+      // Cast through unknown: the generated types don't know the new
+      // composition column yet (regenerate types after the migration).
+      const fullPayload = {
+        ...payload,
+        composition: compositionToSave.length ? compositionToSave : null,
+      } as unknown as TablesInsert<"wardrobe_items">;
 
       const { data: inserted, error: insErr } = await supabase
-        .from("wardrobe_items").insert(payload).select("*").single();
+        .from("wardrobe_items").insert(fullPayload).select("*").single();
       if (insErr) throw insErr;
 
       toast.success("Added to your closet");
@@ -439,7 +454,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       <input ref={fileRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
-
       {step === "capture" ? (
         <div className="flex-1 flex flex-col px-6 pb-10">
           <div
@@ -622,7 +636,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
             <MultiChipGroup label="Style" options={styleOptions} values={styles} onToggle={(v: string) => toggle(styles, setStyles, v)} />
             <MultiChipGroup label="Occasion" options={occasionOptions} values={occasions} onToggle={(v: string) => toggle(occasions, setOccasions, v)} />
-            <MultiChipGroup label="Material" options={materialOptions} values={materials} onToggle={(v: string) => toggle(materials, setMaterials, v)} />
+            <MaterialCombobox label="Material" options={materialOptions} values={materials} onChange={setMaterials} />
+            {composition.length > 0 && (
+              <p className="text-[11px] text-muted-foreground -mt-1">
+                Composition: {composition.map((c) => (c.pct != null ? `${c.pct}% ${c.material}` : c.material)).join(" · ")}
+              </p>
+            )}
           </div>
 
           {err && <p className="mt-4 text-xs text-red-700">{err}</p>}
