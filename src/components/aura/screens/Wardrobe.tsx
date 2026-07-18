@@ -38,6 +38,72 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [colorWheelOpen, setColorWheelOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [edit, setEdit] = useState({
+    brand: "",
+    category: "Tops",
+    colors: [] as string[],
+    seasons: [] as string[],
+    styles: [] as string[],
+    occasions: [] as string[],
+    materials: [] as string[],
+    price: "" as string,
+    currency: "EUR",
+  });
+
+  const openEdit = () => {
+    if (!detail) return;
+    setEdit({
+      brand: detail.brand ?? "",
+      category: editCategories.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
+      colors: detail.colors ?? [],
+      seasons: splitCsv(detail.season),
+      styles: splitCsv(detail.style),
+      occasions: splitCsv(detail.occasion),
+      materials: Array.isArray(detail.material) ? detail.material : splitCsv(detail.material as string | null),
+      price: detail.price != null ? String(detail.price) : "",
+      currency: (detail.currency && currencyOptions.includes(detail.currency)) ? detail.currency : "EUR",
+    });
+    setEditing(true);
+  };
+
+  const toggleChip = (arr: string[], setter: (v: string[]) => void, v: string) =>
+    setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const saveEdit = async () => {
+    if (!detail) return;
+    setSavingEdit(true);
+    try {
+      const priceNum = edit.price.trim() === "" ? null : Number(edit.price);
+      if (priceNum != null && !Number.isFinite(priceNum)) throw new Error("Invalid price");
+      const patch = {
+        brand: edit.brand.trim() || null,
+        category: edit.category,
+        color: edit.colors[0] ?? null,
+        colors: edit.colors,
+        season: edit.seasons.join(", ") || null,
+        style: edit.styles.join(", ") || null,
+        occasion: edit.occasions.join(", ") || null,
+        material: edit.materials,
+        price: priceNum,
+        currency: priceNum != null ? edit.currency : null,
+      };
+      const { data, error } = await supabase
+        .from("wardrobe_items").update(patch).eq("id", detail.id).select("*").single();
+      if (error) throw error;
+      const updated = data as WardrobeItem;
+      setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+      setDetail(updated);
+      setEditing(false);
+      toast.success("Item updated");
+    } catch (e) {
+      console.error("[AURA wardrobe] update", e);
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const deleteItem = async () => {
     if (!detail) return;
