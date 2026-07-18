@@ -5,9 +5,10 @@ interface MaterialComboboxProps {
   options: string[];
   values: string[];
   onChange: (values: string[]) => void;
+  label?: string;
 }
 
-export function MaterialCombobox({ options, values, onChange }: MaterialComboboxProps) {
+export function MaterialCombobox({ options, values, onChange, label }: MaterialComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
