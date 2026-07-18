@@ -174,6 +174,15 @@ const FIBER_MAP: Array<[RegExp, string]> = [
   [/\b(suede|camoscio|daim|wildleder|ante)\b/i, "Suede"],
   [/\b(shearling|montone)\b/i, "Shearling"],
   [/\b(down|piuma|piumino|daunen)\b/i, "Down"],
+  [/\b(gold|oro|doré|dorée|vergoldet)\b/i, "Gold"],
+  [/\b(silver|argento|argent|silber|plata)\b/i, "Silver"],
+  [/\b(steel|acciaio|acier|stahl|inox|stainless)\b/i, "Steel"],
+  [/\b(brass|ottone|laiton|messing)\b/i, "Brass"],
+  [/\b(metal|metallo|métal|metall)\b/i, "Metal"],
+  [/\b(pearl|perla|perle)\b/i, "Pearl"],
+  [/\b(rubber|gomma|caoutchouc|caucciù)\b/i, "Rubber"],
+  [/\b(canvas|tela|toile)\b/i, "Canvas"],
+
   [/\b(polyurethane|poliuretano|pvc|vinyl)\b/i, "Synthetic"],
 ];
 
