@@ -416,9 +416,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         composition: compositionToSave.length ? compositionToSave : null,
       } as unknown as TablesInsert<"wardrobe_items">;
 
-      const { data: inserted, error: insErr } = await supabase
+            let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
+      if (insErr && String(insErr.message).includes("composition")) {
+        // Schema cache stale: save without composition rather than failing.
+        console.warn("[AURA wardrobe] composition column not in cache — saving without it");
+        ({ data: inserted, error: insErr } = await supabase
+          .from("wardrobe_items").insert(payload).select("*").single());
+      }
       if (insErr) throw insErr;
+
 
       toast.success("Added to your closet");
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
