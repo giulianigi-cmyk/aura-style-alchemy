@@ -1,5 +1,6 @@
 import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { ColorPicker } from "@/components/aura/ColorPicker";
+import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { Plus, Filter, Search, Loader2, Trash2, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
@@ -11,6 +12,14 @@ import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { currentSeason, itemMatchesSeason, resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import {
+  ITEM_CATEGORIES,
+  SEASON_OPTIONS,
+  STYLE_OPTIONS,
+  OCCASION_OPTIONS,
+  MATERIAL_OPTIONS,
+  CURRENCY_OPTIONS,
+} from "@/lib/wardrobe-options";
 
 const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
 const editCategories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
