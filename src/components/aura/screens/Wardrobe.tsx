@@ -295,21 +295,26 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       )}
 
       {detail && (
-        <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur flex items-end sm:items-center justify-center" onClick={() => setDetail(null)}>
+        <div
+          className="fixed inset-0 z-[60] bg-background/85 backdrop-blur flex items-end sm:items-center justify-center"
+          onClick={() => { setDetail(null); setEditing(false); setConfirmDelete(false); }}
+        >
          <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[85dvh] overflow-y-auto bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] relative"
+            className="w-full max-w-md max-h-[82vh] overflow-y-auto overscroll-contain bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] relative"
           >
             <button
-              onClick={() => setDetail(null)}
+              onClick={() => { setDetail(null); setEditing(false); setConfirmDelete(false); }}
               className="absolute top-4 left-4 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
               aria-label="Close"
             ><X size={16} /></button>
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="absolute top-4 right-4 h-9 w-9 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90"
-              aria-label="Delete item"
-            ><Trash2 size={16} /></button>
+            {!editing && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="absolute top-4 right-4 h-9 w-9 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90"
+                aria-label="Delete item"
+              ><Trash2 size={16} /></button>
+            )}
 
             {(() => {
               const path = toStoragePath(detail.image_url);
@@ -323,7 +328,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                       <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
                     )}
                   </div>
-                  {src && (
+                  {src && !editing && (
                    <button
                       onClick={() => setColorWheelOpen(true)}
                       className="mx-auto mt-3 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
@@ -338,48 +343,158 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
               );
             })()}
 
-            <div className="mt-4 text-center">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
-              <p className="font-serif text-2xl mt-1">{[detail.colors?.[0] ?? detail.color, detail.category].filter(Boolean).join(" ")}</p>
-              {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
-              {detail.price != null && (
-                <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
-                  {detail.worn_count ? (
-                    <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toFixed(2)} per wear</span>
-                  ) : (
-                    <span>Not worn yet</span>
+            {!editing ? (
+              <>
+                <div className="mt-4 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
+                  <p className="font-serif text-2xl mt-1">{[detail.colors?.[0] ?? detail.color, detail.category].filter(Boolean).join(" ")}</p>
+                  {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
+                  {detail.price != null && (
+                    <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
+                      {detail.worn_count ? (
+                        <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toFixed(2)} per wear</span>
+                      ) : (
+                        <span>Not worn yet</span>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {confirmDelete ? (
-              <div className="mt-5 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
-                <p className="font-serif text-lg text-center">Delete this item?</p>
-                <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  onClick={openEdit}
+                  className="mt-5 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Pencil size={12} /> Edit details
+                </button>
+
+                {confirmDelete ? (
+                  <div className="mt-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+                    <p className="font-serif text-lg text-center">Delete this item?</p>
+                    <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={deleting}
+                        className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+                      >Cancel</button>
+                      <button
+                        onClick={deleteItem}
+                        disabled={deleting}
+                        className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        {deleting && <Loader2 size={12} className="animate-spin" />}
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => setConfirmDelete(false)}
-                    disabled={deleting}
+                    onClick={() => setConfirmDelete(true)}
+                    className="mt-3 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={12} /> Delete item
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Brand</p>
+                  <input
+                    value={edit.brand}
+                    onChange={(e) => setEdit((s) => ({ ...s, brand: e.target.value }))}
+                    placeholder="Brand"
+                    className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {editCategories.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setEdit((s) => ({ ...s, category: c }))}
+                        className={`rounded-full px-3 py-1.5 text-xs ${
+                          edit.category === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                        }`}
+                      >{c}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <ColorPicker
+                  value={edit.colors}
+                  onChange={(next) => setEdit((s) => ({ ...s, colors: next }))}
+                />
+
+                {([
+                  ["Season", seasonOptions, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
+                  ["Style", styleOptions, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
+                  ["Occasion", occasionOptions, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
+                  ["Material", materialOptions, edit.materials, (v: string[]) => setEdit((s) => ({ ...s, materials: v }))],
+                ] as const).map(([label, opts, values, setter]) => (
+                  <div key={label}>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {opts.map((o) => {
+                        const on = values.includes(o);
+                        return (
+                          <button
+                            key={o}
+                            onClick={() => toggleChip(values, setter, o)}
+                            className={`rounded-full px-3 py-1.5 text-xs ${
+                              on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                            }`}
+                          >{o}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground w-6 text-center">{currencySymbol[edit.currency]}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={edit.price}
+                      onChange={(e) => setEdit((s) => ({ ...s, price: e.target.value }))}
+                      placeholder="0.00"
+                      className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    {currencyOptions.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setEdit((s) => ({ ...s, currency: c }))}
+                        className={`rounded-full px-3 py-1.5 text-xs ${
+                          edit.currency === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                        }`}
+                      >{c}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-0 bg-card pb-1">
+                  <button
+                    onClick={() => setEditing(false)}
+                    disabled={savingEdit}
                     className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
                   >Cancel</button>
                   <button
-                    onClick={deleteItem}
-                    disabled={deleting}
-                    className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                    onClick={saveEdit}
+                    disabled={savingEdit}
+                    className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    {deleting && <Loader2 size={12} className="animate-spin" />}
-                    Delete
+                    {savingEdit && <Loader2 size={12} className="animate-spin" />}
+                    Save
                   </button>
                 </div>
               </div>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="mt-5 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
-              >
-                <Trash2 size={12} /> Delete item
-              </button>
             )}
           </div>
         </div>
