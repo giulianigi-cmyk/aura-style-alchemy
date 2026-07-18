@@ -625,6 +625,8 @@ function extractFromHtml(html: string, target: URL): Extracted {
 }
 // ---------- Main handler -----------------------------------------------------
 
+// ---------- Main handler -----------------------------------------------------
+
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
@@ -783,6 +785,20 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       if (n != null) {
         priceValue = n;
         priceCurrency = metaCur ? metaCur.toUpperCase() : null;
+      }
+    }
+    // Last-resort: visible price in the cleaned page text ("29,95 €" / "€ 29.95").
+    // Only runs when structured data gave nothing (e.g. Zara); the text has
+    // already been stripped of header/footer/nav where promo banners live.
+    if (priceValue == null && html) {
+      const text = decodeHtml(stripExcludedSections(html).replace(/<[^>]+>/g, " "));
+      const m =
+        text.match(/(?:€|\bEUR\b)\s{0,2}(\d{1,4}(?:[.,]\d{2})?)/) ||
+        text.match(/(\d{1,4}(?:[.,]\d{2}))\s{0,2}(?:€|\bEUR\b)/);
+      const n = parsePriceNum(m?.[1] ?? "");
+      if (n != null && n >= 1 && n <= 20000) {
+        priceValue = n;
+        priceCurrency = "EUR";
       }
     }
     if (priceValue != null) {
