@@ -21,13 +21,7 @@ import {
   CURRENCY_OPTIONS,
 } from "@/lib/wardrobe-options";
 
-const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
-const editCategories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
-const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
-const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
-const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
-const materialOptions = ["Silk", "Linen", "Cotton", "Wool", "Cashmere", "Denim", "Leather", "Suede", "Synthetic", "Knit"];
-const currencyOptions = ["EUR", "USD", "GBP"];
+const categories = ["All", ...ITEM_CATEGORIES];
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
 
 const splitCsv = (v: string | null | undefined) =>
