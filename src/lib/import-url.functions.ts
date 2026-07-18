@@ -182,9 +182,9 @@ const FIBER_MAP: Array<[RegExp, string]> = [
   [/\b(pearl|perla|perle)\b/i, "Pearl"],
   [/\b(rubber|gomma|caoutchouc|caucciù)\b/i, "Rubber"],
   [/\b(canvas|tela|toile)\b/i, "Canvas"],
-
   [/\b(polyurethane|poliuretano|pvc|vinyl)\b/i, "Synthetic"],
 ];
+
 
 function canonicalFiber(word: string): string | null {
   for (const [re, canon] of FIBER_MAP) if (re.test(word)) return canon;
