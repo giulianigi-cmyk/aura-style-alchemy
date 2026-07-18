@@ -476,7 +476,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     />
                   </div>
                   <div className="mt-2 flex gap-2">
-                    {currencyOptions.map((c) => (
+                    {CURRENCY_OPTIONS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setEdit((s) => ({ ...s, currency: c }))}
