@@ -33,6 +33,9 @@ export function MaterialCombobox({ options, values, onChange, label }: MaterialC
 
   return (
     <div ref={containerRef} className="relative">
+      {label && (
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
+      )}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
