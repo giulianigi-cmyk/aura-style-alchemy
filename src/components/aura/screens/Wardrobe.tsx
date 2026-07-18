@@ -414,7 +414,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {editCategories.map((c) => (
+                    {ITEM_CATEGORIES.map((c) => (
                       <button
                         key={c}
                         onClick={() => setEdit((s) => ({ ...s, category: c }))}
