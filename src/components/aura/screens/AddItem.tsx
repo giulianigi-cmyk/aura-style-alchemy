@@ -12,11 +12,14 @@ import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { importProductFromUrl } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 
-const categories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
-const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
-const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
-const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
-const materialOptions = ["Silk", "Linen", "Cotton", "Wool", "Cashmere", "Denim", "Leather", "Suede", "Synthetic", "Knit"];
+import {
+  ITEM_CATEGORIES as categories,
+  SEASON_OPTIONS as seasonOptions,
+  STYLE_OPTIONS as styleOptions,
+  OCCASION_OPTIONS as occasionOptions,
+  MATERIAL_OPTIONS as materialOptions,
+  CURRENCY_OPTIONS as currencyOptions,
+} from "@/lib/wardrobe-options";
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 
 function isImageFile(file: File) {
@@ -160,6 +163,29 @@ async function ensureTransparentPng(
   console.log("[AURA transparency] output bytes", blob.size, "isTransparent", isTransparent);
   return { file: new File([blob], filename, { type: "image/png" }), isTransparent };
 }
+/** remove.bg only accepts JPG/PNG — CDNs sometimes serve webp/avif anyway
+ *  (that's why Mytheresa imports kept their background while Zara worked).
+ *  The browser decodes those natively, so we re-encode via canvas. */
+async function normalizeForPipeline(f: File): Promise<File> {
+  if (f.type === "image/jpeg" || f.type === "image/png") return f;
+  try {
+    const bitmap = await createImageBitmap(f);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return f;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0);
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.92));
+    if (!blob) return f;
+    return new File([blob], f.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg", { type: "image/jpeg" });
+  } catch (e) {
+    console.warn("[AURA normalize] re-encode failed, keeping original", e);
+    return f;
+  }
+}
 
 type Stage = "idle" | "bgremove" | "analyze";
 
@@ -194,10 +220,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [styles, setStyles] = useState<string[]>([]);
   const [occasions, setOccasions] = useState<string[]>([]);
   const [materials, setMaterials] = useState<string[]>([]);
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("EUR");
 
   const resetFields = () => {
     setBrand(""); setCategory("Tops"); setColors([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
+    setPrice(""); setCurrency("EUR");
   };
 
   /**
@@ -207,13 +236,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
    * 3. Attempt background removal; on success, swap file+preview to the PNG.
    *    On failure, keep the original image (non-blocking).
    */
-  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url" }) => {
+  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[] }) => {
     setFile(initialFile);
     setPreview(URL.createObjectURL(initialFile));
     setTransparent(false);
     setStep("details");
     resetFields();
     if (opts?.brand) setBrand(opts.brand);
+    if (opts?.price) setPrice(opts.price);
+    if (opts?.currency) setCurrency(opts.currency);
+    if (opts?.materials?.length) setMaterials(opts.materials);
 
     const dataUrl = await readFileAsDataUrl(initialFile);
 
@@ -226,11 +258,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
         if (result.seasons?.length) setSeasons(result.seasons);
-        // Material auto-detection only applies to photos (camera/gallery/upload).
-        // URL-imported product shots are left for manual selection, since the
-        // fabric read on catalog photography is less reliable and the person
-        // asked to always confirm materials by hand for that path.
-        if (opts?.source !== "url" && result.materials?.length) setMaterials(result.materials);
+        // Materials: the real composition read from the product page
+        // (opts.materials) always wins; the visual guess is only a
+        // fallback for photos or pages without composition info.
+        if (!opts?.materials?.length && result.materials?.length) setMaterials(result.materials);
         // Don't overwrite a domain-derived brand with an empty AI result.
         if (result.brand && !opts?.brand) setBrand(result.brand);
       })
@@ -280,8 +311,15 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (!result.ok) { toast.error(result.error); return; }
       setAltImages(result.imageCandidates ?? []);
       setImportReferer(parsed.origin);
-      const file = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
-      await runPipeline(file, { brand: result.brand || undefined, source: "url" });
+      const raw = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
+      const file = await normalizeForPipeline(raw);
+      await runPipeline(file, {
+        brand: result.brand || undefined,
+        source: "url",
+        price: result.priceValue != null ? String(result.priceValue) : undefined,
+        currency: result.priceCurrency || undefined,
+        materials: result.materials?.length ? result.materials : undefined,
+      });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
       if (result.confidence === "low") {
         toast.message("Double-check the photo", {
@@ -304,8 +342,15 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     try {
       const res = await downloadImage({ data: { url, referer: importReferer || undefined } });
       if (!res.ok) { toast.error(res.error); return; }
-      const f = await dataUrlToFile(res.imageDataUrl, `import-${Date.now()}.jpg`);
-      await runPipeline(f, { brand: brand || undefined, source: "url" });
+      const rawF = await dataUrlToFile(res.imageDataUrl, `import-${Date.now()}.jpg`);
+      const f = await normalizeForPipeline(rawF);
+      await runPipeline(f, {
+        brand: brand || undefined,
+        source: "url",
+        price: price || undefined,
+        currency,
+        materials: materials.length ? materials : undefined,
+      });
     } catch (e) {
       console.error("[AURA import-alt]", e);
       toast.error("Could not load that photo");
@@ -313,7 +358,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setAltLoading(null);
     }
   };
-
   const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
     setter(values.includes(value) ? values.filter((x) => x !== value) : [...values, value]);
 
@@ -350,6 +394,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         style: styles.filter((s) => styleOptions.includes(s)).join(", ") || null,
         occasion: occasions.filter((o) => occasionOptions.includes(o)).join(", ") || null,
         material: materials.filter((m) => materialOptions.includes(m)),
+        price: (() => {
+          const n = parseFloat(price.replace(",", "."));
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })(),
+        currency: price.trim() ? currency : null,
       };
 
       const { data: inserted, error: insErr } = await supabase
@@ -531,6 +580,28 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
           <div className="mt-5 space-y-4">
             <Field label="Brand" value={brand} onChange={setBrand} placeholder={stage === "analyze" ? "detecting…" : "leave empty if no logo"} />
+
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
+              <div className="mt-1 flex items-center gap-3">
+                <input
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value.replace(/[^0-9.,]/g, ""))}
+                  inputMode="decimal"
+                  placeholder="e.g. 129.90"
+                  className="flex-1 bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+                />
+                <div className="flex gap-1.5">
+                  {currencyOptions.map((c) => (
+                    <button key={c} onClick={() => setCurrency(c)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] tracking-widest transition ${currency === c ? "bg-foreground text-background" : "bg-secondary/60"}`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">Powers cost-per-wear in the item card.</p>
+            </div>
             <ChipGroup label="Category" options={categories} value={category} onChange={setCategory} />
             <ColorPicker value={colors} onChange={setColors} />
 
