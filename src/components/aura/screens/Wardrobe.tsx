@@ -432,10 +432,9 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 />
 
                 {([
-                  ["Season", seasonOptions, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
-                  ["Style", styleOptions, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
-                  ["Occasion", occasionOptions, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
-                  ["Material", materialOptions, edit.materials, (v: string[]) => setEdit((s) => ({ ...s, materials: v }))],
+                  ["Season", SEASON_OPTIONS, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
+                  ["Style", STYLE_OPTIONS, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
+                  ["Occasion", OCCASION_OPTIONS, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
                 ] as const).map(([label, opts, values, setter]) => (
                   <div key={label}>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
@@ -455,6 +454,13 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     </div>
                   </div>
                 ))}
+
+                <MaterialCombobox
+                  label="Material"
+                  options={MATERIAL_OPTIONS}
+                  values={edit.materials}
+                  onChange={(v) => setEdit((s) => ({ ...s, materials: v }))}
+                />
 
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
