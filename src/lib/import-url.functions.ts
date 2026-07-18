@@ -157,11 +157,24 @@ const FIBER_MAP: Array<[RegExp, string]> = [
   [/\b(linen|lino|leinen|lin)\b/i, "Linen"],
   [/\b(silk|seta|soie|seide|seda)\b/i, "Silk"],
   [/\b(cashmere|kaschmir|cachemire)\b/i, "Cashmere"],
-  [/\b(wool|lana|laine|wolle|merino|alpaca|mohair)\b/i, "Wool"],
+  [/\b(merino)\b/i, "Merino"],
+  [/\b(mohair)\b/i, "Mohair"],
+  [/\b(alpaca)\b/i, "Alpaca"],
+  [/\b(wool|lana|laine|wolle)\b/i, "Wool"],
+  [/\b(viscose|viscosa|rayon)\b/i, "Viscose"],
+  [/\b(modal)\b/i, "Modal"],
+  [/\b(lyocell|tencel)\b/i, "Lyocell"],
+  [/\b(cupro)\b/i, "Cupro"],
+  [/\b(polyester|poliestere|poliéster)\b/i, "Polyester"],
+  [/\b(polyamide|poliammide|nylon)\b/i, "Polyamide"],
+  [/\b(elastane|elastan|elastanne|spandex|lycra)\b/i, "Elastane"],
+  [/\b(acrylic|acrilico|acrylique)\b/i, "Acrylic"],
   [/\b(denim)\b/i, "Denim"],
   [/\b(leather|pelle|cuir|leder|cuero)\b/i, "Leather"],
   [/\b(suede|camoscio|daim|wildleder|ante)\b/i, "Suede"],
-  [/\b(polyester|poliestere|poliéster|polyamide|poliammide|nylon|elastane|elastan|elastanne|spandex|lycra|acrylic|acrilico|acrylique|viscose|viscosa|rayon|modal|lyocell|tencel|polyurethane|poliuretano)\b/i, "Synthetic"],
+  [/\b(shearling|montone)\b/i, "Shearling"],
+  [/\b(down|piuma|piumino|daunen)\b/i, "Down"],
+  [/\b(polyurethane|poliuretano|pvc|vinyl)\b/i, "Synthetic"],
 ];
 
 function canonicalFiber(word: string): string | null {
@@ -169,24 +182,35 @@ function canonicalFiber(word: string): string | null {
   return null;
 }
 
+/** One fiber of a garment's composition. pct is null when the source
+ *  names the material without a percentage (e.g. schema.org material). */
+export type CompositionEntry = { material: string; pct: number | null };
+
 /** Pull the real fabric composition from the product page — far more
  *  reliable than guessing from the photo. Sources, in order:
  *  1. JSON-LD Product.material / description
  *  2. "52% viscosa 48% lino"-style percentage pairs anywhere in the page text
- *  Returns up to 2 canonical materials, highest percentage first. */
-function extractMaterials(html: string | null, productNode: ProductJson | null): string[] {
-  const found: Array<{ canon: string; pct: number }> = [];
-  const push = (canon: string | null, pct: number) => {
+ *  Keeps ALL percentages: 90% linen vs 90% wool decides whether a piece is
+ *  summer or winter, so proportions matter downstream. */
+function extractMaterials(html: string | null, productNode: ProductJson | null): {
+  materials: string[];
+  composition: CompositionEntry[];
+} {
+  const found: Array<{ canon: string; pct: number | null }> = [];
+  const push = (canon: string | null, pct: number | null) => {
     if (!canon) return;
     const existing = found.find((f) => f.canon === canon);
-    if (existing) existing.pct = Math.max(existing.pct, pct);
-    else found.push({ canon, pct });
+    if (existing) {
+      if (pct != null) existing.pct = Math.max(existing.pct ?? 0, pct);
+    } else {
+      found.push({ canon, pct });
+    }
   };
 
-  // 1 — explicit schema.org material
+  // 1 — explicit schema.org material (usually no percentage attached)
   const ldMat = productNode?.material;
   for (const m of Array.isArray(ldMat) ? ldMat : ldMat ? [ldMat] : []) {
-    push(canonicalFiber(String(m)), 100);
+    push(canonicalFiber(String(m)), null);
   }
 
   // 2 — percentage pairs in JSON-LD description + raw page text
@@ -199,13 +223,27 @@ function extractMaterials(html: string | null, productNode: ProductJson | null):
       if (pct < 1 || pct > 100) continue;
       push(canonicalFiber(m[2]), pct); // non-fiber words ("50% off") map to null and are skipped
     }
-    if (found.length) break; // trust the structured description before the whole page
+    if (found.some((f) => f.pct != null)) break; // structured description wins over whole-page scan
   }
 
-  return found.sort((a, b) => b.pct - a.pct).slice(0, 2).map((f) => f.canon);
+  const sorted = found
+    .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1))
+    .slice(0, 5);
+  return {
+    materials: sorted.map((f) => f.canon),
+    composition: sorted.map((f) => ({ material: f.canon, pct: f.pct })),
+  };
 }
-
 // ---------- JSON-LD ---------------------------------------------------------
+
+type PriceSpec = { price?: string | number; priceCurrency?: string };
+type OfferLike = {
+  price?: string | number;
+  lowPrice?: string | number;
+  priceCurrency?: string;
+  url?: string;
+  priceSpecification?: PriceSpec | PriceSpec[];
+};
 
 type ProductJson = {
   "@type"?: string | string[];
@@ -215,9 +253,7 @@ type ProductJson = {
   url?: string;
   brand?: string | { name?: string };
   image?: string | string[] | { url?: string } | Array<{ url?: string }>;
-  offers?:
-    | { price?: string | number; priceCurrency?: string; url?: string }
-    | Array<{ price?: string | number; priceCurrency?: string; url?: string }>;
+  offers?: OfferLike | OfferLike[];
   material?: string | string[];
   description?: string;
 };
@@ -424,6 +460,7 @@ const firecrawlScrape: FallbackScraper = async (url) => {
 };
 
 const fallbackScraper: FallbackScraper = firecrawlScrape;
+
 // ---------- Per-user Firecrawl quota ----------------------------------------
 
 type CreditResult =
@@ -475,7 +512,6 @@ const fallbackScraperAvailable = () => {
   console.log("[AURA import-url] FIRECRAWL_API_KEY present:", Boolean(key), "length:", key?.length ?? 0);
   return Boolean(key);
 };
-
 // ---------- Direct fetch ----------------------------------------------------
 
 async function directFetch(target: URL): Promise<{ html: string | null; blocked: boolean }> {
@@ -693,16 +729,55 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       ""
     ).trim();
 
+    // Price: handles plain Offers, AggregateOffer (lowPrice), nested
+    // priceSpecification, sale prices, and EU decimal commas ("1.299,00").
+    const parsePriceNum = (v: unknown): number | null => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v !== "string") return null;
+      const cleaned = v.replace(/[^\d.,]/g, "");
+      if (!cleaned) return null;
+      const lastComma = cleaned.lastIndexOf(",");
+      const lastDot = cleaned.lastIndexOf(".");
+      const norm = lastComma >= 0 && lastDot >= 0
+        ? (lastComma > lastDot
+            ? cleaned.replace(/\./g, "").replace(",", ".")   // EU: 1.299,00
+            : cleaned.replace(/,/g, ""))                     // US: 1,299.00
+        : cleaned.replace(",", ".");
+      const n = parseFloat(norm);
+      return Number.isFinite(n) ? n : null;
+    };
+
     let price: string | null = null;
     let priceValue: number | null = null;
     let priceCurrency: string | null = null;
-    const offer = Array.isArray(ld?.offers) ? ld?.offers[0] : ld?.offers;
-    if (offer?.price) {
-      const parsed = typeof offer.price === "number" ? offer.price : parseFloat(String(offer.price).replace(",", "."));
-      if (Number.isFinite(parsed)) priceValue = parsed;
-      priceCurrency = offer.priceCurrency ? String(offer.priceCurrency).toUpperCase() : null;
-      const currencySuffix = priceCurrency ? ` ${priceCurrency}` : "";
-      price = `${offer.price}${currencySuffix}`;
+    const offerList: OfferLike[] = Array.isArray(ld?.offers) ? ld?.offers ?? [] : ld?.offers ? [ld.offers] : [];
+    for (const offer of offerList) {
+      const spec = Array.isArray(offer.priceSpecification) ? offer.priceSpecification[0] : offer.priceSpecification;
+      const candidate = parsePriceNum(offer.price) ?? parsePriceNum(offer.lowPrice) ?? parsePriceNum(spec?.price);
+      if (candidate != null) {
+        priceValue = candidate;
+        priceCurrency = String(offer.priceCurrency || spec?.priceCurrency || "").toUpperCase() || null;
+        break;
+      }
+    }
+    // Meta-tag fallback when JSON-LD carries no usable offer price.
+    if (priceValue == null && html) {
+      const metaPrice =
+        pickMeta(html, "product:price:amount") ||
+        pickMeta(html, "og:price:amount") ||
+        (html.match(/itemprop=["']price["'][^>]*content=["']([\d.,]+)["']/i)?.[1] ?? "");
+      const metaCur =
+        pickMeta(html, "product:price:currency") ||
+        pickMeta(html, "og:price:currency") ||
+        (html.match(/itemprop=["']priceCurrency["'][^>]*content=["']([A-Za-z]{3})["']/i)?.[1] ?? "");
+      const n = parsePriceNum(metaPrice);
+      if (n != null) {
+        priceValue = n;
+        priceCurrency = metaCur ? metaCur.toUpperCase() : null;
+      }
+    }
+    if (priceValue != null) {
+      price = priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue);
     }
 
     return {
@@ -717,7 +792,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       extractionMethod: extracted.method,
       confidence: extracted.confidence,
       imageCandidates: extracted.candidates,
-      materials: extractMaterials(html, extracted.productNode),
+      ...extractMaterials(html, extracted.productNode),
       usedFallback,
     };
   });
