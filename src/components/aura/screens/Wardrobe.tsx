@@ -1,5 +1,6 @@
 import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { ColorPicker } from "@/components/aura/ColorPicker";
+import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { Plus, Filter, Search, Loader2, Trash2, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
@@ -11,14 +12,16 @@ import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { currentSeason, itemMatchesSeason, resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import {
+  ITEM_CATEGORIES,
+  SEASON_OPTIONS,
+  STYLE_OPTIONS,
+  OCCASION_OPTIONS,
+  MATERIAL_OPTIONS,
+  CURRENCY_OPTIONS,
+} from "@/lib/wardrobe-options";
 
-const categories = ["All", "Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
-const editCategories = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"];
-const seasonOptions = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"];
-const styleOptions = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
-const occasionOptions = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
-const materialOptions = ["Silk", "Linen", "Cotton", "Wool", "Cashmere", "Denim", "Leather", "Suede", "Synthetic", "Knit"];
-const currencyOptions = ["EUR", "USD", "GBP"];
+const categories = ["All", ...ITEM_CATEGORIES];
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
 
 const splitCsv = (v: string | null | undefined) =>
@@ -56,14 +59,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     if (!detail) return;
     setEdit({
       brand: detail.brand ?? "",
-      category: editCategories.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
+      category: ITEM_CATEGORIES.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
       colors: detail.colors ?? [],
       seasons: splitCsv(detail.season),
       styles: splitCsv(detail.style),
       occasions: splitCsv(detail.occasion),
       materials: Array.isArray(detail.material) ? detail.material : [],
       price: detail.price != null ? String(detail.price) : "",
-      currency: (detail.currency && currencyOptions.includes(detail.currency)) ? detail.currency : "EUR",
+      currency: (detail.currency && CURRENCY_OPTIONS.includes(detail.currency)) ? detail.currency : "EUR",
     });
     setEditing(true);
   };
@@ -411,7 +414,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {editCategories.map((c) => (
+                    {ITEM_CATEGORIES.map((c) => (
                       <button
                         key={c}
                         onClick={() => setEdit((s) => ({ ...s, category: c }))}
@@ -429,10 +432,9 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 />
 
                 {([
-                  ["Season", seasonOptions, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
-                  ["Style", styleOptions, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
-                  ["Occasion", occasionOptions, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
-                  ["Material", materialOptions, edit.materials, (v: string[]) => setEdit((s) => ({ ...s, materials: v }))],
+                  ["Season", SEASON_OPTIONS, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
+                  ["Style", STYLE_OPTIONS, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
+                  ["Occasion", OCCASION_OPTIONS, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
                 ] as const).map(([label, opts, values, setter]) => (
                   <div key={label}>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
@@ -453,6 +455,13 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   </div>
                 ))}
 
+                <MaterialCombobox
+                  label="Material"
+                  options={MATERIAL_OPTIONS}
+                  values={edit.materials}
+                  onChange={(v) => setEdit((s) => ({ ...s, materials: v }))}
+                />
+
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
                   <div className="mt-2 flex items-center gap-2">
@@ -467,7 +476,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     />
                   </div>
                   <div className="mt-2 flex gap-2">
-                    {currencyOptions.map((c) => (
+                    {CURRENCY_OPTIONS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setEdit((s) => ({ ...s, currency: c }))}
