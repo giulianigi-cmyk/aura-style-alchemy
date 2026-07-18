@@ -2,12 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { COLOR_NAMES } from "./color-palette";
+import { MATERIAL_OPTIONS } from "./wardrobe-options";
 
 const CATEGORIES = ["Tops", "Outerwear", "Bottoms", "Dresses", "Shoes", "Bags", "Accessories", "Underwear"] as const;
 const SEASONS = ["Spring", "Summer", "Autumn", "Winter", "All Seasons"] as const;
 const STYLES = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"] as const;
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"] as const;
-const MATERIALS = ["Silk", "Linen", "Cotton", "Wool", "Cashmere", "Denim", "Leather", "Suede", "Synthetic", "Knit"] as const;
+const MATERIALS = MATERIAL_OPTIONS;
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20), // data:image/...;base64,...
@@ -39,7 +40,7 @@ export const analyzeWardrobeImage = createServerFn({ method: "POST" })
       `Return styles as an array (0-3) from: ${STYLES.join(", ")}.`,
       `Return occasions as an array (0-3) from: ${OCCASIONS.join(", ")}.`,
       `Return seasons as an array (0-5) from: ${SEASONS.join(", ")}. Use "All Seasons" when unsure.`,
-      `Return materials as an array (1-2) from: ${MATERIALS.join(", ")}. Always give your best guess — materials power season matching and outfit suggestions, and the user can correct them before saving. Combine visible texture cues (sheen, weave, grain, knit stitches) with what this garment type is typically made of (t-shirts and shirts → Cotton; jeans and denim jackets → Denim; tailored blazers and coats → Wool or Synthetic; flowing dresses and blouses → Silk, Linen or Synthetic; chunky sweaters → Knit, Wool or Cashmere; boots and belts → Leather or Suede). Return an empty array only if the item is genuinely impossible to assess (e.g. heavily obscured or not a garment).`,
+      `Return materials as an array (1-2) from: ${MATERIALS.join(", ")}. Always give your best guess — materials power season matching and outfit suggestions, and the user can correct them before saving. Combine visible texture cues (sheen, weave, grain, knit stitches) with what this garment type is typically made of (t-shirts and shirts → Cotton; jeans and denim jackets → Denim; tailored blazers and coats → Wool, Polyester or Viscose; flowing dresses and blouses → Viscose, Silk, Linen or Polyester; chunky sweaters → Knit, Wool or Cashmere; sporty/technical pieces → Polyester, Polyamide or Elastane; boots and belts → Leather or Suede). Return an empty array only if the item is genuinely impossible to assess (e.g. heavily obscured or not a garment).`,
       "Return brand ONLY if a clearly visible logo/label is present in the image; otherwise return an empty string. Never guess a brand.",
       "If a field cannot be determined confidently, return an empty array or empty string for it.",
     ].join(" ");
