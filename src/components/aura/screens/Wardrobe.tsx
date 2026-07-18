@@ -59,14 +59,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     if (!detail) return;
     setEdit({
       brand: detail.brand ?? "",
-      category: editCategories.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
+      category: ITEM_CATEGORIES.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
       colors: detail.colors ?? [],
       seasons: splitCsv(detail.season),
       styles: splitCsv(detail.style),
       occasions: splitCsv(detail.occasion),
       materials: Array.isArray(detail.material) ? detail.material : [],
       price: detail.price != null ? String(detail.price) : "",
-      currency: (detail.currency && currencyOptions.includes(detail.currency)) ? detail.currency : "EUR",
+      currency: (detail.currency && CURRENCY_OPTIONS.includes(detail.currency)) ? detail.currency : "EUR",
     });
     setEditing(true);
   };
