@@ -24,7 +24,9 @@ export async function fetchImageAsDataUrl(
         signal: ctl.signal,
         headers: {
           "User-Agent": UA,
-          Accept: "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8",
+          // Prefer jpeg/png: remove.bg (and some analyzers) reject avif.
+          // webp only as a low-priority fallback; the client normalises it.
+          Accept: "image/jpeg,image/png;q=0.9,image/webp;q=0.5,*/*;q=0.4",
           ...(withReferer && referer ? { Referer: referer } : {}),
         },
       });
