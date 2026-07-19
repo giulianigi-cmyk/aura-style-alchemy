@@ -1,24 +1,18 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import hero1 from "@/assets/hero-1.jpg";
-import hero2 from "@/assets/hero-2.jpg";
-import outfit2 from "@/assets/outfit-2.jpg";
 
 const slides = [
   {
-    img: hero1,
     eyebrow: "Step 01",
     title: "Your wardrobe,\nfinally seen.",
     body: "Photograph each piece. AURA catalogs fabric, color, season, and silhouette automatically.",
   },
   {
-    img: outfit2,
     eyebrow: "Step 02",
     title: "An editor,\nin your pocket.",
     body: "AI styling trained on decades of runway, street, and atelier moments. Always personal.",
   },
   {
-    img: hero2,
     eyebrow: "Step 03",
     title: "Style with\nintention.",
     body: "Plan looks for any occasion, shop the gaps, and discover what truly suits you.",
@@ -32,8 +26,20 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="relative h-full w-full flex flex-col">
-      <div className="relative flex-1 overflow-hidden">
-        <img src={slide.img} alt="" className="absolute inset-0 h-full w-full object-cover animate-scale-in" key={i} />
+      <div className="relative flex-1 overflow-hidden gradient-warm">
+        <div className="absolute inset-0 grain opacity-40" />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] text-center animate-scale-in"
+          key={i}
+        >
+          <p className="font-serif text-[72px] leading-none italic text-foreground/80 tracking-tight">
+            aura
+          </p>
+          <div className="mx-auto mt-4 h-px w-16 bg-foreground/30" />
+          <p className="mt-4 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
+            Wardrobe Intelligence
+          </p>
+        </div>
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
         <button
           onClick={onDone}
