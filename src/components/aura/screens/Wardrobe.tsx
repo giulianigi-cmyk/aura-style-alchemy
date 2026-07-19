@@ -1,8 +1,7 @@
-import { COLOR_PALETTE } from "@/lib/color-palette";
-import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
-
 import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { ColorPicker } from "@/components/aura/ColorPicker";
+import { COLOR_PALETTE } from "@/lib/color-palette";
+import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { Plus, Filter, Search, Loader2, Trash2, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -133,7 +132,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       setDeleting(false);
     }
   };
-
   const season = useMemo(() => currentSeason(), []);
 
   // Sign whenever items change
@@ -243,7 +241,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           >{c}</button>
         ))}
       </div>
-
       {loading ? (
         <div className="flex items-center justify-center mt-20 text-muted-foreground"><Loader2 className="animate-spin" /></div>
       ) : filtered.length === 0 ? (
@@ -299,7 +296,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           })}
         </div>
       )}
-
       {detail && (
         <div
           className="fixed inset-0 z-[60] bg-background/85 backdrop-blur flex items-end sm:items-center justify-center"
@@ -310,12 +306,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             className="w-full max-w-md max-h-[82vh] overflow-y-auto overscroll-contain bg-card rounded-t-3xl sm:rounded-3xl border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] relative"
           >
             <button
-              onClick={() => { setDetail(null); setEditing(false); setConfirmDelete(false); }}
-              className="absolute top-4 left-4 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-              aria-label="Close"
-            ><X size={16} /></button>
-            {!editing && (
-                          <button
               onClick={() => { setDetail(null); setEditing(false); setConfirmDelete(false); }}
               className="absolute top-4 left-4 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
               aria-label="Close"
@@ -334,7 +324,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 aria-label="Delete item"
               ><Trash2 size={16} /></button>
             )}
-
 
             {(() => {
               const path = toStoragePath(detail.image_url);
@@ -380,13 +369,52 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   )}
                 </div>
 
+                {(() => {
+                  const cname = detail.colors?.[0] ?? detail.color;
+                  const pal = cname
+                    ? COLOR_PALETTE.find((p) => p.name.toLowerCase() === cname.toLowerCase())
+                    : undefined;
+                  if (!pal) return null;
+                  const { h, s } = hexToHsl(pal.hex);
+                  const neutral = s < 0.12;
+                  return (
+                    <div className="mt-5 rounded-2xl border border-border bg-secondary/30 p-4">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
+                        Analisi colore · Itten
+                      </p>
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <span className="h-8 w-8 rounded-full border border-border" style={{ background: pal.hex }} />
+                        <div className="text-left">
+                          <p className="text-sm font-medium">{pal.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {neutral ? "Neutro" : nearestWheelName(h)}
+                          </p>
+                        </div>
+                      </div>
+                      {neutral ? (
+                        <p className="mt-3 text-[11px] text-muted-foreground text-center">
+                          Colore neutro: si abbina a tutta la ruota.
+                        </p>
+                      ) : (
+                        <div className="mt-3 flex justify-center gap-2 flex-wrap">
+                          {getHarmonies(pal.hex).slice(0, 5).map((hm, idx) => (
+                            <div key={idx} className="text-center">
+                              <span className="block h-7 w-7 rounded-full border border-border mx-auto" style={{ background: hm.hex }} />
+                              <p className="mt-1 text-[8px] uppercase tracking-wide text-muted-foreground">{hm.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <button
                   onClick={openEdit}
                   className="mt-5 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Pencil size={12} /> Edit details
                 </button>
-
                 {confirmDelete ? (
                   <div className="mt-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
                     <p className="font-serif text-lg text-center">Delete this item?</p>
