@@ -70,14 +70,28 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setEditing(false);
   };
 
-  const onPickAvatar = async (f: File | null) => {
+  const onPickAvatar = (f: File | null) => {
     if (!f) return;
     if (!f.type.startsWith("image/")) { toast.error("Please select an image"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => toast.error("Couldn't read image");
+    reader.readAsDataURL(f);
+  };
+
+  const onCropSave = async (blob: Blob) => {
     setUploading(true); setErr(null);
-    const { error } = await uploadAvatar(f);
+    const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const { error } = await uploadAvatar(file);
     setUploading(false);
+    setCropSrc(null);
     if (error) { setErr(error); toast.error("Upload failed"); }
     else toast.success("Profile photo updated");
+  };
+
+  const openEditPhoto = () => {
+    if (!avatarUrl && !profile?.avatar_url) { fileRef.current?.click(); return; }
+    setCropSrc(avatarUrl || profile?.avatar_url || null);
   };
 
   const avatarSrc = avatarUrl || profile?.avatar_url || profile1;
