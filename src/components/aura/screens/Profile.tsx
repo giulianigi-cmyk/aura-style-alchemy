@@ -382,7 +382,8 @@ function MySizes({ userId }: { userId: string | undefined }) {
       .eq("id", userId);
     setSaving(false);
     if (error) { toast.error("Couldn't save sizes"); return; }
-    toast.success("Sizes saved");
+        if (error) { toast.error(error.message); return; }
+
   };
 
   return (
