@@ -12,6 +12,7 @@ import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
+import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
 
 import {
   ITEM_CATEGORIES as categories,
@@ -215,6 +216,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [importReferer, setImportReferer] = useState<string>("");
 
   const [brand, setBrand] = useState("");
+  const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
   const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
@@ -228,7 +230,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
-    setBrand(""); setCategory("Tops"); setColors([]);
+    setBrand(""); setSize(""); setCategory("Tops"); setColors([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
   };
@@ -408,6 +410,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           return Number.isFinite(n) && n > 0 ? n : null;
         })(),
         currency: price.trim() ? currency : null,
+        size: size.trim() || null,
       };
       // New column not yet in generated types — attach with a safe cast.
       const compositionToSave = composition.filter((c) => materials.includes(c.material));
@@ -605,6 +608,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
           <div className="mt-5 space-y-4">
             <Field label="Brand" value={brand} onChange={setBrand} placeholder={stage === "analyze" ? "detecting…" : "leave empty if no logo"} />
+            <Field
+              label="Size"
+              value={size}
+              onChange={setSize}
+              placeholder="e.g. 42 or M — optional"
+              hint={sizeEquivalences(size, { shoes: isShoeCategory(category) }) ?? undefined}
+            />
 
             <div className="border-b border-border/60 pb-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
@@ -671,7 +681,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function Field({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
   return (
     <div className="border-b border-border/60 pb-3">
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
@@ -681,6 +691,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         placeholder={placeholder}
         className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
       />
+      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
