@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Cropper, { type Area } from "react-easy-crop";
 import { Loader2 } from "lucide-react";
 
@@ -54,11 +55,9 @@ export function AvatarCropper({ src, onCancel, onSave }: Props) {
     }
   };
 
-  return (
-        <div className="fixed inset-x-0 top-0 z-[80] h-[100dvh] bg-black flex flex-col">
-
-            <div className="relative flex-1 min-h-0">
-
+  return createPortal(
+    <div className="fixed inset-x-0 top-0 z-[80] h-[100dvh] bg-black flex flex-col">
+      <div className="relative flex-1 min-h-0">
         <Cropper
           image={src}
           crop={crop}
@@ -71,8 +70,7 @@ export function AvatarCropper({ src, onCancel, onSave }: Props) {
           onCropComplete={onCropComplete}
         />
       </div>
-            <div className="bg-background px-6 pt-5 pb-[max(2rem,env(safe-area-inset-bottom))] space-y-5 shrink-0">
-
+      <div className="bg-background px-6 pt-5 pb-[max(2rem,env(safe-area-inset-bottom))] space-y-5 shrink-0">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Zoom</p>
           <input
@@ -97,6 +95,7 @@ export function AvatarCropper({ src, onCancel, onSave }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
