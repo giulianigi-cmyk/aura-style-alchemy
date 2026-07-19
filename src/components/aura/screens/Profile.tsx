@@ -9,6 +9,7 @@ import { WeatherPanel } from "../WeatherPanel";
 import { MyBrands } from "../MyBrands";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
+import { AvatarCropper } from "../AvatarCropper";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
