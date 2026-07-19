@@ -136,6 +136,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
           </span>
         </button>
+        <button
+          onClick={openEditPhoto}
+          className="mt-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:text-foreground transition"
+        >
+          Edit photo
+        </button>
 
         {editing ? (
           <input
