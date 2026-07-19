@@ -19,6 +19,57 @@ const slides = [
   },
 ];
 
+function Motif({ index }: { index: number }) {
+  if (index === 0) {
+    const tones = ["#F5EFE0", "#C19A6B", "#8A9A7B", "#22304A", "#6E1423"];
+    return (
+      <div className="relative h-60 w-60">
+        {tones.map((t, i) => (
+          <div
+            key={t}
+            className="absolute left-1/2 top-1/2 h-40 w-28 rounded-2xl border border-foreground/10 shadow-luxe"
+            style={{
+              background: t,
+              transform: `translate(-50%,-60%) rotate(${(i - 2) * 14}deg)`,
+              transformOrigin: "50% 130%",
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+  if (index === 1) {
+    return (
+      <div className="relative h-60 w-60">
+        {Array.from({ length: 12 }).map((_, i) => {
+          const a = (i / 12) * 2 * Math.PI - Math.PI / 2;
+          return (
+            <span
+              key={i}
+              className="absolute h-5 w-5 rounded-full"
+              style={{
+                left: `calc(50% + ${Math.cos(a) * 105}px - 10px)`,
+                top: `calc(50% + ${Math.sin(a) * 105}px - 10px)`,
+                background: `hsl(${i * 30} 45% 55%)`,
+              }}
+            />
+          );
+        })}
+        <p className="absolute inset-0 flex items-center justify-center font-serif italic text-4xl text-foreground/70">
+          aura
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-60 w-60">
+      <div className="absolute left-4 top-8 h-36 w-36 rounded-full mix-blend-multiply" style={{ background: "#EBD9B4" }} />
+      <div className="absolute right-4 top-8 h-36 w-36 rounded-full mix-blend-multiply" style={{ background: "#D9B3A6" }} />
+      <div className="absolute left-1/2 bottom-4 h-36 w-36 -translate-x-1/2 rounded-full mix-blend-multiply" style={{ background: "#BFAE9B" }} />
+    </div>
+  );
+}
+
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [i, setI] = useState(0);
   const slide = slides[i];
@@ -29,16 +80,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="relative flex-1 overflow-hidden gradient-warm">
         <div className="absolute inset-0 grain opacity-40" />
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] text-center animate-scale-in"
           key={i}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[62%] animate-scale-in"
         >
-          <p className="font-serif text-[72px] leading-none italic text-foreground/80 tracking-tight">
-            aura
-          </p>
-          <div className="mx-auto mt-4 h-px w-16 bg-foreground/30" />
-          <p className="mt-4 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
-            Wardrobe Intelligence
-          </p>
+          <Motif index={i} />
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
         <button
