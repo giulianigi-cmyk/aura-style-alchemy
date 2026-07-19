@@ -12,6 +12,7 @@ import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
+import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
 
 import {
   ITEM_CATEGORIES as categories,
