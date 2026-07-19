@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
-const slides = [
+type Slide = { intro?: boolean; eyebrow?: string; title?: string; body?: string };
+
+const slides: Slide[] = [
+  { intro: true },
   {
     eyebrow: "Step 01",
     title: "Your wardrobe,\nfinally seen.",
@@ -28,15 +31,17 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     <div className="relative h-full w-full flex flex-col">
       <div className="relative flex-1 overflow-hidden gradient-warm">
         <div className="absolute inset-0 grain opacity-40" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[68%] text-center animate-scale-in">
-          <p className="font-serif text-[96px] leading-none italic text-foreground/85 tracking-tight">
-            aura
-          </p>
-          <div className="mx-auto mt-5 h-px w-16 bg-foreground/30" />
-          <p className="mt-5 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
-            Wardrobe Intelligence
-          </p>
-        </div>
+        {slide.intro && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center animate-scale-in">
+            <p className="font-serif text-[96px] leading-none italic text-foreground/85 tracking-tight">
+              aura
+            </p>
+            <div className="mx-auto mt-5 h-px w-16 bg-foreground/30" />
+            <p className="mt-5 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
+              Wardrobe Intelligence
+            </p>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
         <button
           onClick={onDone}
@@ -46,14 +51,20 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
-      <div className="px-8 pb-10 -mt-28 relative z-10">
-        <p className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground animate-fade-up">{slide.eyebrow}</p>
-        <h1 className="mt-3 font-serif text-[42px] leading-[1.05] text-foreground whitespace-pre-line animate-fade-up" style={{ animationDelay: "0.1s" }}>
-          {slide.title}
-        </h1>
-        <p className="mt-4 text-sm leading-relaxed text-muted-foreground max-w-[280px] animate-fade-up" style={{ animationDelay: "0.2s" }}>
-          {slide.body}
-        </p>
+      <div className="px-8 pb-10 relative z-10">
+        <div className="min-h-[190px] flex flex-col justify-end">
+          {!slide.intro && (
+            <div key={i}>
+              <p className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground animate-fade-up">{slide.eyebrow}</p>
+              <h1 className="mt-3 font-serif text-[42px] leading-[1.05] text-foreground whitespace-pre-line animate-fade-up" style={{ animationDelay: "0.1s" }}>
+                {slide.title}
+              </h1>
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground max-w-[280px] animate-fade-up" style={{ animationDelay: "0.2s" }}>
+                {slide.body}
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="mt-8 flex items-center justify-between">
           <div className="flex gap-1.5">
