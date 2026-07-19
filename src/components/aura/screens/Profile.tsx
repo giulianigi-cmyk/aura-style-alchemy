@@ -242,6 +242,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </section>
           )}
           <MyBrands />
+          <MySizes userId={user?.id} />
 
 
           {/* Color analysis */}
