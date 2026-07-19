@@ -9,6 +9,7 @@ import { WeatherPanel } from "../WeatherPanel";
 import { MyBrands } from "../MyBrands";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
+import { AvatarCropper } from "../AvatarCropper";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -36,6 +37,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [brands, setBrands] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,14 +70,28 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setEditing(false);
   };
 
-  const onPickAvatar = async (f: File | null) => {
+  const onPickAvatar = (f: File | null) => {
     if (!f) return;
     if (!f.type.startsWith("image/")) { toast.error("Please select an image"); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => toast.error("Couldn't read image");
+    reader.readAsDataURL(f);
+  };
+
+  const onCropSave = async (blob: Blob) => {
     setUploading(true); setErr(null);
-    const { error } = await uploadAvatar(f);
+    const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const { error } = await uploadAvatar(file);
     setUploading(false);
+    setCropSrc(null);
     if (error) { setErr(error); toast.error("Upload failed"); }
     else toast.success("Profile photo updated");
+  };
+
+  const openEditPhoto = () => {
+    if (!avatarUrl && !profile?.avatar_url) { fileRef.current?.click(); return; }
+    setCropSrc(avatarUrl || profile?.avatar_url || null);
   };
 
   const avatarSrc = avatarUrl || profile?.avatar_url || profile1;
@@ -92,8 +108,11 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
+      {cropSrc && (
+        <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={onCropSave} />
+      )}
       <input ref={fileRef} type="file" accept="image/*" className="hidden"
-        onChange={e => onPickAvatar(e.target.files?.[0] ?? null)} />
+        onChange={e => { onPickAvatar(e.target.files?.[0] ?? null); if (fileRef.current) fileRef.current.value = ""; }} />
 
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
         <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"><Share2 size={15} /></button>
@@ -116,6 +135,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           <span className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center shadow-luxe">
             {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
           </span>
+        </button>
+        <button
+          onClick={openEditPhoto}
+          className="mt-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:text-foreground transition"
+        >
+          Edit photo
         </button>
 
         {editing ? (
