@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
 import { MyBrands } from "../MyBrands";
+import { supabase } from "@/integrations/supabase/client";
+import { sizeEquivalences } from "@/lib/size-conversion";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
