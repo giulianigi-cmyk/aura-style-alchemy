@@ -37,6 +37,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [brands, setBrands] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
