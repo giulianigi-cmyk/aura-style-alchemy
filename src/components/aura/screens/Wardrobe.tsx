@@ -2,6 +2,7 @@ import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
+import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { Plus, Filter, Search, Loader2, Trash2, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [savingEdit, setSavingEdit] = useState(false);
   const [edit, setEdit] = useState({
     brand: "",
+    size: "",
     category: "Tops",
     colors: [] as string[],
     seasons: [] as string[],
@@ -61,6 +63,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     if (!detail) return;
     setEdit({
       brand: detail.brand ?? "",
+      size: detail.size ?? "",
       category: ITEM_CATEGORIES.includes(detail.category ?? "") ? (detail.category as string) : "Tops",
       colors: detail.colors ?? [],
       seasons: splitCsv(detail.season),
@@ -84,6 +87,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       if (priceNum != null && !Number.isFinite(priceNum)) throw new Error("Invalid price");
       const patch = {
         brand: edit.brand.trim() || null,
+        size: edit.size.trim() || null,
         category: edit.category,
         color: edit.colors[0] ?? null,
         colors: edit.colors,
@@ -358,6 +362,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{detail.brand ?? detail.category}</p>
                   <p className="font-serif text-2xl mt-1">{[detail.colors?.[0] ?? detail.color, detail.category].filter(Boolean).join(" ")}</p>
                   {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
+                  {detail.size && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Taglia {detail.size}
+                      {(() => {
+                        const eq = sizeEquivalences(detail.size, { shoes: isShoeCategory(detail.category) });
+                        return eq ? ` — ${eq}` : "";
+                      })()}
+                    </p>
+                  )}
                   {detail.price != null && (
                     <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
                       {detail.worn_count ? (
@@ -454,6 +467,20 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     placeholder="Brand"
                     className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
                   />
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Taglia</p>
+                  <input
+                    value={edit.size}
+                    onChange={(e) => setEdit((s) => ({ ...s, size: e.target.value }))}
+                    placeholder="es. 42 o M — facoltativa"
+                    className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                  {(() => {
+                    const eq = sizeEquivalences(edit.size, { shoes: isShoeCategory(edit.category) });
+                    return eq ? <p className="mt-1.5 px-2 text-[11px] text-muted-foreground">{eq}</p> : null;
+                  })()}
                 </div>
 
                 <div>
