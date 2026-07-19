@@ -216,6 +216,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [importReferer, setImportReferer] = useState<string>("");
 
   const [brand, setBrand] = useState("");
+  const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
   const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
@@ -229,7 +230,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
-    setBrand(""); setCategory("Tops"); setColors([]);
+    setBrand(""); setSize(""); setCategory("Tops"); setColors([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
   };
