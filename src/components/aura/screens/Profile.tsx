@@ -304,3 +304,91 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     </div>
   );
 }
+
+type SizeKey = "tops" | "bottoms" | "dresses" | "shoes";
+const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean }[] = [
+  { key: "tops", label: "Tops" },
+  { key: "bottoms", label: "Bottoms" },
+  { key: "dresses", label: "Dresses" },
+  { key: "shoes", label: "Shoes", shoes: true },
+];
+
+function MySizes({ userId }: { userId: string | undefined }) {
+  const [values, setValues] = useState<Record<SizeKey, string>>({ tops: "", bottoms: "", dresses: "", shoes: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("sizes")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!cancelled) {
+        if (error) console.error("[AURA sizes] load", error);
+        const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
+        setValues({
+          tops: s.tops ?? "",
+          bottoms: s.bottoms ?? "",
+          dresses: s.dresses ?? "",
+          shoes: s.shoes ?? "",
+        });
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const save = async () => {
+    if (!userId) return;
+    setSaving(true);
+    const payload: Record<string, string> = {};
+    (Object.keys(values) as SizeKey[]).forEach((k) => {
+      const v = values[k].trim();
+      if (v) payload[k] = v;
+    });
+    const { error } = await supabase
+      .from("profiles")
+      .update({ sizes: payload, updated_at: new Date().toISOString() } as never)
+      .eq("id", userId);
+    setSaving(false);
+    if (error) { toast.error("Couldn't save sizes"); return; }
+    toast.success("Sizes saved");
+  };
+
+  return (
+    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
+      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
+      <div className="mt-4 space-y-4">
+        {SIZE_FIELDS.map((f) => {
+          const v = values[f.key];
+          const hint = sizeEquivalences(v, f.shoes ? { shoes: true } : undefined);
+          return (
+            <div key={f.key} className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{f.label}</p>
+              <input
+                value={v}
+                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                placeholder="e.g. 42 or M — optional"
+                className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+              />
+              {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+            </div>
+          );
+        })}
+      </div>
+      <button
+        onClick={save}
+        disabled={saving || loading}
+        className="mt-5 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
+      >
+        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+        <span className="text-[10px] uppercase tracking-[0.3em]">Save sizes</span>
+      </button>
+    </section>
+  );
+}
