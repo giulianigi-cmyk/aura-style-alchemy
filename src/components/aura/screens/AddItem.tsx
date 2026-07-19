@@ -410,6 +410,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           return Number.isFinite(n) && n > 0 ? n : null;
         })(),
         currency: price.trim() ? currency : null,
+        size: size.trim() || null,
       };
       // New column not yet in generated types — attach with a safe cast.
       const compositionToSave = composition.filter((c) => materials.includes(c.material));
