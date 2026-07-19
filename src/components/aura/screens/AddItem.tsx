@@ -608,6 +608,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
           <div className="mt-5 space-y-4">
             <Field label="Brand" value={brand} onChange={setBrand} placeholder={stage === "analyze" ? "detecting…" : "leave empty if no logo"} />
+            <Field
+              label="Size"
+              value={size}
+              onChange={setSize}
+              placeholder="e.g. 42 or M — optional"
+              hint={sizeEquivalences(size, { shoes: isShoeCategory(category) }) ?? undefined}
+            />
 
             <div className="border-b border-border/60 pb-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
