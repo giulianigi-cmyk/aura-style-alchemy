@@ -1,3 +1,6 @@
+import { COLOR_PALETTE } from "@/lib/color-palette";
+import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
+
 import { ColorWheelPicker } from "@/components/ColorWheelPicker";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
@@ -312,12 +315,26 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
               aria-label="Close"
             ><X size={16} /></button>
             {!editing && (
+                          <button
+              onClick={() => { setDetail(null); setEditing(false); setConfirmDelete(false); }}
+              className="absolute top-4 left-4 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+              aria-label="Close"
+            ><X size={16} /></button>
+            {!editing && (
+              <button
+                onClick={openEdit}
+                className="absolute top-4 left-16 h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+                aria-label="Edit item"
+              ><Pencil size={16} /></button>
+            )}
+            {!editing && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 className="absolute top-4 right-4 h-9 w-9 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90"
                 aria-label="Delete item"
               ><Trash2 size={16} /></button>
             )}
+
 
             {(() => {
               const path = toStoragePath(detail.image_url);
