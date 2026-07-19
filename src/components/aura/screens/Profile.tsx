@@ -108,8 +108,11 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
+      {cropSrc && (
+        <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={onCropSave} />
+      )}
       <input ref={fileRef} type="file" accept="image/*" className="hidden"
-        onChange={e => onPickAvatar(e.target.files?.[0] ?? null)} />
+        onChange={e => { onPickAvatar(e.target.files?.[0] ?? null); if (fileRef.current) fileRef.current.value = ""; }} />
 
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
         <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"><Share2 size={15} /></button>
