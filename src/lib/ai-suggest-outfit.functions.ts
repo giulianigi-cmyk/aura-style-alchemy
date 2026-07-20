@@ -15,6 +15,7 @@ const InputSchema = z.object({
   temperature: z.number().nullable().optional(),
   condition: z.string().nullable().optional(),
   occasion: z.string().nullable().optional(),
+  dressRules: z.string().nullable().optional(),
   items: z.array(ItemSchema).min(1),
 });
 
@@ -46,12 +47,13 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
     }));
 
     const system = [
+      ...(data.dressRules ? [data.dressRules, ""] : []),
       "You are a personal stylist. Compose ONE coherent outfit from the user's wardrobe.",
       "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
       "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
       "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
       "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
-    ].join(" ");
+    ].join("\n");
 
     try {
       const { output } = await generateText({
