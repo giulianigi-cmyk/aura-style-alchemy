@@ -59,6 +59,25 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
     go("planner");
   };
 
+  const deleteOutfit = async (id: string) => {
+    if (!user) return;
+    const outfit = outfits.find((o) => o.id === id);
+    setDeleting(true);
+    const { error } = await supabase.from("outfits").delete().eq("id", id).eq("user_id", user.id);
+    if (error) {
+      setDeleting(false);
+      toast.error(error.message);
+      return;
+    }
+    if (outfit?.canvas_image_url) {
+      try { await supabase.storage.from("outfits").remove([outfit.canvas_image_url]); } catch { /* best-effort */ }
+    }
+    setOutfits((prev) => prev.filter((o) => o.id !== id));
+    setConfirmDelete(null);
+    setDeleting(false);
+    toast.success("Outfit deleted");
+  };
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28 bg-background">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
