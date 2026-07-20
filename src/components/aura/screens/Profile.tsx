@@ -339,7 +339,10 @@ const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean }[] = [
 ];
 
 function MySizes({ userId }: { userId: string | undefined }) {
-  const [values, setValues] = useState<Record<SizeKey, string>>({ tops: "", bottoms: "", dresses: "", shoes: "" });
+  const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
+  const [values, setValues] = useState<Record<SizeKey, string>>(empty);
+  const [snapshot, setSnapshot] = useState<Record<SizeKey, string>>(empty);
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -356,17 +359,24 @@ function MySizes({ userId }: { userId: string | undefined }) {
       if (!cancelled) {
         if (error) console.error("[AURA sizes] load", error);
         const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
-        setValues({
+        const loaded = {
           tops: s.tops ?? "",
           bottoms: s.bottoms ?? "",
           dresses: s.dresses ?? "",
           shoes: s.shoes ?? "",
-        });
+        };
+        setValues(loaded);
+        setSnapshot(loaded);
         setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [userId]);
+
+  const dirty = (Object.keys(values) as SizeKey[]).some((k) => values[k] !== snapshot[k]);
+
+  const startEdit = () => { setSnapshot(values); setEditing(true); };
+  const cancelEdit = () => { setValues(snapshot); setEditing(false); };
 
   const save = async () => {
     if (!userId) return;
@@ -381,13 +391,30 @@ function MySizes({ userId }: { userId: string | undefined }) {
       .update({ sizes: payload, updated_at: new Date().toISOString() })
       .eq("id", userId);
     setSaving(false);
-        if (error) { toast.error(error.message); return; }
-
+    if (error) { toast.error(error.message); return; }
+    setSnapshot(values);
+    setEditing(false);
+    toast.success("Sizes saved");
   };
 
   return (
     <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
+        {editing ? (
+          <button
+            onClick={cancelEdit}
+            aria-label="Cancel editing sizes"
+            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><X size={13} /></button>
+        ) : (
+          <button
+            onClick={startEdit}
+            aria-label="Edit sizes"
+            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><Pencil size={13} /></button>
+        )}
+      </div>
       <div className="mt-4 space-y-4">
         {SIZE_FIELDS.map((f) => {
           const v = values[f.key];
@@ -395,25 +422,36 @@ function MySizes({ userId }: { userId: string | undefined }) {
           return (
             <div key={f.key} className="border-b border-border/60 pb-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{f.label}</p>
-              <input
-                value={v}
-                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                                placeholder={f.shoes ? "e.g. 38 — optional" : "e.g. 42 or M — optional"}
-                className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
-              />
-              {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+              {editing ? (
+                <>
+                  <input
+                    value={v}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.shoes ? "e.g. 38 — optional" : "e.g. 42 or M — optional"}
+                    className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+                  />
+                  {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 font-serif text-lg">{loading ? "…" : v || "—"}</p>
+                  {v && hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+                </>
+              )}
             </div>
           );
         })}
       </div>
-      <button
-        onClick={save}
-        disabled={saving || loading}
-        className="mt-5 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
-      >
-        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-        <span className="text-[10px] uppercase tracking-[0.3em]">Save sizes</span>
-      </button>
+      {editing && (
+        <button
+          onClick={save}
+          disabled={saving || !dirty}
+          className="mt-5 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
+        >
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+          <span className="text-[10px] uppercase tracking-[0.3em]">Save sizes</span>
+        </button>
+      )}
     </section>
   );
 }
