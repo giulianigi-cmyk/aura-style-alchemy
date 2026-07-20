@@ -10,6 +10,8 @@ import { MyBrands } from "../MyBrands";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
+import { DressPreferencesSection } from "../DressPreferencesSection";
+
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -268,6 +270,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           )}
           <MyBrands />
           <MySizes userId={user?.id} />
+      <DressPreferencesSection userId={user?.id} />
+
 
 
           {/* Color analysis */}
