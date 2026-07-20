@@ -20,6 +20,7 @@ import {
   nativeShareFile, shareLinks,
 } from "@/lib/aura-share";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
+import { loadDressRules } from "@/lib/dress-preferences";
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -258,8 +259,10 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     setAiExplanation("");
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
+            const dressRules = await loadDressRules(user?.id);
       const res = await suggestOutfitAI({
         data: {
+          dressRules,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           occasion: occasion || null,
