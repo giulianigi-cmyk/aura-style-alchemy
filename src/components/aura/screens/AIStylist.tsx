@@ -10,6 +10,8 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
+import { loadDressRules } from "@/lib/dress-preferences";
+
 
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
@@ -69,8 +71,10 @@ const aiPick = async () => {
     setAiExplanation("");
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
+            const dressRules = await loadDressRules(user?.id);
       const res = await suggestOutfitAI({
         data: {
+          dressRules,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           occasion,
