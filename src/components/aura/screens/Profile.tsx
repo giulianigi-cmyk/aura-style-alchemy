@@ -378,7 +378,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
     });
     const { error } = await supabase
       .from("profiles")
-      .update({ sizes: payload, updated_at: new Date().toISOString() } as never)
+      .update({ sizes: payload, updated_at: new Date().toISOString() })
       .eq("id", userId);
     setSaving(false);
         if (error) { toast.error(error.message); return; }
