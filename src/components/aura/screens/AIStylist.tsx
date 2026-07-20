@@ -155,6 +155,10 @@ const aiPick = async () => {
           className="flex-1 h-12 rounded-full border border-foreground text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98]"
         >Build manually</button>
       </div>
+      <button
+        onClick={() => go("stylist-chat")}
+        className="mx-6 mt-2 w-[calc(100%-3rem)] h-12 rounded-full border border-border text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
+      ><Sparkles size={13} /> Ask your stylist</button>
       {aiExplanation && (
         <p className="mx-6 mt-2 text-xs text-muted-foreground italic leading-relaxed">
           {aiExplanation}
