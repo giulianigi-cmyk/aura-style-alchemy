@@ -381,7 +381,6 @@ function MySizes({ userId }: { userId: string | undefined }) {
       .update({ sizes: payload, updated_at: new Date().toISOString() } as never)
       .eq("id", userId);
     setSaving(false);
-    if (error) { toast.error("Couldn't save sizes"); return; }
         if (error) { toast.error(error.message); return; }
 
   };
@@ -399,7 +398,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
               <input
                 value={v}
                 onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                placeholder="e.g. 42 or M — optional"
+                                placeholder={f.shoes ? "e.g. 38 — optional" : "e.g. 42 or M — optional"}
                 className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
               />
               {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
