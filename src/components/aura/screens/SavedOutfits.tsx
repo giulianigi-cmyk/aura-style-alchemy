@@ -16,6 +16,8 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
   const [loading, setLoading] = useState(true);
   const [assignFor, setAssignFor] = useState<Outfit | null>(null);
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
