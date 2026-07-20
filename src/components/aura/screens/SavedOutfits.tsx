@@ -120,23 +120,6 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
               outfitId: o.id,
             });
             return (
-              <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft">
-                <button onClick={open} className="block w-full text-left active:scale-[0.98]">
-                  <div className="aspect-square" style={{ background: "#FFFFFF" }}>
-                    {url ? (
-                      <img src={url} alt={o.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">Open canvas</div>
-                    )}
-                  </div>
-                </button>
-                <div className="p-3 space-y-2">
-                  <button onClick={open} className="w-full text-left">
-                    <p className="font-serif italic text-sm truncate">{o.name}</p>
-                    {o.occasion?.length ? (
-                      <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
-                    ) : null}
-                  </button>
               <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft relative">
                 <button onClick={open} className="block w-full text-left active:scale-[0.98]">
                   <div className="aspect-square" style={{ background: "#FFFFFF" }}>
