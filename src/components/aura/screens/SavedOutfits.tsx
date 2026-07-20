@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus, Trash2 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
