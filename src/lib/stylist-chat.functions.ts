@@ -1,0 +1,87 @@
+import { createServerFn } from "@tanstack/react-start";
+import { generateText, Output } from "ai";
+import { z } from "zod";
+
+const ItemSchema = z.object({
+  id: z.string(),
+  category: z.string().nullable().optional(),
+  colors: z.array(z.string()).nullable().optional(),
+  style: z.array(z.string()).nullable().optional(),
+  season: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
+  material: z.array(z.string()).nullable().optional(),
+  size: z.string().nullable().optional(),
+});
+
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+});
+
+const InputSchema = z.object({
+  messages: z.array(MessageSchema).min(1).max(30),
+  items: z.array(ItemSchema),
+  dressRules: z.string().nullable().optional(),
+  temperature: z.number().nullable().optional(),
+  condition: z.string().nullable().optional(),
+});
+
+const OutputSchema = z.object({
+  reply: z.string(),
+  item_ids: z.array(z.string()),
+});
+
+export const stylistChat = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
+    const gateway = createLovableAiGatewayProvider(key);
+
+    const wx = data.temperature != null
+      ? `Current weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
+      : "Current weather: unknown.";
+
+    const catalog = data.items.slice(0, 200).map((it) => ({
+      id: it.id,
+      category: it.category ?? "",
+      colors: it.colors ?? [],
+      style: it.style ?? [],
+      season: it.season ?? "",
+      brand: it.brand ?? "",
+      material: it.material ?? [],
+      size: it.size ?? "",
+    }));
+
+    const system = [
+      ...(data.dressRules ? [data.dressRules, ""] : []),
+      "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
+      "Answer styling questions conversationally, in the same language the user writes in.",
+      "When you recommend an outfit or specific pieces, use ONLY items from the wardrobe catalog below and put their ids in item_ids (max 6). If no items apply, return an empty item_ids array.",
+      "Never invent items the user does not own. If the wardrobe lacks something, say so honestly and suggest what kind of piece would fill the gap.",
+      "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
+      wx,
+      `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
+    ].join("\n");
+
+    try {
+      const { output } = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        output: Output.object({ schema: OutputSchema }),
+        messages: [
+          { role: "system", content: system },
+          ...data.messages.map((m) => ({ role: m.role, content: m.content })),
+        ],
+      });
+      const validIds = new Set(catalog.map((c) => c.id));
+      return {
+        ok: true as const,
+        reply: (output.reply ?? "").slice(0, 1200),
+        item_ids: output.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
+      };
+    } catch (err) {
+      console.error("[AURA stylist-chat] failed", err);
+      return { ok: false as const, error: err instanceof Error ? err.message : "AI failed" };
+    }
+  });
