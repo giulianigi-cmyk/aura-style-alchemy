@@ -8,6 +8,7 @@ import { Home } from "./screens/Home";
 import { Wardrobe } from "./screens/Wardrobe";
 import { AddItem } from "./screens/AddItem";
 import { AIStylist } from "./screens/AIStylist";
+import { StylistChat } from "./screens/StylistChat";
 import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
 import { ColorLab } from "./screens/ColorLab";
@@ -25,9 +26,8 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 
 export type Screen =
-  | "splash" | "onboarding" | "auth" | "reset" | "profile-setup" | "home" | "wardrobe" | "add"
-  | "ai" | "planner" | "shop" | "community" | "profile"
-  | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis";
+    | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat";
+
 
 
 export type BuilderInit = {
@@ -132,6 +132,7 @@ function Inner() {
           {screen === "wardrobe" && <Wardrobe go={go} />}
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
           {screen === "ai" && <AIStylist go={go} />}
+          {screen === "stylist-chat" && <StylistChat go={go} />}
           {screen === "planner" && <Planner go={go} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
