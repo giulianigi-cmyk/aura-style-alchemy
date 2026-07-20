@@ -137,10 +137,50 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
                       <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
                     ) : null}
                   </button>
-                  <button
-                    onClick={() => setAssignFor(o)}
-                    className="w-full h-8 rounded-full bg-foreground text-background text-[9px] uppercase tracking-[0.25em] inline-flex items-center justify-center gap-1 active:scale-95"
-                  ><CalendarIcon size={10} /> Add to day</button>
+              <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft relative">
+                <button onClick={open} className="block w-full text-left active:scale-[0.98]">
+                  <div className="aspect-square" style={{ background: "#FFFFFF" }}>
+                    {url ? (
+                      <img src={url} alt={o.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">Open canvas</div>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(o.id); }}
+                  aria-label="Delete outfit"
+                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90 backdrop-blur"
+                ><Trash2 size={14} /></button>
+                <div className="p-3 space-y-2">
+                  <button onClick={open} className="w-full text-left">
+                    <p className="font-serif italic text-sm truncate">{o.name}</p>
+                    {o.occasion?.length ? (
+                      <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
+                    ) : null}
+                  </button>
+                  {confirmDelete === o.id ? (
+                    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-2 space-y-2">
+                      <p className="text-[10px] text-foreground/80 leading-snug">Delete this outfit? This cannot be undone.</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          disabled={deleting}
+                          className="flex-1 h-8 rounded-full border border-border text-[9px] uppercase tracking-[0.25em] active:scale-95"
+                        >Cancel</button>
+                        <button
+                          onClick={() => deleteOutfit(o.id)}
+                          disabled={deleting}
+                          className="flex-1 h-8 rounded-full bg-destructive text-destructive-foreground text-[9px] uppercase tracking-[0.25em] active:scale-95 inline-flex items-center justify-center gap-1 disabled:opacity-60"
+                        >{deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Delete</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAssignFor(o)}
+                      className="w-full h-8 rounded-full bg-foreground text-background text-[9px] uppercase tracking-[0.25em] inline-flex items-center justify-center gap-1 active:scale-95"
+                    ><CalendarIcon size={10} /> Add to day</button>
+                  )}
                 </div>
               </div>
             );
