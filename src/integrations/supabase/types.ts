@@ -107,6 +107,7 @@ export type Database = {
           profile_image: string | null
           season: string | null
           setup_complete: boolean
+          sizes: Json | null
           style_preferences: string[] | null
           undertone: string | null
           updated_at: string
@@ -129,6 +130,7 @@ export type Database = {
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
+          sizes?: Json | null
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
@@ -151,6 +153,7 @@ export type Database = {
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
+          sizes?: Json | null
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
