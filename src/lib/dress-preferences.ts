@@ -81,3 +81,17 @@ export function dressPreferencesToPrompt(p: DressPreferences | null | undefined)
     ...rules.map((r) => `- ${r}`),
   ].join("\n");
 }
+
+/** Loads the signed-in user's dress preferences and returns the binding
+ *  prompt block (or null). One-liner for every AI call site. */
+export async function loadDressRules(userId: string | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data } = await supabase
+    .from("profiles")
+    .select("dress_preferences")
+    .eq("id", userId)
+    .maybeSingle();
+  const p = (data as { dress_preferences?: DressPreferences } | null)?.dress_preferences ?? null;
+  return dressPreferencesToPrompt(p);
+}
