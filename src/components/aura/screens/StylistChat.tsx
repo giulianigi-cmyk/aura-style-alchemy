@@ -95,7 +95,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col">
+        <div className="h-full flex flex-col">
       <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
         <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={16} />
