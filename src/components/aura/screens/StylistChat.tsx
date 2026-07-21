@@ -67,8 +67,8 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
           })),
         },
       });
-      if (!res.ok) {
-        setMessages((m) => [...m, { role: "assistant", content: "Sorry, something went wrong — try again in a moment." }]);
+            if (!res.ok) {
+        setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
         return;
       }
       setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids }]);
