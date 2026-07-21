@@ -72,6 +72,9 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
         return;
       }
       setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids }]);
+      } catch (e) {
+      console.error("[AURA stylist-chat]", e);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
     } finally {
       setBusy(false);
     }
