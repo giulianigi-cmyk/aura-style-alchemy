@@ -59,7 +59,16 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
 
 const aiPick = async () => {
     if (items.length < 3) {
-      toast.error("Add at least 3 pieces (e.g. a top, a bottom, and shoes) to generate an AI outfit.");
+      toast.error(`You have ${items.length} piece${items.length === 1 ? "" : "s"} in your wardrobe — add at least 3 to generate an AI outfit.`);
+      return;
+    }
+    const categories = Array.from(new Set(items.map((it) => it.category).filter(Boolean)));
+    if (categories.length < 2) {
+      toast.error(
+        categories.length === 0
+          ? "None of your pieces have a category set. Edit your items and assign a category (Tops, Bottoms, Shoes…) so AURA can compose an outfit."
+          : `All your pieces are tagged "${categories[0]}". Add at least one item from another category (e.g. Bottoms or Shoes) to unlock AI suggestions.`
+      );
       return;
     }
     const categoryCount = new Set(items.map((it) => it.category).filter(Boolean)).size;
