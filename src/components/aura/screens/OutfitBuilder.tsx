@@ -282,8 +282,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       }
       const byId = new Map(items.map((it) => [it.id, it]));
       const picks = res.item_ids
-        .map((id) => byId.get(id))
-        .filter((it): it is WardrobeItem => Boolean(it));
+        .map((id: string) => byId.get(id))
+        .filter((it: WardrobeItem | undefined): it is WardrobeItem => Boolean(it));
 
       const bucketOf = (it: WardrobeItem): "top" | "bottom" | "dress" | "shoes" | "outer" | "acc" => {
         const c = `${it.category ?? ""} ${it.style ?? ""}`.toLowerCase();
