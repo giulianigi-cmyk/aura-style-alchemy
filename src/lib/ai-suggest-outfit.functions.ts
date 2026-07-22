@@ -56,11 +56,11 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
     ].join("\n");
 
     try {
-      const { output } = await generateText({
+            const { output } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         output: Output.object({ schema: OutputSchema }),
+        system,
         messages: [
-          { role: "system", content: system },
           {
             role: "user",
             content: `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`,
