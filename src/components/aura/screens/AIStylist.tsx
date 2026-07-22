@@ -97,7 +97,11 @@ const aiPick = async () => {
           })),
         },
       });
-    if (!res.ok || !res.item_ids.length) {
+        if (!res.ok) {
+        toast.error(res.error || "AI suggestion failed — please try again.");
+        return;
+      }
+      if (!res.item_ids.length) {
         toast.error("Not enough matching pieces in your wardrobe yet for a complete outfit — try adding more items.");
         return;
       }
