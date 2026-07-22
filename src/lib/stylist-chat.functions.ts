@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 
 const ItemSchema = z.object({
@@ -65,19 +65,36 @@ export const stylistChat = createServerFn({ method: "POST" })
       `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
     ].join("\n");
 
-    try {
-            const { output } = await generateText({
+    const baseMessages = data.messages.map((m) => ({ role: m.role, content: m.content }));
+    const runOnce = (msgs: typeof baseMessages) =>
+      generateObject({
         model: gateway("google/gemini-2.5-flash"),
-        output: Output.object({ schema: OutputSchema }),
         system,
-        messages: data.messages.map((m) => ({ role: m.role, content: m.content })),
+        messages: msgs,
+        schema: OutputSchema,
       });
+
+    try {
+      let object;
+      try {
+        ({ object } = await runOnce(baseMessages));
+      } catch (firstErr) {
+        console.warn("[AURA stylist-chat] retry after schema mismatch", firstErr);
+        ({ object } = await runOnce([
+          ...baseMessages,
+          {
+            role: "user" as const,
+            content:
+              "Your previous response did not match the required JSON schema. Return ONLY valid JSON matching the schema, with no extra text.",
+          },
+        ]));
+      }
 
       const validIds = new Set(catalog.map((c) => c.id));
       return {
         ok: true as const,
-        reply: (output.reply ?? "").slice(0, 1200),
-        item_ids: output.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
+        reply: (object.reply ?? "").slice(0, 1200),
+        item_ids: object.item_ids.filter((id: string) => validIds.has(id)).slice(0, 6),
       };
     } catch (err) {
       console.error("[AURA stylist-chat] failed", err);

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 
 const ItemSchema = z.object({
@@ -55,24 +55,41 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
       "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
     ].join("\n");
 
-    try {
-            const { output } = await generateText({
+    const baseMessages = [
+      {
+        role: "user" as const,
+        content: `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`,
+      },
+    ];
+    const runOnce = (msgs: typeof baseMessages) =>
+      generateObject({
         model: gateway("google/gemini-2.5-flash"),
-        output: Output.object({ schema: OutputSchema }),
         system,
-        messages: [
-          {
-            role: "user",
-            content: `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`,
-          },
-        ],
+        messages: msgs,
+        schema: OutputSchema,
       });
+
+    try {
+      let object;
+      try {
+        ({ object } = await runOnce(baseMessages));
+      } catch (firstErr) {
+        console.warn("[AURA suggest-outfit] retry after schema mismatch", firstErr);
+        ({ object } = await runOnce([
+          ...baseMessages,
+          {
+            role: "user" as const,
+            content:
+              "Your previous response did not match the required JSON schema. Return ONLY valid JSON matching the schema, with no extra text.",
+          },
+        ]));
+      }
       const validIds = new Set(catalog.map((c) => c.id));
-      const item_ids = output.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
+      const item_ids = object.item_ids.filter((id: string) => validIds.has(id)).slice(0, 5);
       return {
         ok: true as const,
         item_ids,
-        explanation: (output.explanation ?? "").slice(0, 240),
+        explanation: (object.explanation ?? "").slice(0, 240),
       };
     } catch (err) {
       console.error("[AURA suggest-outfit] failed", err);
