@@ -66,14 +66,13 @@ export const stylistChat = createServerFn({ method: "POST" })
     ].join("\n");
 
     try {
-      const { output } = await generateText({
+            const { output } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         output: Output.object({ schema: OutputSchema }),
-        messages: [
-          { role: "system", content: system },
-          ...data.messages.map((m) => ({ role: m.role, content: m.content })),
-        ],
+        system,
+        messages: data.messages.map((m) => ({ role: m.role, content: m.content })),
       });
+
       const validIds = new Set(catalog.map((c) => c.id));
       return {
         ok: true as const,
