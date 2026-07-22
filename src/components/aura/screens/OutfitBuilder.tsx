@@ -298,7 +298,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       const zByBucket = { outer: 2, top: 3, dress: 3, bottom: 2, shoes: 1, acc: 4 };
 
       const placedNext: Placed[] = [];
-      picks.forEach((it, i) => {
+      picks.forEach((it: WardrobeItem, i: number) => {
         const path = toStoragePath(it.image_url);
         const url = path ? signed[path] : "";
         if (!url) return;
