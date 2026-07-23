@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
+import { parseAiJson } from "./ai-json";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -31,6 +32,7 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
     const gateway = createLovableAiGatewayProvider(key);
+    const model = gateway("google/gemini-2.5-flash");
 
     const wx = data.temperature != null
       ? `Weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
@@ -53,43 +55,53 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
       "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
       "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
       "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
+      "",
+      "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
+      '{"item_ids": ["id1", "id2"], "explanation": "short reason"}',
     ].join("\n");
 
-    const baseMessages = [
-      {
-        role: "user" as const,
-        content: `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`,
-      },
-    ];
-    const runOnce = (msgs: typeof baseMessages) =>
-      generateObject({
-        model: gateway("google/gemini-2.5-flash"),
-        system,
-        messages: msgs,
-        schema: OutputSchema,
-      });
+    const userContent = `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`;
 
     try {
-      let object;
+      let text: string;
       try {
-        ({ object } = await runOnce(baseMessages));
-      } catch (firstErr) {
-        console.warn("[AURA suggest-outfit] retry after schema mismatch", firstErr);
-        ({ object } = await runOnce([
-          ...baseMessages,
-          {
-            role: "user" as const,
-            content:
-              "Your previous response did not match the required JSON schema. Return ONLY valid JSON matching the schema, with no extra text.",
-          },
-        ]));
+        const r1 = await generateText({
+          model,
+          system,
+          messages: [{ role: "user", content: userContent }],
+        });
+        text = r1.text;
+      } catch (err) {
+        console.error("[AURA suggest-outfit] first call failed", err);
+        text = "";
       }
+
+      let parsed: z.infer<typeof OutputSchema>;
+      try {
+        parsed = parseAiJson(text, OutputSchema);
+      } catch {
+        // One repair retry: ask again, explicitly pointing out the failure.
+        const r2 = await generateText({
+          model,
+          system,
+          messages: [
+            { role: "user", content: userContent },
+            { role: "assistant", content: text || "(no response)" },
+            {
+              role: "user",
+              content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+            },
+          ],
+        });
+        parsed = parseAiJson(r2.text, OutputSchema);
+      }
+
       const validIds = new Set(catalog.map((c) => c.id));
-      const item_ids = object.item_ids.filter((id: string) => validIds.has(id)).slice(0, 5);
+      const item_ids = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
       return {
         ok: true as const,
         item_ids,
-        explanation: (object.explanation ?? "").slice(0, 240),
+        explanation: (parsed.explanation ?? "").slice(0, 240),
       };
     } catch (err) {
       console.error("[AURA suggest-outfit] failed", err);
