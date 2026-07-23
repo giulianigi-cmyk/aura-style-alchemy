@@ -58,6 +58,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
           items: items.map((it) => ({
             id: it.id,
             category: it.category,
+            subcategory: it.subcategory,
             colors: it.colors ?? (it.color ? [it.color] : []),
             style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
             season: it.season,
