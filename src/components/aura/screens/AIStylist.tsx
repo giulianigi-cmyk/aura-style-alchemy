@@ -190,7 +190,7 @@ const aiPick = async () => {
           />
           <p className="text-xs text-muted-foreground mt-1">{selected.length} pieces selected</p>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 max-h-72 overflow-y-auto">
+                    <div className="mt-4 grid grid-cols-3 gap-2 max-h-72 overflow-y-auto overflow-x-hidden">
             {items.map(it => {
               const on = selected.includes(it.id);
               const path = toStoragePath(it.image_url);
@@ -200,16 +200,23 @@ const aiPick = async () => {
                 <button
                   key={it.id}
                   onClick={() => toggle(it.id)}
-                  className={`relative rounded-xl overflow-hidden aspect-square transition ${on ? "ring-2 ring-foreground" : ""}`}
-                  style={{ background: "#FFFFFF" }}
+                  className={`relative block w-full rounded-xl overflow-hidden transition ${on ? "ring-2 ring-foreground" : ""}`}
+                  style={{ background: "#FFFFFF", aspectRatio: "1 / 1" }}
                 >
-                  {src ? (
-                    <img src={src} alt={label} className="h-full w-full object-contain p-1.5" loading="lazy" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">No image</div>
-                  )}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {src ? (
+                      <img
+                        src={src}
+                        alt={label}
+                        className="max-h-full max-w-full object-contain p-1.5"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground px-2 text-center">No image</span>
+                    )}
+                  </div>
                   {on && (
-                    <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center">
+                    <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center z-10">
                       <Check size={11} />
                     </div>
                   )}
