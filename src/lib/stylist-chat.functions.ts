@@ -85,23 +85,31 @@ export const stylistChat = createServerFn({ method: "POST" })
         text = "";
       }
 
-      let parsed: z.infer<typeof OutputSchema>;
+            let parsed: z.infer<typeof OutputSchema> | null = null;
       try {
         parsed = parseAiJson(text, OutputSchema);
       } catch {
-        const r2 = await generateText({
-          model,
-          system,
-          messages: [
-            ...history,
-            { role: "assistant", content: text || "(no response)" },
-            {
-              role: "user",
-              content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
-            },
-          ],
-        });
-        parsed = parseAiJson(r2.text, OutputSchema);
+        try {
+          const r2 = await generateText({
+            model,
+            system,
+            messages: [
+              ...history,
+              { role: "assistant", content: text || "(no response)" },
+              {
+                role: "user",
+                content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+              },
+            ],
+          });
+          parsed = parseAiJson(r2.text, OutputSchema);
+        } catch {
+          // Graceful degradation: the model ignored the JSON format after
+          // a retry too (can happen over long conversations). Rather than
+          // showing an error, fall back to its plain-text reply with no
+          // item thumbnails — the conversation still works for the user.
+          parsed = { reply: text.trim() || "Sorry, I didn't quite catch that — could you rephrase?", item_ids: [] };
+        }
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
