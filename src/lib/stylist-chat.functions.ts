@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
+import { parseAiJson } from "./ai-json";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -38,6 +39,7 @@ export const stylistChat = createServerFn({ method: "POST" })
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
     const gateway = createLovableAiGatewayProvider(key);
+    const model = gateway("google/gemini-2.5-flash");
 
     const wx = data.temperature != null
       ? `Current weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
@@ -63,38 +65,47 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       wx,
       `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
+      "",
+      "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
+      '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"]}',
     ].join("\n");
 
-    const baseMessages = data.messages.map((m) => ({ role: m.role, content: m.content }));
-    const runOnce = (msgs: typeof baseMessages) =>
-      generateObject({
-        model: gateway("google/gemini-2.5-flash"),
-        system,
-        messages: msgs,
-        schema: OutputSchema,
-      });
-
     try {
-      let object;
+      const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
+
+      let text: string;
       try {
-        ({ object } = await runOnce(baseMessages));
-      } catch (firstErr) {
-        console.warn("[AURA stylist-chat] retry after schema mismatch", firstErr);
-        ({ object } = await runOnce([
-          ...baseMessages,
-          {
-            role: "user" as const,
-            content:
-              "Your previous response did not match the required JSON schema. Return ONLY valid JSON matching the schema, with no extra text.",
-          },
-        ]));
+        const r1 = await generateText({ model, system, messages: history });
+        text = r1.text;
+      } catch (err) {
+        console.error("[AURA stylist-chat] first call failed", err);
+        text = "";
+      }
+
+      let parsed: z.infer<typeof OutputSchema>;
+      try {
+        parsed = parseAiJson(text, OutputSchema);
+      } catch {
+        const r2 = await generateText({
+          model,
+          system,
+          messages: [
+            ...history,
+            { role: "assistant", content: text || "(no response)" },
+            {
+              role: "user",
+              content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+            },
+          ],
+        });
+        parsed = parseAiJson(r2.text, OutputSchema);
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
       return {
         ok: true as const,
-        reply: (object.reply ?? "").slice(0, 1200),
-        item_ids: object.item_ids.filter((id: string) => validIds.has(id)).slice(0, 6),
+        reply: (parsed.reply ?? "").slice(0, 1200),
+        item_ids: parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
       };
     } catch (err) {
       console.error("[AURA stylist-chat] failed", err);
