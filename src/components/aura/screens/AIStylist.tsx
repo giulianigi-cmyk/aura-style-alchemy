@@ -1,35 +1,27 @@
-import { Check, Loader2, Sparkles, X } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { Screen } from "../AuraApp";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { Outfit, WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
-import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
-
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
-export function AIStylist({ go }: { go: (s: Screen) => void }) {
+export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
   const [items, setItems] = useState<WardrobeItem[]>([]);
-  const [signed, setSigned] = useState<Record<string, string>>({});
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [outfitCovers, setOutfitCovers] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<string[]>([]);
-  const [name, setName] = useState("");
   const [occasion, setOccasion] = useState<string>("Everyday");
-  const [saving, setSaving] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiExplanation, setAiExplanation] = useState<string>("");
 
   const load = async () => {
     if (!user) return;
@@ -39,7 +31,6 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
     ]);
     const list = (i ?? []) as WardrobeItem[];
     setItems(list);
-    setSigned(await resolveWardrobeUrls(list));
     const olist = (o ?? []) as Outfit[];
     setOutfits(olist);
     // Sign cover images (may be storage paths on the outfits or wardrobe buckets)
@@ -54,10 +45,7 @@ export function AIStylist({ go }: { go: (s: Screen) => void }) {
   };
   useEffect(() => { load(); }, [user]);
 
-  const toggle = (id: string) =>
-    setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
-
-const aiPick = async () => {
+  const aiPick = async () => {
     if (items.length < 3) {
       toast.error(`You have ${items.length} piece${items.length === 1 ? "" : "s"} in your wardrobe — add at least 3 to generate an AI outfit.`);
       return;
@@ -71,16 +59,10 @@ const aiPick = async () => {
       );
       return;
     }
-    const categoryCount = new Set(items.map((it) => it.category).filter(Boolean)).size;
-    if (categoryCount < 2) {
-      toast.error("Your wardrobe needs more variety — add pieces from at least 2 categories (e.g. tops and bottoms) for a complete outfit.");
-      return;
-    }
     setAiBusy(true);
-    setAiExplanation("");
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
-            const dressRules = await loadDressRules(user?.id);
+      const dressRules = await loadDressRules(user?.id);
       const res = await suggestOutfitAI({
         data: {
           dressRules,
@@ -98,7 +80,7 @@ const aiPick = async () => {
           })),
         },
       });
-        if (!res.ok) {
+      if (!res.ok) {
         toast.error(res.error || "AI suggestion failed — please try again.");
         return;
       }
@@ -106,10 +88,14 @@ const aiPick = async () => {
         toast.error("Not enough matching pieces in your wardrobe yet for a complete outfit — try adding more items.");
         return;
       }
-      setSelected(res.item_ids);
-      setName("AI styled look");
-      setAiExplanation(res.explanation);
-      setCreating(true);
+      // Hand off straight to the drag-and-arrange canvas, pre-loaded with
+      // the AI's picks — the user can move pieces around and save from there.
+      openBuilder({
+        itemIds: res.item_ids,
+        name: "AI styled look",
+        occasion,
+        notes: res.explanation || undefined,
+      });
     } catch (e) {
       console.error(e);
       toast.error("AI suggest failed");
@@ -117,24 +103,6 @@ const aiPick = async () => {
       setAiBusy(false);
     }
   };
-
-  const save = async () => {
-    if (!user || selected.length === 0) return;
-    setSaving(true);
-    const first = items.find(i => i.id === selected[0]);
-    const cover = first ? toStoragePath(first.image_url) ?? first.image_url : null;
-    await supabase.from("outfits").insert({
-      user_id: user.id,
-      name: name || "Untitled look",
-      item_ids: selected,
-      cover_url: cover,
-      occasion: occasion ? [occasion] : [],
-      notes: aiExplanation || null,
-    });
-    setSelected([]); setName(""); setCreating(false); setSaving(false); setAiExplanation("");
-    load();
-  };
-
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14">
@@ -173,68 +141,6 @@ const aiPick = async () => {
         onClick={() => go("stylist-chat")}
         className="mx-6 mt-2 w-[calc(100%-3rem)] h-12 rounded-full border border-border text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
       ><Sparkles size={13} /> Ask your stylist</button>
-      {aiExplanation && (
-        <p className="mx-6 mt-2 text-xs text-muted-foreground italic leading-relaxed">
-          {aiExplanation}
-        </p>
-      )}
-
-      {creating && (
-        <div className="mx-6 mt-6 rounded-2xl border border-border bg-card p-4 animate-fade-up">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Composing</p>
-            <button onClick={() => { setCreating(false); setSelected([]); setAiExplanation(""); }}><X size={16} /></button>
-          </div>
-          <input
-            value={name} onChange={e => setName(e.target.value)} placeholder="Name this look"
-            className="mt-2 w-full bg-transparent font-serif text-xl outline-none placeholder:text-muted-foreground/50"
-          />
-          <p className="text-xs text-muted-foreground mt-1">{selected.length} pieces selected</p>
-
-                    <div className="mt-4 grid grid-cols-3 gap-2 max-h-72 overflow-y-auto overflow-x-hidden">
-            {items.map(it => {
-              const on = selected.includes(it.id);
-              const path = toStoragePath(it.image_url);
-              const src = path ? signed[path] : null;
-              const label = it.brand ?? it.color ?? it.category ?? "piece";
-              return (
-                <button
-                  key={it.id}
-                  onClick={() => toggle(it.id)}
-                  className={`relative block w-full rounded-xl overflow-hidden transition ${on ? "ring-2 ring-foreground" : ""}`}
-                  style={{ background: "#FFFFFF", aspectRatio: "1 / 1" }}
-                >
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    {src ? (
-                      <img
-                        src={src}
-                        alt={label}
-                        className="max-h-full max-w-full object-contain p-1.5"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                      />
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground px-2 text-center">No image</span>
-                    )}
-                  </div>
-                  {on && (
-                    <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center z-10">
-                      <Check size={11} />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={save} disabled={saving || selected.length === 0}
-            className="mt-5 w-full h-12 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            Save outfit
-          </button>
-        </div>
-      )}
 
       <section className="px-6 mt-10">
         <h2 className="font-serif text-2xl italic mb-3">Saved looks</h2>
