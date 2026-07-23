@@ -9,6 +9,7 @@ import { Wardrobe } from "./screens/Wardrobe";
 import { AddItem } from "./screens/AddItem";
 import { AIStylist } from "./screens/AIStylist";
 import { StylistChat } from "./screens/StylistChat";
+import { OutfitScan } from "./screens/OutfitScan";
 import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
 import { ColorLab } from "./screens/ColorLab";
@@ -135,6 +136,7 @@ function Inner() {
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
           {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "stylist-chat" && <StylistChat go={go} />}
+          {screen === "outfit-scan" && <OutfitScan go={go} />}
           {screen === "planner" && <Planner go={go} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
