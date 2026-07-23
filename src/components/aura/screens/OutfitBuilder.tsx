@@ -269,6 +269,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           items: items.map((it) => ({
             id: it.id,
             category: it.category,
+            subcategory: it.subcategory,
             colors: it.colors ?? (it.color ? [it.color] : []),
             style: it.style ? [it.style] : [],
             season: it.season,
