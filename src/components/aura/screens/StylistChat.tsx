@@ -9,7 +9,6 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { stylistChat } from "@/lib/stylist-chat.functions";
-import { OutfitScan } from "./screens/OutfitScan";
 import { loadDressRules } from "@/lib/dress-preferences";
 
 type ChatMsg = { role: "user" | "assistant"; content: string; itemIds?: string[] };
