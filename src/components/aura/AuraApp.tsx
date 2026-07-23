@@ -133,7 +133,7 @@ function Inner() {
           {screen === "home" && <Home go={go} />}
           {screen === "wardrobe" && <Wardrobe go={go} />}
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
-          {screen === "ai" && <AIStylist go={go} />}
+          {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "stylist-chat" && <StylistChat go={go} />}
           {screen === "planner" && <Planner go={go} />}
           {screen === "shop" && <Shop go={go} />}
