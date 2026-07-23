@@ -6,6 +6,7 @@ import { parseAiJson } from "./ai-json";
 const ItemSchema = z.object({
   id: z.string(),
   category: z.string().nullable().optional(),
+  subcategory: z.string().nullable().optional(),
   colors: z.array(z.string()).nullable().optional(),
   style: z.array(z.string()).nullable().optional(),
   season: z.string().nullable().optional(),
@@ -42,6 +43,7 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
     const catalog = data.items.slice(0, 200).map((it) => ({
       id: it.id,
       category: it.category ?? "",
+      subcategory: it.subcategory ?? "",
       colors: it.colors ?? [],
       style: it.style ?? [],
       season: it.season ?? "",
@@ -53,6 +55,7 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
       "You are a personal stylist. Compose ONE coherent outfit from the user's wardrobe.",
       "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
       "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
+      "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
       "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
       "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
       "",
@@ -61,7 +64,6 @@ export const suggestOutfitAI = createServerFn({ method: "POST" })
     ].join("\n");
 
     const userContent = `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`;
-
     try {
       let text: string;
       try {
