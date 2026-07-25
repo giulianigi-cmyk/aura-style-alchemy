@@ -15,6 +15,7 @@
     "@ai-sdk/openai-compatible": "^3.0.2",
     "@cloudflare/vite-plugin": "^1.25.5",
     "@hookform/resolvers": "^5.2.2",
+    "@imgly/background-removal": "^1.7.0",
     "@lovable.dev/mcp-js": "^0.20.0",
     "@mediapipe/tasks-vision": "^0.10.35",
     "@radix-ui/react-accordion": "^1.2.12",
