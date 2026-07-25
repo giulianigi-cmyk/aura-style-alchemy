@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Camera, Check, Loader2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,8 +10,8 @@ import type { WardrobeItem } from "@/lib/aura-types";
 import { ITEM_CATEGORIES, MATERIAL_OPTIONS, SEASON_OPTIONS, subcategoriesFor } from "@/lib/wardrobe-options";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { analyzeOutfit, type DetectedOutfitItem } from "@/lib/analyze-outfit.functions";
-import { removeBackgroundClient } from "@/lib/bg-removal-client";
+import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
+import { segmentOutfitPhoto } from "@/lib/outfit-segmentation";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 
@@ -21,80 +21,21 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
   return new File([blob], filename, { type: blob.type || "image/png" });
 }
 
-/** Same checker-detection used in AddItem — some bg-removal outputs bake
- *  the "transparent" area in as opaque grey/white checker pixels instead
- *  of real alpha. We zero the alpha on those pixels so it displays clean. */
-function isCheckerPixel(r: number, g: number, b: number): boolean {
-  const grey = Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && Math.abs(r - b) < 10;
-  if (!grey) return false;
-  return r >= 235 || (r >= 175 && r <= 225);
-}
-
-async function ensureTransparentPng(dataUrl: string, filename: string): Promise<File> {
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("image failed to load"));
-    el.src = dataUrl;
-  });
-  const w = img.naturalWidth, h = img.naturalHeight;
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("no 2d context");
-  ctx.drawImage(img, 0, 0);
-  try {
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const d = imgData.data;
-    let hasAlpha = false;
-    for (let i = 3; i < d.length; i += 4) { if (d[i] < 250) { hasAlpha = true; break; } }
-    if (!hasAlpha) {
-      const corner = (x: number, y: number) => { const o = (y * w + x) * 4; return [d[o], d[o + 1], d[o + 2]] as const; };
-      const corners = [corner(0, 0), corner(w - 1, 0), corner(0, h - 1), corner(w - 1, h - 1)];
-      const checkerCorners = corners.filter((p) => isCheckerPixel(p[0], p[1], p[2])).length;
-      if (checkerCorners >= 3) {
-        for (let i = 0; i < d.length; i += 4) if (isCheckerPixel(d[i], d[i + 1], d[i + 2])) d[i + 3] = 0;
-        ctx.putImageData(imgData, 0, 0);
-      }
-    }
-  } catch { /* ship as-is */ }
-  const blob: Blob = await new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob null"))), "image/png"));
-  return new File([blob], filename, { type: "image/png" });
-}
-
-/** Crop a region (fractions 0-1) out of the full photo, with a little
- *  padding since the AI's bounding box is only approximate. */
-async function cropRegion(photoDataUrl: string, bbox: { x: number; y: number; width: number; height: number }): Promise<string> {
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("photo failed to load"));
-    el.src = photoDataUrl;
-  });
-  const W = img.naturalWidth, H = img.naturalHeight;
-  const pad = 0.05;
-  const x0 = Math.max(0, bbox.x - pad) * W;
-  const y0 = Math.max(0, bbox.y - pad) * H;
-  const x1 = Math.min(1, bbox.x + bbox.width + pad) * W;
-  const y1 = Math.min(1, bbox.y + bbox.height + pad) * H;
-  const cw = Math.max(1, x1 - x0), ch = Math.max(1, y1 - y0);
-  const canvas = document.createElement("canvas");
-  canvas.width = cw; canvas.height = ch;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("no 2d context");
-  ctx.drawImage(img, x0, y0, cw, ch, 0, 0, cw, ch);
-  return canvas.toDataURL("image/jpeg", 0.92);
-}
-
-type ScanItem = DetectedOutfitItem & {
+type ScanItem = {
   key: string;
+  category: string;
+  subcategory: string;
+  colors: string[];
+  materials: string[];
+  seasons: string[];
   brand: string;
+  description: string;
   imageDataUrl: string;
   transparent: boolean;
   dedupe: DedupeResult;
   status: "pending" | "confirmed-new" | "confirmed-duplicate";
 };
+
 
 export function OutfitScan({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
