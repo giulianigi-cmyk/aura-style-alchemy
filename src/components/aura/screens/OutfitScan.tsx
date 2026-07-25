@@ -75,44 +75,36 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       const existingList = (existing ?? []) as WardrobeItem[];
       setWardrobe(existingList);
 
-      const res = await analyze({ data: { imageDataUrl: dataUrl } });
-      if (!res.ok) {
-        toast.error(res.error || "Could not analyze this photo — try again.");
-        reset();
-        return;
-      }
-      if (!res.items.length) {
+      setProgressLabel("Analyzing your outfit…");
+      const segments = await segmentOutfitPhoto(dataUrl);
+      if (!segments.length) {
         toast.error("No clothing items recognized in this photo. Try a clearer full-body shot.");
         reset();
         return;
       }
 
       const built: ScanItem[] = [];
-      for (let i = 0; i < res.items.length; i++) {
-        const it = res.items[i];
-        setProgressLabel(`Processing item ${i + 1} of ${res.items.length}…`);
-        const cropped = await cropRegion(dataUrl, it.bbox);
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        setProgressLabel(`Identifying item ${i + 1} of ${segments.length}…`);
 
-        let finalImage = cropped;
-        let transparent = false;
+        let meta: {
+          category: string; subcategory: string; colors: string[];
+          materials: string[]; seasons: string[]; brand: string;
+        };
         try {
-          const bg = await removeBackgroundClient(cropped);
-          if (bg.ok) {
-            const cleanFile = await ensureTransparentPng(bg.imageDataUrl, `scan-${i}.png`);
-            finalImage = await new Promise<string>((resolve, reject) => {
-              const r = new FileReader();
-              r.onload = () => resolve(r.result as string);
-              r.onerror = () => reject(new Error("read failed"));
-              r.readAsDataURL(cleanFile);
-            });
-            transparent = true;
-          }
+          const r = await analyze({ data: { imageDataUrl: seg.imageDataUrl } });
+          meta = {
+            category: r.category, subcategory: r.subcategory, colors: r.colors,
+            materials: r.materials, seasons: r.seasons, brand: r.brand,
+          };
         } catch (e) {
-          console.warn("[AURA outfit-scan] bg removal failed for item", i, e);
+          console.warn("[AURA outfit-scan] analyze failed for segment", i, e);
+          meta = { category: "", subcategory: "", colors: [], materials: [], seasons: [], brand: "" };
         }
 
         const dedupe = findBestMatch(
-          { category: it.category, subcategory: it.subcategory, colors: it.colors, brand: null },
+          { category: meta.category, subcategory: meta.subcategory, colors: meta.colors, brand: meta.brand || null },
           existingList,
         );
         if (dedupe.match) {
@@ -123,16 +115,24 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           }
         }
 
+        const description = [meta.colors[0], meta.subcategory || meta.category].filter(Boolean).join(" ");
+
         built.push({
-          ...it,
           key: `${Date.now()}-${i}`,
-          brand: "",
-          imageDataUrl: finalImage,
-          transparent,
+          category: meta.category,
+          subcategory: meta.subcategory,
+          colors: meta.colors,
+          materials: meta.materials,
+          seasons: meta.seasons,
+          brand: meta.brand || "",
+          description,
+          imageDataUrl: seg.imageDataUrl,
+          transparent: true,
           dedupe,
           status: dedupe.verdict === "certain" ? "confirmed-duplicate" : dedupe.verdict === "maybe" ? "pending" : "confirmed-new",
         });
       }
+
 
       setScanItems(built);
       setStage("review");
