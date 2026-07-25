@@ -194,7 +194,7 @@ type Stage = "idle" | "bgremove" | "analyze";
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
-  const bgRemove = useServerFn(removeBackground);
+  
   const importUrl = useServerFn(importProductFromUrl);
   const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
