@@ -4,7 +4,7 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
@@ -189,13 +189,23 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{items.length} pieces</p>
           <h1 className="font-serif text-4xl mt-1">Your closet</h1>
         </div>
-        <button
-          onClick={() => go("add")}
-          className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
-        >
-          <Plus size={20} />
-        </button>
+                <div className="flex gap-2">
+          <button
+            onClick={() => go("outfit-scan")}
+            aria-label="Scan an outfit photo"
+            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
+          >
+            <Camera size={18} />
+          </button>
+          <button
+            onClick={() => go("add")}
+            className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
       </header>
+
 
       {/* Weather / season banner */}
       <div className="mx-6 mt-4 rounded-2xl bg-card border border-border/60 p-4 flex items-center justify-between gap-3">
