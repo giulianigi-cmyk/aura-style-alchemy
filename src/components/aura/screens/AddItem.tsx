@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
-import { removeBackground } from "@/lib/ai-bgremove.functions";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
@@ -194,7 +194,7 @@ type Stage = "idle" | "bgremove" | "analyze";
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
-  const bgRemove = useServerFn(removeBackground);
+  
   const importUrl = useServerFn(importProductFromUrl);
   const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -276,7 +276,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setStage("bgremove");
     try {
-            const bg = await bgRemove({ data: { imageDataUrl: dataUrl } });
+            const bg = await removeBackgroundClient(dataUrl);
       if (!bg.ok) toast.message("Background not removed", { description: bg.error });
       if (bg.ok) {
 
