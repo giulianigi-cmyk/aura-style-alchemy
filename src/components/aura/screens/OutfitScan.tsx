@@ -11,7 +11,7 @@ import { ITEM_CATEGORIES, MATERIAL_OPTIONS, SEASON_OPTIONS, subcategoriesFor } f
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { analyzeOutfit, type DetectedOutfitItem } from "@/lib/analyze-outfit.functions";
-import { removeBackground } from "@/lib/ai-bgremove.functions";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 
