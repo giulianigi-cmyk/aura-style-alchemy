@@ -99,7 +99,7 @@ type ScanItem = DetectedOutfitItem & {
 export function OutfitScan({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const analyze = useServerFn(analyzeOutfit);
-  const bgRemove = useServerFn(removeBackground);
+  
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
         let finalImage = cropped;
         let transparent = false;
         try {
-          const bg = await bgRemove({ data: { imageDataUrl: cropped } });
+          const bg = await removeBackgroundClient(cropped);
           if (bg.ok) {
             const cleanFile = await ensureTransparentPng(bg.imageDataUrl, `scan-${i}.png`);
             finalImage = await new Promise<string>((resolve, reject) => {
