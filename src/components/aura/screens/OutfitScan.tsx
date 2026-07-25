@@ -39,7 +39,7 @@ type ScanItem = {
 
 export function OutfitScan({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
-  const analyze = useServerFn(analyzeOutfit);
+  const analyze = useServerFn(analyzeWardrobeImage);
   
   const fileRef = useRef<HTMLInputElement>(null);
 
