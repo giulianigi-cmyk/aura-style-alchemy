@@ -439,40 +439,44 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 >
                   <Pencil size={12} /> Edit details
                 </button>
-                                {confirmDelete ? (
+                                            <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="mt-3 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={12} /> Delete item
+                </button>
+                {confirmDelete && (
                   <div
-                    ref={(el) => el?.scrollIntoView({ behavior: "smooth", block: "end" })}
-                    className="mt-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4"
+                    className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+                    onClick={() => !deleting && setConfirmDelete(false)}
                   >
-
-                    <p className="font-serif text-lg text-center">Delete this item?</p>
-                    <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setConfirmDelete(false)}
-                        disabled={deleting}
-                        className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
-                      >Cancel</button>
-                      <button
-                        onClick={deleteItem}
-                        disabled={deleting}
-                        className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
-                      >
-                        {deleting && <Loader2 size={12} className="animate-spin" />}
-                        Delete
-                      </button>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full max-w-xs rounded-2xl border border-destructive/40 bg-card p-5 shadow-luxe"
+                    >
+                      <p className="font-serif text-lg text-center">Delete this item?</p>
+                      <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setConfirmDelete(false)}
+                          disabled={deleting}
+                          className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+                        >Cancel</button>
+                        <button
+                          onClick={deleteItem}
+                          disabled={deleting}
+                          className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {deleting && <Loader2 size={12} className="animate-spin" />}
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDelete(true)}
-                    className="mt-3 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
-                  >
-                    <Trash2 size={12} /> Delete item
-                  </button>
                 )}
               </>
             ) : (
+
               <div className="mt-4 space-y-4">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Brand</p>
