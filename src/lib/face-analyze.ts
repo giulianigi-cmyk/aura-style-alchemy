@@ -80,12 +80,26 @@ function samplePatch(
   return out;
 }
 
-function average(pixels: [number, number, number][]): [number, number, number] | null {
-  if (!pixels.length) return null;
-  let r = 0, g = 0, b = 0;
-  for (const p of pixels) { r += p[0]; g += p[1]; b += p[2]; }
-  return [r / pixels.length, g / pixels.length, b / pixels.length];
+/** Per-channel median across all sampled pixels — used instead of a plain
+ *  mean because it's far less sensitive to a handful of outlier pixels
+ *  (a specular highlight on the cheek, a stray dark eyelash, a glare spot
+ *  in the iris) than an arithmetic average, which lets a small number of
+ *  anomalous pixels pull the whole reading off. */
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
+
+function robustAggregate(pixels: [number, number, number][]): [number, number, number] | null {
+  if (!pixels.length) return null;
+  return [
+    medianOf(pixels.map((p) => p[0])),
+    medianOf(pixels.map((p) => p[1])),
+    medianOf(pixels.map((p) => p[2])),
+  ];
+}
+
 
 export async function autoSampleFromCanvas(canvas: HTMLCanvasElement): Promise<AutoSamples | null> {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -133,7 +147,7 @@ export async function autoSampleFromCanvas(canvas: HTMLCanvasElement): Promise<A
     const [x, y] = toPx(lm[idx]);
     skinPixels.push(...samplePatch(data, W, H, x, y, cheekRadius));
   }
-  const skinAvg = average(skinPixels);
+  const skinAvg = robustAggregate(skinPixels);
   if (!skinAvg) return null;
 
   // ---- EYE: iris landmarks, exclude sclera / pupil / highlights ----
@@ -150,7 +164,7 @@ export async function autoSampleFromCanvas(canvas: HTMLCanvasElement): Promise<A
     const [x, y] = toPx(lm[idx]);
     eyePixels.push(...samplePatch(data, W, H, x, y, irisRadius, eyeAccept));
   }
-  const eyeAvg = average(eyePixels);
+  const eyeAvg = robustAggregate(eyePixels);
 
   // ---- HAIR: band above forehead, within face bbox, exclude skin-like pixels ----
   const [fx, fy] = toPx(lm[FOREHEAD_ANCHOR]);
@@ -179,7 +193,7 @@ export async function autoSampleFromCanvas(canvas: HTMLCanvasElement): Promise<A
       hairPixels.push([r, g, b]);
     }
   }
-  const hairAvg = average(hairPixels);
+  const hairAvg = robustAggregate(hairPixels);
 
   return {
     skin: toHex(skinAvg[0], skinAvg[1], skinAvg[2]),
