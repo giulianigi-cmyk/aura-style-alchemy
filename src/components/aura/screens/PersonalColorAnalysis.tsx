@@ -64,7 +64,15 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight);
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
+            // Front-camera ("selfie") captures are frequently saved mirrored by
+      // iOS — flip horizontally so what's drawn/sampled matches true
+      // left-right orientation, not a mirror image.
+      ctx.save();
+      ctx.translate(size, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      ctx.restore();
+
 
       // Run auto-detection once per loaded image.
       if (autoRanRef.current === imageUrl) return;
