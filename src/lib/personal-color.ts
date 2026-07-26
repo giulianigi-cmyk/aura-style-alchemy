@@ -23,8 +23,8 @@ export interface SeasonResult {
   dominantTrait: DominantTrait;
   undertone: Undertone;
   value: "Light" | "Deep";
-  contrast: "Alto" | "Medio" | "Basso";
-  metal: "Oro" | "Argento";
+  contrast: "High" | "Medium" | "Low";
+  metal: "Gold" | "Silver";
   compatibilityScores: Record<ColorSeason, number>;
   classificationConfidence: ClassificationConfidence;
   sampleQuality: SampleQuality;
@@ -35,19 +35,32 @@ export interface SeasonResult {
   lessHarmonious: string[];
 }
 
-const SUBGROUP_NAMES: Record<ColorSeason, Record<DominantTrait, string>> = {
-  Spring: { undertone: "Primavera Calda", value: "Primavera Chiara", intensity: "Primavera Brillante", balanced: "Primavera Assoluta" },
-  Summer: { undertone: "Estate Fredda", value: "Estate Chiara", intensity: "Estate Soft", balanced: "Estate Assoluta" },
-  Autumn: { undertone: "Autunno Caldo", value: "Autunno Profondo", intensity: "Autunno Soft", balanced: "Autunno Assoluto" },
-  Winter: { undertone: "Inverno Freddo", value: "Inverno Profondo", intensity: "Inverno Brillante", balanced: "Inverno Assoluto" },
+/**
+ * Subgroup naming uses the standard English 12-season nomenclature
+ * (Warm/Cool + season, Light/Deep + season, Bright/Soft + season, "True"
+ * for the balanced/absolute version) — common, widely-used industry
+ * terms, not tied to any single consultant's specific branding.
+ */
+const SUBGROUP_NAMES: Record<ColorSeason, {
+  undertone: string;
+  valueLight: string;
+  valueDeep: string;
+  intensityBright: string;
+  intensitySoft: string;
+  balanced: string;
+}> = {
+  Spring: { undertone: "Warm Spring", valueLight: "Light Spring", valueDeep: "Deep Spring", intensityBright: "Bright Spring", intensitySoft: "Soft Spring", balanced: "True Spring" },
+  Summer: { undertone: "Cool Summer", valueLight: "Light Summer", valueDeep: "Deep Summer", intensityBright: "Bright Summer", intensitySoft: "Soft Summer", balanced: "True Summer" },
+  Autumn: { undertone: "Warm Autumn", valueLight: "Light Autumn", valueDeep: "Deep Autumn", intensityBright: "Bright Autumn", intensitySoft: "Soft Autumn", balanced: "True Autumn" },
+  Winter: { undertone: "Cool Winter", valueLight: "Light Winter", valueDeep: "Deep Winter", intensityBright: "Bright Winter", intensitySoft: "Soft Winter", balanced: "True Winter" },
 };
 
 const SEASON_LABELS: Record<ColorSeason, string> = {
-  Spring: "Primavera", Summer: "Estate", Autumn: "Autunno", Winter: "Inverno",
+  Spring: "Spring", Summer: "Summer", Autumn: "Autumn", Winter: "Winter",
 };
 
-const SEASON_METAL: Record<ColorSeason, "Oro" | "Argento"> = {
-  Spring: "Oro", Autumn: "Oro", Summer: "Argento", Winter: "Argento",
+const SEASON_METAL: Record<ColorSeason, "Gold" | "Silver"> = {
+  Spring: "Gold", Autumn: "Gold", Summer: "Silver", Winter: "Silver",
 };
 
 const SEASON_RANGES: Record<ColorSeason, Record<"temperature" | "intensity" | "value" | "contrast", [number, number]>> = {
@@ -200,7 +213,7 @@ export function classifyColorSeason(skinHex: string, hairHex: string, eyeHex: st
   const dHairEye = Math.abs(hair.L - eye.L);
   const contrastRaw = dSkinHair * 0.5 + dSkinEye * 0.3 + dHairEye * 0.2;
   const contrast01 = clamp01((contrastRaw - CONTRAST_MIN) / (CONTRAST_MAX - CONTRAST_MIN));
-  const contrast: "Alto" | "Medio" | "Basso" = contrastRaw >= 40 ? "Alto" : contrastRaw >= 22 ? "Medio" : "Basso";
+  const contrast: "High" | "Medium" | "Low" = contrastRaw >= 40 ? "High" : contrastRaw >= 22 ? "Medium" : "Low";
 
   const profile = { temperature: temperature01, intensity: intensity01, value: value01, contrast: contrast01 };
 
@@ -246,7 +259,11 @@ export function classifyColorSeason(skinHex: string, hairHex: string, eyeHex: st
   const secondDev = sortedDevs[1][1];
   const dominantTrait: DominantTrait = (topDev >= 0.35 && topDev - secondDev >= 0.12) ? topTrait : "balanced";
 
-  const subgroup = SUBGROUP_NAMES[season][dominantTrait];
+  const subgroup =
+    dominantTrait === "undertone" ? SUBGROUP_NAMES[season].undertone
+    : dominantTrait === "value" ? (profile.value >= (ref.value[0] + ref.value[1]) / 2 ? SUBGROUP_NAMES[season].valueLight : SUBGROUP_NAMES[season].valueDeep)
+    : dominantTrait === "intensity" ? (profile.intensity >= (ref.intensity[0] + ref.intensity[1]) / 2 ? SUBGROUP_NAMES[season].intensityBright : SUBGROUP_NAMES[season].intensitySoft)
+    : SUBGROUP_NAMES[season].balanced;
 
   return {
     season,
