@@ -402,22 +402,23 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   const neutral = s < 0.12;
                   return (
                     <div className="mt-5 rounded-2xl border border-border bg-secondary/30 p-4">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-                        Analisi colore · Itten
+                                            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
+                        Color analysis · Itten
                       </p>
                       <div className="mt-3 flex items-center justify-center gap-2">
                         <span className="h-8 w-8 rounded-full border border-border" style={{ background: pal.hex }} />
                         <div className="text-left">
                           <p className="text-sm font-medium">{pal.name}</p>
                           <p className="text-[11px] text-muted-foreground">
-                            {neutral ? "Neutro" : nearestWheelName(h)}
+                            {neutral ? "Neutral" : nearestWheelName(h)}
                           </p>
                         </div>
                       </div>
                       {neutral ? (
                         <p className="mt-3 text-[11px] text-muted-foreground text-center">
-                          Colore neutro: si abbina a tutta la ruota.
+                          Neutral color: pairs with the whole wheel.
                         </p>
+
                       ) : (
                         <div className="mt-3 flex justify-center gap-2 flex-wrap">
                           {getHarmonies(pal.hex).slice(0, 5).map((hm, idx) => (
