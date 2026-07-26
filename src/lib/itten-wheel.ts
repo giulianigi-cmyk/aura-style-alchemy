@@ -42,23 +42,24 @@ export function hexToHsl(hex: string): HSL {
   return rgbToHsl(r, g, b);
 }
 
-// 12 tappe della ruota (cerchio delle tonalità digitale, base per l'analisi
-// tipo Itten). Nomi pensati per essere leggibili in UI, non per rigore
-// pigmentario da manuale d'arte.
+// 12 stops on the wheel (digital hue circle, basis for the Itten-style
+// analysis). Names chosen to be readable in the UI, not for pigment-grade
+// rigor from an art manual.
 export const ITTEN_WHEEL_NAMES: { hue: number; name: string }[] = [
-  { hue: 0, name: "Rosso" },
-  { hue: 30, name: "Arancio" },
-  { hue: 60, name: "Giallo" },
-  { hue: 90, name: "Giallo-Verde" },
-  { hue: 120, name: "Verde" },
-  { hue: 150, name: "Verde Smeraldo" },
-  { hue: 180, name: "Ciano" },
-  { hue: 210, name: "Azzurro" },
-  { hue: 240, name: "Blu" },
-  { hue: 270, name: "Viola" },
+  { hue: 0, name: "Red" },
+  { hue: 30, name: "Orange" },
+  { hue: 60, name: "Yellow" },
+  { hue: 90, name: "Yellow-Green" },
+  { hue: 120, name: "Green" },
+  { hue: 150, name: "Emerald Green" },
+  { hue: 180, name: "Cyan" },
+  { hue: 210, name: "Sky Blue" },
+  { hue: 240, name: "Blue" },
+  { hue: 270, name: "Purple" },
   { hue: 300, name: "Magenta" },
-  { hue: 330, name: "Fucsia" },
+  { hue: 330, name: "Fuchsia" },
 ];
+
 
 export function nearestWheelName(hue: number): string {
   let best = ITTEN_WHEEL_NAMES[0];
@@ -84,13 +85,14 @@ export function getHarmonies(baseHex: string): Harmony[] {
     const hh = ((h + deltaH) % 360 + 360) % 360;
     return { label, hue: hh, hex: hslToHex(hh, sUse, lUse) };
   };
-  return [
-    at(180, "Complementare"),
-    at(-30, "Analogo"),
-    at(30, "Analogo"),
-    at(150, "Split-complementare"),
-    at(-150, "Split-complementare"),
-    at(120, "Triadico"),
-    at(-120, "Triadico"),
+    return [
+    at(180, "Complementary"),
+    at(-30, "Analogous"),
+    at(30, "Analogous"),
+    at(150, "Split-Complementary"),
+    at(-150, "Split-Complementary"),
+    at(120, "Triadic"),
+    at(-120, "Triadic"),
   ];
+
 }
