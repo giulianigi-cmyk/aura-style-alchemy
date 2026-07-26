@@ -439,8 +439,12 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 >
                   <Pencil size={12} /> Edit details
                 </button>
-                {confirmDelete ? (
-                  <div className="mt-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+                                {confirmDelete ? (
+                  <div
+                    ref={(el) => el?.scrollIntoView({ behavior: "smooth", block: "end" })}
+                    className="mt-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4"
+                  >
+
                     <p className="font-serif text-lg text-center">Delete this item?</p>
                     <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
                     <div className="mt-4 grid grid-cols-2 gap-2">
