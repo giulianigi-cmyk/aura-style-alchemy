@@ -28,6 +28,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
       <div>
         <p className="font-serif text-3xl">Something slipped</p>
+        <p className="mt-3 text-xs text-muted-foreground break-words max-w-sm mx-auto">{error.message}</p>
         <button
           onClick={() => { router.invalidate(); reset(); }}
           className="mt-6 rounded-full bg-primary px-6 py-2.5 text-xs uppercase tracking-widest text-primary-foreground"
