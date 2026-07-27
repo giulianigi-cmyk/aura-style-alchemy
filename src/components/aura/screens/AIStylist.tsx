@@ -1,4 +1,4 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Copy, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
@@ -33,12 +33,13 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     setItems(list);
     const olist = (o ?? []) as Outfit[];
     setOutfits(olist);
-    // Sign cover images (may be storage paths on the outfits or wardrobe buckets)
+    // Sign cover images (stored in the "outfits" bucket as canvas_image_url,
+    // the composed export from the builder — not a raw wardrobe photo).
     const covers: Record<string, string> = {};
     for (const outfit of olist) {
-      if (!outfit.cover_url) continue;
-      if (/^https?:\/\//i.test(outfit.cover_url)) { covers[outfit.id] = outfit.cover_url; continue; }
-      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrl(outfit.cover_url, 60 * 60);
+      if (!outfit.canvas_image_url) continue;
+      if (/^https?:\/\//i.test(outfit.canvas_image_url)) { covers[outfit.id] = outfit.canvas_image_url; continue; }
+      const { data: signedData } = await supabase.storage.from("outfits").createSignedUrl(outfit.canvas_image_url, 60 * 60);
       if (signedData?.signedUrl) covers[outfit.id] = signedData.signedUrl;
     }
     setOutfitCovers(covers);
@@ -150,13 +151,39 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           <div className="grid grid-cols-2 gap-3">
             {outfits.map(o => {
               const cover = outfitCovers[o.id];
+              const open = () => openBuilder({
+                itemIds: o.item_ids,
+                name: o.name,
+                occasion: o.occasion?.[0],
+                notes: o.notes ?? undefined,
+                outfitId: o.id,
+              });
+              const duplicate = () => openBuilder({
+                itemIds: o.item_ids,
+                name: `${o.name} Copy`,
+                occasion: o.occasion?.[0],
+                notes: o.notes ?? undefined,
+              });
               return (
-                <div key={o.id} className="animate-fade-up">
-                  <div className="rounded-2xl overflow-hidden aspect-[3/4] shadow-soft" style={{ background: "#FFFFFF" }}>
-                    {cover && <img src={cover} alt={o.name} className="h-full w-full object-contain p-2" />}
-                  </div>
-                  <p className="mt-2 font-serif text-base">{o.name}</p>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
+                <div key={o.id} className="animate-fade-up relative">
+                  <button onClick={open} className="block w-full text-left active:scale-[0.98]">
+                    <div className="rounded-2xl overflow-hidden aspect-[3/4] shadow-soft" style={{ background: "#FFFFFF" }}>
+                      {cover ? (
+                        <img src={cover} alt={o.name} className="h-full w-full object-contain p-2" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">Open canvas</div>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); duplicate(); }}
+                    aria-label="Duplicate outfit"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                  ><Copy size={14} /></button>
+                  <button onClick={open} className="block w-full text-left">
+                    <p className="mt-2 font-serif text-base">{o.name}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
+                  </button>
                 </div>
               );
             })}
