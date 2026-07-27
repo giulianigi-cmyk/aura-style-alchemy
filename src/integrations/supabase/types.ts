@@ -14,6 +14,91 @@ export type Database = {
   }
   public: {
     Tables: {
+      friends: {
+        Row: {
+          addressee_id: string
+          created_at: string
+          id: string
+          requester_id: string
+          status: string
+        }
+        Insert: {
+          addressee_id: string
+          created_at?: string
+          id?: string
+          requester_id: string
+          status?: string
+        }
+        Update: {
+          addressee_id?: string
+          created_at?: string
+          id?: string
+          requester_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      outfit_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_comments_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "outfit_shares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outfit_likes: {
+        Row: {
+          created_at: string
+          id: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_likes_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "outfit_shares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outfit_plans: {
         Row: {
           created_at: string
@@ -49,6 +134,38 @@ export type Database = {
           weather_temp?: number | null
         }
         Relationships: []
+      }
+      outfit_shares: {
+        Row: {
+          created_at: string
+          id: string
+          outfit_id: string
+          shared_by: string
+          shared_with: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          outfit_id: string
+          shared_by: string
+          shared_with: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          outfit_id?: string
+          shared_by?: string
+          shared_with?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_shares_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outfits: {
         Row: {
@@ -111,6 +228,7 @@ export type Database = {
           style_preferences: string[] | null
           undertone: string | null
           updated_at: string
+          username: string | null
           value: string | null
         }
         Insert: {
@@ -134,6 +252,7 @@ export type Database = {
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
+          username?: string | null
           value?: string | null
         }
         Update: {
@@ -157,6 +276,7 @@ export type Database = {
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
+          username?: string | null
           value?: string | null
         }
         Relationships: []
@@ -223,7 +343,60 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      are_friends: { Args: { _a: string; _b: string }; Returns: boolean }
+      can_access_share: { Args: { _share_id: string }; Returns: boolean }
+      get_share_comments: {
+        Args: { _share_id: string }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          profile_image: string
+          user_id: string
+          username: string
+        }[]
+      }
+      get_shared_feed: {
+        Args: never
+        Returns: {
+          canvas_image_url: string
+          comment_count: number
+          created_at: string
+          direction: string
+          like_count: number
+          liked_by_me: boolean
+          other_profile_image: string
+          other_username: string
+          outfit_id: string
+          outfit_name: string
+          share_id: string
+          shared_by: string
+          shared_with: string
+        }[]
+      }
+      list_friendships: {
+        Args: never
+        Returns: {
+          created_at: string
+          direction: string
+          friendship_id: string
+          other_id: string
+          profile_image: string
+          status: string
+          username: string
+        }[]
+      }
+      search_profiles: {
+        Args: { _q: string }
+        Returns: {
+          id: string
+          profile_image: string
+          relation: string
+          username: string
+        }[]
+      }
+      unfriend: { Args: { _other: string }; Returns: undefined }
+      username_available: { Args: { _username: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
