@@ -345,6 +345,10 @@ export type Database = {
     Functions: {
       are_friends: { Args: { _a: string; _b: string }; Returns: boolean }
       can_access_share: { Args: { _share_id: string }; Returns: boolean }
+      can_read_shared_canvas: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
       get_share_comments: {
         Args: { _share_id: string }
         Returns: {
