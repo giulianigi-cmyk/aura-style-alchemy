@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus, Trash2, Copy } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -77,7 +77,6 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
     setDeleting(false);
     toast.success("Outfit deleted");
   };
-
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28 bg-background">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
@@ -119,6 +118,12 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
               notes: o.notes ?? undefined,
               outfitId: o.id,
             });
+            const duplicate = () => openBuilder({
+              itemIds: o.item_ids,
+              name: `${o.name} Copy`,
+              occasion: o.occasion?.[0],
+              notes: o.notes ?? undefined,
+            });
             return (
               <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft relative">
                 <button onClick={open} className="block w-full text-left active:scale-[0.98]">
@@ -131,48 +136,10 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
                   </div>
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(o.id); }}
-                  aria-label="Delete outfit"
-                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90 backdrop-blur"
-                ><Trash2 size={14} /></button>
-                <div className="p-3 space-y-2">
-                  <button onClick={open} className="w-full text-left">
-                    <p className="font-serif italic text-sm truncate">{o.name}</p>
-                    {o.occasion?.length ? (
-                      <p className="text-[9px] uppercase tracking-widest text-muted-foreground truncate">{o.occasion.join(" · ")}</p>
-                    ) : null}
-                  </button>
-                  {confirmDelete === o.id ? (
-                    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-2 space-y-2">
-                      <p className="text-[10px] text-foreground/80 leading-snug">Delete this outfit? This cannot be undone.</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setConfirmDelete(null)}
-                          disabled={deleting}
-                          className="flex-1 h-8 rounded-full border border-border text-[9px] uppercase tracking-[0.25em] active:scale-95"
-                        >Cancel</button>
-                        <button
-                          onClick={() => deleteOutfit(o.id)}
-                          disabled={deleting}
-                          className="flex-1 h-8 rounded-full bg-destructive text-destructive-foreground text-[9px] uppercase tracking-[0.25em] active:scale-95 inline-flex items-center justify-center gap-1 disabled:opacity-60"
-                        >{deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Delete</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAssignFor(o)}
-                      className="w-full h-8 rounded-full bg-foreground text-background text-[9px] uppercase tracking-[0.25em] inline-flex items-center justify-center gap-1 active:scale-95"
-                    ><CalendarIcon size={10} /> Add to day</button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-      )}
-
-      {assignFor && (
+                  onClick={(e) => { e.stopPropagation(); duplicate(); }}
+                  aria-label="Duplicate outfit"
+                  className="absolute top-2 right-11
+                {assignFor && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setAssignFor(null)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
             <p className="font-serif italic text-lg">Assign to a date</p>
