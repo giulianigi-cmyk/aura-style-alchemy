@@ -44,7 +44,7 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
     const { data: userData } = await supabase.auth.getUser();
     const me = userData.user?.id;
     if (!me) { setSaving(false); toast.error("You are signed out"); return; }
-    const { error } = await supabase.from("profiles").update({ username: value }).eq("id", me);
+    const { error } = await supabase.from("profiles").upsert({ id: me, username: value }, { onConflict: "id" });
     setSaving(false);
     if (error) {
       if (error.code === "23505") { setAvailable(false); toast.error("Username is no longer available."); }
