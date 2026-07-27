@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus, Trash2, Copy } from "lucide-react";
+import { ArrowLeft, Heart, Sparkles, Calendar as CalendarIcon, Loader2, Plus, Trash2, Copy, Share2 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Outfit = Tables<"outfits">;
@@ -18,6 +19,7 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
   const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [shareFor, setShareFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;

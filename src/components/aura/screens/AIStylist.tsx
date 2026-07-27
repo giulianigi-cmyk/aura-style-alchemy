@@ -1,10 +1,11 @@
-import { Copy, Loader2, Sparkles } from "lucide-react";
+import { Copy, Loader2, Share2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { Outfit, WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
+import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
@@ -22,6 +23,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const [outfitCovers, setOutfitCovers] = useState<Record<string, string>>({});
   const [occasion, setOccasion] = useState<string>("Everyday");
   const [aiBusy, setAiBusy] = useState(false);
+  const [shareFor, setShareFor] = useState<string | null>(null);
 
   const load = async () => {
     if (!user) return;
@@ -178,8 +180,13 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   <button
                     onClick={(e) => { e.stopPropagation(); duplicate(); }}
                     aria-label="Duplicate outfit"
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                    className="absolute top-2 right-11 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                   ><Copy size={14} /></button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShareFor(o.id); }}
+                    aria-label="Share outfit"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                  ><Share2 size={14} /></button>
                   <button onClick={open} className="block w-full text-left">
                     <p className="mt-2 font-serif text-base">{o.name}</p>
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
@@ -190,6 +197,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           </div>
         )}
       </section>
+
+      {shareFor && <ShareOutfitSheet outfitId={shareFor} onClose={() => setShareFor(null)} />}
     </div>
   );
 }
