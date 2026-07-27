@@ -138,8 +138,56 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
                 <button
                   onClick={(e) => { e.stopPropagation(); duplicate(); }}
                   aria-label="Duplicate outfit"
-                  className="absolute top-2 right-11
-                {assignFor && (
+                  className="absolute top-2 right-20 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                ><Copy size={14} /></button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShareFor(o.id); }}
+                  aria-label="Share outfit"
+                  className="absolute top-2 right-11 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                ><Share2 size={14} /></button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(o.id); }}
+                  aria-label="Delete outfit"
+                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                ><Trash2 size={14} /></button>
+                <div className="p-3">
+                  <button onClick={open} className="block w-full text-left">
+                    <p className="font-serif text-base truncate">{o.name}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
+                  </button>
+                  <button
+                    onClick={() => setAssignFor(o)}
+                    className="mt-2 h-8 w-full rounded-full border border-border text-[10px] uppercase tracking-[0.25em] active:scale-[0.98] inline-flex items-center justify-center gap-1.5"
+                  ><CalendarIcon size={11} /> Plan</button>
+                </div>
+
+                {confirmDelete === o.id && (
+                  <div className="absolute inset-0 z-10 bg-background/90 backdrop-blur flex flex-col items-center justify-center gap-2 p-3 text-center">
+                    <p className="text-xs">Delete this outfit?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="h-8 px-4 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]"
+                      >Cancel</button>
+                      <button
+                        disabled={deleting}
+                        onClick={() => void deleteOutfit(o.id)}
+                        className="h-8 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] disabled:opacity-60"
+                      >{deleting ? "…" : "Delete"}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {shareFor && (
+        <ShareOutfitSheet outfitId={shareFor} onClose={() => setShareFor(null)} />
+      )}
+
+      {assignFor && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setAssignFor(null)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
             <p className="font-serif italic text-lg">Assign to a date</p>
