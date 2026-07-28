@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
 import { DressPreferencesSection } from "../DressPreferencesSection";
+import { USERNAME_RE } from "@/lib/community";
 
 
 const STYLES = [
@@ -268,10 +269,10 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               </div>
             </section>
           )}
-          <MyBrands />
+                    <MyBrands />
           <MySizes userId={user?.id} />
       <DressPreferencesSection userId={user?.id} />
-
+      <MyUsername userId={user?.id} />
 
 
           {/* Color analysis */}
@@ -341,6 +342,112 @@ const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean }[] = [
   { key: "dresses", label: "Dresses" },
   { key: "shoes", label: "Shoes", shoes: true },
 ];
+function MyUsername({ userId }: { userId: string | undefined }) {
+  const [username, setUsername] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const valid = USERNAME_RE.test(value);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+      if (!cancelled) {
+        setUsername((data as { username?: string | null } | null)?.username ?? null);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!editing || !valid || value === username) { setAvailable(null); return; }
+    setChecking(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("username_available", { _username: value });
+      setChecking(false);
+      setAvailable(error ? null : Boolean(data));
+    }, 400);
+    return () => { clearTimeout(t); setChecking(false); };
+  }, [value, valid, editing, username]);
+
+  const startEdit = () => { setValue(username ?? ""); setEditing(true); };
+
+  const save = async () => {
+    if (!userId) return;
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({ username: value } as never).eq("id", userId);
+    setSaving(false);
+    if (error) {
+      if (error.code === "23505") { setAvailable(false); toast.error("Username is no longer available."); }
+      else toast.error(error.message);
+      return;
+    }
+    setUsername(value);
+    setEditing(false);
+    toast.success("Username saved");
+  };
+
+  const unchanged = value === username;
+
+  return (
+    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Username</p>
+        {editing ? (
+          <button
+            onClick={() => setEditing(false)}
+            aria-label="Cancel editing username"
+            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><X size={13} /></button>
+        ) : (
+          <button
+            onClick={startEdit}
+            aria-label="Edit username"
+            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><Pencil size={13} /></button>
+        )}
+      </div>
+      {!editing ? (
+        <p className="mt-3 font-serif text-lg">{loading ? "…" : username ? `@${username}` : "Not set"}</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="yourname"
+            className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+          <p className="text-[11px] text-muted-foreground h-4">
+            {value.length === 0 ? "" :
+              !valid ? "3-20 characters: lowercase letters, numbers, underscores." :
+              unchanged ? "" :
+              checking ? "Checking…" :
+              available === true ? "Available" :
+              available === false ? "Already taken" : ""}
+          </p>
+          <button
+            onClick={() => void save()}
+            disabled={!valid || saving || (!unchanged && available !== true)}
+            className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 size={12} className="animate-spin" />}
+            Save username
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 function MySizes({ userId }: { userId: string | undefined }) {
   const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
