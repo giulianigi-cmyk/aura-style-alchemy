@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Heart, MessageCircle, Loader2, Search, UserPlus, Check, X, Trash2, Send } from "lucide-react";
 import type { Screen } from "../AuraApp";
@@ -55,7 +56,7 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
     onSaved(value);
   };
 
-  return (
+    return createPortal(
     <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur flex items-end">
       <div className="w-full bg-card rounded-t-3xl border-t border-border p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-3">
         <p className="font-serif italic text-2xl">Choose a username</p>
@@ -83,9 +84,12 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
           disabled={!valid || available !== true || saving}
           className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50"
         >{saving ? "Saving…" : "Save"}</button>
-      </div>
-    </div>
+            </div>
+    </div>,
+    document.body,
   );
+}
+
 }
 
 /* ------------------------------------------------------------------ feed */
