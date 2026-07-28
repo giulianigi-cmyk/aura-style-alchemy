@@ -350,8 +350,17 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     });
   }
 
-  const exportCanvas = useCallback(async (): Promise<{ blob: Blob; dataUrl: string } | null> => {
+    const exportCanvas = useCallback(async (): Promise<{ blob: Blob; dataUrl: string } | null> => {
     if (!canvasRef.current) return null;
+    // Deselect any active item first — otherwise its edit handles
+    // (delete/rotate/resize toolbar) get baked into the exported PNG.
+    // Two animation frames is enough for React to re-render without the
+    // selection overlay before we capture the DOM.
+    setSelectedKey(null);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    );
+
     const targetW = ratio === "1:1" ? 1080 : 1080;
     const targetH = ratio === "1:1" ? 1080 : 1920;
     const rect = canvasRef.current.getBoundingClientRect();
