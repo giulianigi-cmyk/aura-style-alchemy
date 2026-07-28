@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,7 +59,7 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
     if (!failed) onClose();
   };
 
-  return (
+    return createPortal(
     <div className="fixed inset-0 z-[60] bg-background/80 backdrop-blur flex items-end" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
@@ -107,6 +108,8 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
           </>
         )}
       </div>
-    </div>
+       </div>,
+    document.body,
   );
 }
+
