@@ -1,3 +1,4 @@
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getBrandFromUrl } from "./brand-domains";
@@ -628,6 +629,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
 // ---------- Main handler -----------------------------------------------------
 
 export const importProductFromUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const target = stripTrackingParams(new URL(data.url));
