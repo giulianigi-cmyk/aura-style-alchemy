@@ -86,13 +86,12 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
         >{saving ? "Saving…" : "Save"}</button>
             </div>
     </div>,
-    document.body,
+        document.body,
   );
 }
 
-}
-
 /* ------------------------------------------------------------------ feed */
+
 
 function FeedCard({ row, avatar, image, onChanged, meId }: {
   row: FeedRow; avatar?: string | null; image?: string | null;
