@@ -198,6 +198,13 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             <Camera size={18} />
           </button>
           <button
+            onClick={() => go("batch-scan")}
+            aria-label="Batch scan multiple photos"
+            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
+          >
+            <Images size={18} />
+
+          <button
             onClick={() => go("add")}
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
           >
