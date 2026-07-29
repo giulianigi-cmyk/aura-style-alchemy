@@ -1,3 +1,4 @@
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { fetchImageAsDataUrl } from "./fetch-image";
@@ -12,6 +13,7 @@ const InputSchema = z.object({
  *  import, so the user can swap the auto-picked photo for another shot
  *  (e.g. the flat packshot instead of the on-model image). */
 export const downloadImportImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const u = new URL(data.url);

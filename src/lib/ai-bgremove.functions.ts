@@ -1,3 +1,4 @@
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -25,6 +26,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
  * transparent PNG as a data URL.
  */
 export const removeBackground = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const key = process.env.REMOVEBG_API_KEY;
