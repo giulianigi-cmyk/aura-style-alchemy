@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      batch_scans: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          total_photos: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string
+          total_photos?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          total_photos?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       friends: {
         Row: {
           addressee_id: string
@@ -35,6 +62,39 @@ export type Database = {
           id?: string
           requester_id?: string
           status?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          data: Json
+          id: string
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          title: string
+          type: string
+          user_id?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -281,6 +341,122 @@ export type Database = {
         }
         Relationships: []
       }
+      scan_detected_items: {
+        Row: {
+          bbox: Json | null
+          category: string | null
+          colors: string[]
+          confidence: number | null
+          created_at: string
+          description: string | null
+          id: string
+          job_id: string
+          material: string[]
+          scan_id: string
+          season: string | null
+          status: string
+          subcategory: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bbox?: Json | null
+          category?: string | null
+          colors?: string[]
+          confidence?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          job_id: string
+          material?: string[]
+          scan_id: string
+          season?: string | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          bbox?: Json | null
+          category?: string | null
+          colors?: string[]
+          confidence?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          job_id?: string
+          material?: string[]
+          scan_id?: string
+          season?: string | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_detected_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scan_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_detected_items_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "batch_scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_jobs: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          image_path: string
+          scan_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          image_path: string
+          scan_id: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          image_path?: string
+          scan_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_jobs_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "batch_scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wardrobe_items: {
         Row: {
           brand: string | null
@@ -348,6 +524,27 @@ export type Database = {
       can_read_shared_canvas: {
         Args: { _object_name: string }
         Returns: boolean
+      }
+      claim_scan_jobs: {
+        Args: { _limit: number }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          image_path: string
+          scan_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scan_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_share_comments: {
         Args: { _share_id: string }

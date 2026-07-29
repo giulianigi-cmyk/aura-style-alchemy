@@ -10,6 +10,8 @@ import { AddItem } from "./screens/AddItem";
 import { AIStylist } from "./screens/AIStylist";
 import { StylistChat } from "./screens/StylistChat";
 import { OutfitScan } from "./screens/OutfitScan";
+import { BatchScan } from "./screens/BatchScan";
+import { BatchReview } from "./screens/BatchReview";
 import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
 import { ColorLab } from "./screens/ColorLab";
@@ -29,7 +31,7 @@ import { useProfile } from "@/hooks/use-profile";
 export type Screen =
     | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
-      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan";
+      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review";
 
 
 
@@ -46,6 +48,7 @@ function Inner() {
   const { profile, loading: profileLoading } = useProfile();
   const [screen, setScreen] = useState<Screen>("splash");
   const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
+  const [reviewScanId, setReviewScanId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
@@ -59,6 +62,11 @@ function Inner() {
       setBuilderInit(null);
     }
     setScreen(s);
+  };
+
+  const openBatchReview = (scanId: string) => {
+    setReviewScanId(scanId);
+    setScreen("batch-review");
   };
 
   const openBuilder = (init: BuilderInit) => {
@@ -137,6 +145,8 @@ function Inner() {
           {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "stylist-chat" && <StylistChat go={go} />}
           {screen === "outfit-scan" && <OutfitScan go={go} />}
+          {screen === "batch-scan" && <BatchScan go={go} openReview={openBatchReview} />}
+          {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
           {screen === "planner" && <Planner go={go} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}

@@ -4,7 +4,7 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
@@ -197,6 +197,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           >
             <Camera size={18} />
           </button>
+          <button
+            onClick={() => go("batch-scan")}
+            aria-label="Batch scan multiple photos"
+            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
+          >
+            <Images size={18} />
+          </button>
+
+
           <button
             onClick={() => go("add")}
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
