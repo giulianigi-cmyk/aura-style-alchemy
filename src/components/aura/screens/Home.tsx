@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Bell, Search, Sparkles, TrendingUp, MapPin, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
-import outfit1 from "@/assets/outfit-1.jpg";
-import outfit2 from "@/assets/outfit-2.jpg";
-import outfit3 from "@/assets/outfit-3.jpg";
 import { useProfile } from "@/hooks/use-profile";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
@@ -12,12 +10,19 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { loadDressRules } from "@/lib/dress-preferences";
+import { suggestDailyLooks, type DailyLook } from "@/lib/suggest-daily-looks.functions";
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function Home({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
+  const generateLooks = useServerFn(suggestDailyLooks);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualCity, setManualCity] = useState("");
   const [autoTried, setAutoTried] = useState(false);
@@ -26,6 +31,12 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   });
   const [recent, setRecent] = useState<WardrobeItem[]>([]);
   const [recentSigned, setRecentSigned] = useState<Record<string, string>>({});
+  const [allItems, setAllItems] = useState<WardrobeItem[]>([]);
+  const [todayLook, setTodayLook] = useState<DailyLook | null>(null);
+  const [curatedLooks, setCuratedLooks] = useState<DailyLook[]>([]);
+  const [looksSigned, setLooksSigned] = useState<Record<string, string>>({});
+  const [looksLoading, setLooksLoading] = useState(true);
+  const [looksError, setLooksError] = useState<string | null>(null);
 
   // Load real stats + recent wardrobe items
   useEffect(() => {
@@ -40,6 +51,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         supabase.from("outfits").select("id", { count: "exact", head: true }).eq("user_id", user.id),
       ]);
       const items = (itemsRes.data ?? []) as WardrobeItem[];
+      setAllItems(items);
       const pieces = itemsRes.count ?? items.length;
       const worn = items.filter((i) => (i.worn_count ?? 0) > 0).length;
       setStats({
@@ -53,8 +65,154 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     })();
   }, [user]);
 
+  // Real AI-generated daily looks, cached once per day in home_suggestions —
+  // but invalidated immediately (not just by date) whenever the wardrobe
+  // itself changes, via a fingerprint of item count + latest edit time.
+  useEffect(() => {
+    if (!user || allItems.length === 0) return;
+    void (async () => {
+      setLooksLoading(true);
+      setLooksError(null);
+      let today_: DailyLook | null = null;
+      let curated_: DailyLook[] = [];
 
+      try {
+        const today = todayISO();
 
+        // Fingerprint: item count (catches adds/deletes) + the most recent
+        // updated_at across all items (catches edits to an existing item).
+        // Reuses wardrobe_items.updated_at rather than a separate versioning
+        // system — this IS the cache's invalidation signal, not a copy of
+        // the wardrobe.
+        const latestEdit = allItems.reduce((max, it) => {
+          const t = (it as unknown as { updated_at?: string }).updated_at ?? it.created_at;
+          return t && t > max ? t : max;
+        }, "");
+        const fingerprint = `${allItems.length}:${latestEdit}`;
+
+        type CachedRow = {
+          date: string; wardrobe_fingerprint: string; today_item_ids: string[];
+          today_occasion: string | null; today_explanation: string | null; curated: DailyLook[] | null;
+        };
+        let cachedRow: CachedRow | null = null;
+        try {
+          const { data: cached } = await (supabase.from("home_suggestions" as never) as any)
+            .select("*").eq("user_id", user.id).maybeSingle();
+          cachedRow = cached as CachedRow | null;
+        } catch (err) {
+          console.error("[AURA home] failed to read suggestion cache", err);
+        }
+
+        const realIds = new Set(allItems.map((it) => it.id));
+        // Fully fresh: same day, wardrobe unchanged since generation, and
+        // every referenced item still exists.
+        const cacheStillValid = (row: CachedRow | null) => {
+          if (!row || row.date !== today || row.wardrobe_fingerprint !== fingerprint) return false;
+          const ids = [...(row.today_item_ids ?? []), ...((row.curated ?? []).flatMap((l) => l.item_ids))];
+          return ids.length > 0 && ids.every((id) => realIds.has(id));
+        };
+        // Stale (different day or wardrobe has since changed) but every
+        // referenced item still genuinely exists — good enough as a last
+        // resort if a fresh generation attempt fails, rather than showing
+        // nothing.
+        const cacheItemsStillReal = (row: CachedRow | null) => {
+          if (!row) return false;
+          const ids = [...(row.today_item_ids ?? []), ...((row.curated ?? []).flatMap((l) => l.item_ids))];
+          return ids.length > 0 && ids.every((id) => realIds.has(id));
+        };
+        const useRow = (row: CachedRow) => {
+          today_ = { item_ids: row.today_item_ids ?? [], occasion: row.today_occasion ?? "", explanation: row.today_explanation ?? "" };
+          curated_ = row.curated ?? [];
+        };
+
+        if (cacheStillValid(cachedRow)) {
+          useRow(cachedRow!);
+        } else if (allItems.length >= 3) {
+          try {
+            const dressRules = await loadDressRules(user.id);
+            const res = await generateLooks({
+              data: {
+                temperature: weather?.current.temperature ?? null,
+                condition: weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null,
+                dressRules,
+                items: allItems.map((it) => ({
+                  id: it.id, category: it.category, subcategory: it.subcategory,
+                  colors: it.colors ?? (it.color ? [it.color] : []),
+                  style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
+                  season: it.season, brand: it.brand,
+                })),
+              },
+            });
+            if (res.ok) {
+              today_ = res.result.today;
+              curated_ = res.result.curated;
+              try {
+                await (supabase.from("home_suggestions" as never) as any).upsert({
+                  user_id: user.id,
+                  date: today,
+                  wardrobe_fingerprint: fingerprint,
+                  today_item_ids: today_.item_ids,
+                  today_occasion: today_.occasion,
+                  today_explanation: today_.explanation,
+                  curated: curated_,
+                  generated_at: new Date().toISOString(),
+                } as never);
+              } catch (err) {
+                // Non-fatal: we still show the freshly generated (real,
+                // validated) result even if persisting the cache row failed.
+                console.error("[AURA home] failed to save suggestion cache", err);
+              }
+            } else if (cacheItemsStillReal(cachedRow)) {
+              useRow(cachedRow!);
+            } else {
+              setLooksError(res.error ?? "Couldn't generate today's looks.");
+            }
+          } catch (err) {
+            console.error("[AURA home] look generation failed", err);
+            if (cacheItemsStillReal(cachedRow)) {
+              useRow(cachedRow!);
+            } else {
+              setLooksError("Couldn't generate today's looks.");
+            }
+          }
+        } else if (cacheItemsStillReal(cachedRow)) {
+          // Wardrobe currently too small to generate fresh, but an older
+          // cache with still-real items exists — use it rather than
+          // nothing.
+          useRow(cachedRow!);
+        }
+      } catch (err) {
+        console.error("[AURA home] daily looks effect failed", err);
+        setLooksError("Couldn't load today's looks.");
+      } finally {
+        setTodayLook(today_);
+        setCuratedLooks(curated_);
+        try {
+          const ids = new Set<string>();
+          if (today_) (today_ as DailyLook).item_ids.forEach((id) => ids.add(id));
+          curated_.forEach((l) => l.item_ids.forEach((id) => ids.add(id)));
+          const referenced = allItems.filter((it) => ids.has(it.id));
+          setLooksSigned(await resolveWardrobeUrls(referenced));
+        } catch (err) {
+          console.error("[AURA home] failed to sign look thumbnails", err);
+        }
+        setLooksLoading(false);
+      }
+    })();
+  }, [user, allItems, weather]);
+
+  const itemById = useMemo(() => {
+    const map: Record<string, WardrobeItem> = {};
+    allItems.forEach((it) => { map[it.id] = it; });
+    return map;
+  }, [allItems]);
+
+  const thumbFor = (id: string): string | null => {
+    const it = itemById[id];
+    if (!it) return null;
+    const path = toStoragePath(it.image_url);
+    return path ? looksSigned[path] ?? null : null;
+  };
 
   // Try geolocation once on first visit if no location stored yet.
   useEffect(() => {
@@ -131,31 +289,49 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         )}
       </div>
 
-      {/* Outfit of the day - hero */}
+      {/* Today's edit — a real AI-composed look from the user's own wardrobe,
+          weather-aware, cached once per day (see home_suggestions). */}
       <section className="px-6 mt-8 animate-fade-up">
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="font-serif text-2xl italic">Today's edit</h2>
-          <button onClick={() => go("ai")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Regenerate</button>
+          <button onClick={() => go("ai")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Style a look</button>
         </div>
-        <button onClick={() => go("ai")} className="block w-full text-left">
-          <div className="relative overflow-hidden rounded-[2rem] shadow-luxe">
-            <img src={outfit1} alt="Today's outfit" className="aspect-[4/5] w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-            <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5">
-              <Sparkles size={11} />
-              <span className="text-[10px] uppercase tracking-widest">AI styled</span>
-            </div>
-            <div className="absolute bottom-5 left-5 right-5 text-warm-white">
-              <p className="text-[10px] uppercase tracking-[0.3em] opacity-80">For the day ahead</p>
-              <p className="font-serif text-2xl mt-1">Quiet luxury, soft tailoring</p>
-              <div className="mt-3 flex gap-1.5">
-                {["beige", "cream", "taupe"].map(c => (
-                  <span key={c} className="text-[10px] uppercase tracking-widest rounded-full bg-white/15 backdrop-blur px-2.5 py-0.5">{c}</span>
-                ))}
-              </div>
-            </div>
+        {looksLoading ? (
+          <div className="rounded-[2rem] bg-secondary/40 aspect-[4/5] flex items-center justify-center">
+            <Loader2 className="animate-spin text-muted-foreground" />
           </div>
-        </button>
+        ) : todayLook && todayLook.item_ids.length > 0 ? (
+          <button onClick={() => go("ai")} className="block w-full text-left">
+            <div className="relative overflow-hidden rounded-[2rem] shadow-luxe bg-[#FFFFFF] p-4">
+              <div className="grid grid-cols-2 gap-2">
+                {todayLook.item_ids.slice(0, 4).map((id) => {
+                  const src = thumbFor(id);
+                  return (
+                    <div key={id} className="aspect-square rounded-xl overflow-hidden bg-secondary/30 flex items-center justify-center">
+                      {src ? <img src={src} alt="" className="h-full w-full object-contain p-1.5" /> : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5">
+                <Sparkles size={11} />
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{todayLook.occasion || "Today"}</span>
+              </div>
+              <p className="mt-2 text-sm text-foreground/80 leading-relaxed">{todayLook.explanation}</p>
+            </div>
+          </button>
+        ) : (
+          <div className="rounded-[2rem] bg-secondary/40 p-6 text-center">
+            <p className="font-serif text-lg italic">
+              {looksError ?? (stats.pieces < 3 ? "Add a few more pieces first" : "No look yet")}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {stats.pieces < 3
+                ? "AURA needs at least 3 wardrobe pieces to compose a real outfit."
+                : "Tap Style a look to build one with AI."}
+            </p>
+          </div>
+        )}
       </section>
 
     {/* Quick nav */}
@@ -187,7 +363,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         {[
           { n: String(stats.pieces), l: "Pieces", to: "wardrobe" as Screen },
           { n: String(stats.outfits), l: "Outfits", to: "saved-outfits" as Screen },
-          { n: `${stats.wearRate}%`, l: "Wear rate", to: null as Screen | null },
+          { n: `${stats.wearRate}%`, l: "Wear rate", to: "insights" as Screen | null },
         ].map(s => (
           <button
             key={s.l}
@@ -201,27 +377,45 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         ))}
       </section>
 
-      {/* Suggested for you */}
+      {/* Curated for you — real AI-composed looks for different real
+          occasions, from the user's own wardrobe. Same cache as Today's edit. */}
       <section className="mt-10 animate-fade-up" style={{ animationDelay: "0.1s" }}>
         <div className="flex items-baseline justify-between px-6 mb-3">
           <h2 className="font-serif text-2xl italic">Curated for you</h2>
-          <button onClick={() => go("wardrobe")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">See all</button>
+          <button onClick={() => go("saved-outfits")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">See all</button>
         </div>
-        <div className="flex gap-3 overflow-x-auto no-scrollbar px-6">
-          {[
-            { img: outfit2, t: "Evening" },
-            { img: outfit3, t: "Office" },
-            { img: outfit1, t: "Weekend" },
-          ].map((c, i) => (
-            <button key={i} className="shrink-0 w-44 text-left active:scale-[0.98] transition">
-              <div className="overflow-hidden rounded-2xl shadow-soft">
-                <img src={c.img} alt="" className="aspect-[3/4] w-full object-cover" loading="lazy" />
-              </div>
-              <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{c.t}</p>
-              <p className="font-serif text-base">Look {i + 1}</p>
-            </button>
-          ))}
-        </div>
+        {looksLoading ? (
+          <div className="mx-6 rounded-2xl bg-secondary/40 h-44 flex items-center justify-center">
+            <Loader2 className="animate-spin text-muted-foreground" size={18} />
+          </div>
+        ) : curatedLooks.length === 0 ? (
+          <div className="mx-6 rounded-2xl bg-secondary/40 p-5">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {stats.pieces < 3
+                ? "Add a few more wardrobe pieces and AURA will curate real looks from them."
+                : "Couldn't curate looks right now — try again shortly."}
+            </p>
+          </div>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto no-scrollbar px-6">
+            {curatedLooks.map((look, i) => (
+              <button key={i} onClick={() => go("ai")} className="shrink-0 w-40 text-left active:scale-[0.98] transition">
+                <div className="overflow-hidden rounded-2xl shadow-soft aspect-[3/4] bg-[#FFFFFF] p-2 grid grid-cols-2 gap-1.5">
+                  {look.item_ids.slice(0, 4).map((id) => {
+                    const src = thumbFor(id);
+                    return (
+                      <div key={id} className="rounded-lg overflow-hidden bg-secondary/30 flex items-center justify-center">
+                        {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" /> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{look.occasion || "Look"}</p>
+                <p className="text-xs text-muted-foreground truncate">{look.explanation}</p>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* From your wardrobe — real signed items */}
