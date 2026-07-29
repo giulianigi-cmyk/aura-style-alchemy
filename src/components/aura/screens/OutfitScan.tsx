@@ -314,88 +314,15 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
               );
             }
 
-            // confirmed-new: full editable card
-            const subs = subcategoriesFor(it.category);
+            // confirmed-new: full editable card (shared with batch review)
             return (
-              <div key={it.key} className="rounded-2xl border border-border bg-card p-4 relative">
-                <button
-                  onClick={() => removeItem(it.key)}
-                  aria-label="Remove item"
-                  className="absolute top-3 right-3 h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-                ><Trash2 size={14} /></button>
-
-                <div className="h-24 w-24 rounded-xl overflow-hidden mx-auto" style={{ background: "#FFFFFF" }}>
-                  <img src={it.imageDataUrl} alt="" className="h-full w-full object-contain p-1.5" />
-                </div>
-                <p className="mt-2 text-center text-xs text-muted-foreground italic">{it.description}</p>
-
-                <div className="mt-4">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {ITEM_CATEGORIES.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => updateItem(it.key, { category: c, subcategory: "" })}
-                        className={`rounded-full px-3 py-1.5 text-xs ${it.category === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-                      >{c}</button>
-                    ))}
-                  </div>
-                </div>
-
-                {subs.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Type</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {subs.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => updateItem(it.key, { subcategory: it.subcategory === s ? "" : s })}
-                          className={`rounded-full px-3 py-1.5 text-xs ${it.subcategory === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-                        >{s}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-3">
-                  <ColorPicker value={it.colors} onChange={(next) => updateItem(it.key, { colors: next })} />
-                </div>
-
-                <div className="mt-3">
-                  <MaterialCombobox
-                    label="Material"
-                    options={MATERIAL_OPTIONS}
-                    values={it.materials}
-                    onChange={(v) => updateItem(it.key, { materials: v })}
-                  />
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {SEASON_OPTIONS.map((s) => {
-                      const on = it.seasons.includes(s);
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => updateItem(it.key, { seasons: on ? it.seasons.filter((x) => x !== s) : [...it.seasons, s] })}
-                          className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-                        >{s}</button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Brand</p>
-                  <input
-                    value={it.brand}
-                    onChange={(e) => updateItem(it.key, { brand: e.target.value })}
-                    placeholder="leave empty if unknown"
-                    className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
+              <DetectedItemCard
+                key={it.key}
+                item={it}
+                imageUrl={it.imageDataUrl}
+                onChange={(patch) => updateItem(it.key, patch)}
+                onRemove={() => removeItem(it.key)}
+              />
             );
           })}
 
