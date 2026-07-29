@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Sparkles, ArrowLeft } from "lucide-react";
+import { Sparkles, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -9,6 +9,7 @@ export function Auth() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -79,10 +80,20 @@ export function Auth() {
                   </button>
                 )}
               </div>
-              <input
-                type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
-                className="mt-1 w-full bg-transparent border-b border-border py-2 outline-none focus:border-foreground transition"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"} required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
+                  className="mt-1 w-full bg-transparent border-b border-border py-2 pr-8 outline-none focus:border-foreground transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-0 top-2.5 text-muted-foreground active:scale-90"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
           )}
 
