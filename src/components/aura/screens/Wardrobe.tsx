@@ -203,6 +203,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
           >
             <Images size={18} />
+          </button>
+
 
           <button
             onClick={() => go("add")}
