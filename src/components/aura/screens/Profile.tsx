@@ -321,7 +321,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         </>
       )}
 
-      <div className="px-6 mt-6">
+            <div className="px-6 mt-6">
         <p className="text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">{user?.email}</p>
         <button
           onClick={signOut}
@@ -329,7 +329,14 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         >
           <LogOut size={14} /> Sign out
         </button>
+        <button
+          onClick={() => _go("storage-debug")}
+          className="w-full h-10 mt-3 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
+        >
+          Storage debug (temporary)
+        </button>
       </div>
+
 
       <p className="text-center mt-8 text-[9px] uppercase tracking-[0.4em] text-muted-foreground">aura · v 1.0</p>
     </div>
