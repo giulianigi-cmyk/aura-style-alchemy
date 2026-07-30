@@ -34,7 +34,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
-  const [items, setItems] = useState<WardrobeItem[]>([]);
+    const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [scanMenuOpen, setScanMenuOpen] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState("All");
@@ -191,20 +192,13 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         </div>
                 <div className="flex gap-2">
           <button
-            onClick={() => go("outfit-scan")}
-            aria-label="Scan an outfit photo"
-            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
+            onClick={() => setScanMenuOpen(true)}
+            aria-label="Scan photos"
+            className="h-12 px-4 rounded-full border border-border flex items-center gap-1.5 active:scale-90 transition"
           >
-            <Camera size={18} />
+            <Camera size={16} />
+            <span className="text-[10px] uppercase tracking-widest">Scan</span>
           </button>
-          <button
-            onClick={() => go("batch-scan")}
-            aria-label="Batch scan multiple photos"
-            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition"
-          >
-            <Images size={18} />
-          </button>
-
 
           <button
             onClick={() => go("add")}
@@ -214,6 +208,40 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           </button>
         </div>
       </header>
+
+      {scanMenuOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-background/80 backdrop-blur flex items-end"
+          onClick={() => setScanMenuOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-2"
+          >
+            <p className="font-serif italic text-lg mb-1">Scan photos</p>
+            <button
+              onClick={() => { setScanMenuOpen(false); go("outfit-scan"); }}
+              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
+            >
+              <Camera size={18} />
+              <div>
+                <p className="text-sm font-medium">Scan one outfit</p>
+                <p className="text-xs text-muted-foreground">One photo, multiple items detected at once</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setScanMenuOpen(false); go("batch-scan"); }}
+              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
+            >
+              <Images size={18} />
+              <div>
+                <p className="text-sm font-medium">Batch scan photos</p>
+                <p className="text-xs text-muted-foreground">Up to 150 photos at once, processed in the background</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* Weather / season banner */}
