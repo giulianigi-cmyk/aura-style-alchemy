@@ -17,10 +17,18 @@ export function StorageDebug({ go }: { go: (s: Screen) => void }) {
 
   useEffect(() => {
     if (!user) return;
-    void (async () => {
+        void (async () => {
       const results: Check[] = [];
 
+      // 0. Which Supabase project is this build actually talking to?
+      results.push({
+        label: "Connected Supabase project",
+        status: "ok",
+        detail: (import.meta as { env?: { VITE_SUPABASE_URL?: string } }).env?.VITE_SUPABASE_URL || "VITE_SUPABASE_URL is empty/undefined",
+      });
+
       // 1. Session sanity check
+
       const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
       results.push({
         label: "Auth session",
