@@ -155,6 +155,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         ) : (
           <h1 className="font-serif text-3xl mt-3">{displayName}</h1>
         )}
+        <MyUsername userId={user?.id} />
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-1">
           {meta || "Tap edit to complete profile"}
         </p>
@@ -272,8 +273,6 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                     <MyBrands />
           <MySizes userId={user?.id} />
       <DressPreferencesSection userId={user?.id} />
-      <MyUsername userId={user?.id} />
-
 
           {/* Color analysis */}
           <button
@@ -398,58 +397,57 @@ function MyUsername({ userId }: { userId: string | undefined }) {
   const unchanged = value === username;
 
   return (
-    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Username</p>
-        {editing ? (
-          <button
-            onClick={() => setEditing(false)}
-            aria-label="Cancel editing username"
-            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><X size={13} /></button>
-        ) : (
-          <button
-            onClick={startEdit}
-            aria-label="Edit username"
-            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><Pencil size={13} /></button>
-        )}
-      </div>
+    <div className="mt-1">
       {!editing ? (
-        <p className="mt-3 font-serif text-lg">{loading ? "…" : username ? `@${username}` : "Not set"}</p>
+        <button
+          onClick={startEdit}
+          className="flex items-center justify-center gap-1.5 mx-auto active:opacity-70 transition"
+        >
+          <span className="font-serif italic text-sm text-muted-foreground">
+            {loading ? "" : username ? `@${username}` : "Set a username"}
+          </span>
+          <Pencil size={11} className="text-muted-foreground" />
+        </button>
       ) : (
-        <div className="mt-3 space-y-2">
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value.toLowerCase().replace(/\s+/g, ""))}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="yourname"
-            className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <p className="text-[11px] text-muted-foreground h-4">
+        <div className="flex flex-col items-center gap-1.5 mt-1">
+          <div className="flex items-center gap-1.5">
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="username"
+              autoFocus
+              className="bg-secondary/60 rounded-full px-3 py-1 text-xs outline-none placeholder:text-muted-foreground w-32 text-center"
+            />
+            <button
+              onClick={() => void save()}
+              disabled={!valid || saving || (!unchanged && available !== true)}
+              aria-label="Save username"
+              className="h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 disabled:opacity-40"
+            >
+              {saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              aria-label="Cancel"
+              className="h-6 w-6 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+            ><X size={10} /></button>
+          </div>
+          <p className="text-[10px] text-muted-foreground h-3">
             {value.length === 0 ? "" :
-              !valid ? "3-20 characters: lowercase letters, numbers, underscores." :
+              !valid ? "3-20 chars: lowercase, numbers, underscores" :
               unchanged ? "" :
               checking ? "Checking…" :
               available === true ? "Available" :
               available === false ? "Already taken" : ""}
           </p>
-          <button
-            onClick={() => void save()}
-            disabled={!valid || saving || (!unchanged && available !== true)}
-            className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {saving && <Loader2 size={12} className="animate-spin" />}
-            Save username
-          </button>
         </div>
       )}
-    </section>
+    </div>
   );
 }
-
 
 function MySizes({ userId }: { userId: string | undefined }) {
   const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
