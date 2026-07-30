@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,12 +8,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { DetectedItemCard, type DetectedItemDraft } from "@/components/aura/DetectedItemCard";
 import { confirmDetectedItems, listDetectedItems, rejectDetectedItem } from "@/lib/batch-scan.functions";
 import type { BBox } from "@/lib/outfit-detect-types";
+import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
+import type { WardrobeItem } from "@/lib/aura-types";
 
 type Draft = DetectedItemDraft & {
   id: string;
   jobId: string;
   bbox: BBox | null;
   cropUrl: string | null;
+  dedupe: DedupeResult;
 };
 
 async function cropFromUrl(src: string, bbox: BBox | null): Promise<string | null> {
@@ -64,14 +67,20 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     (async () => {
       setLoading(true);
       try {
-        const res = (await load({ data: { scanId } })) as unknown as {
-          items: Array<{
-            id: string; job_id: string; category: string | null; subcategory: string | null;
-            colors: string[] | null; material: string[] | null; season: string | null;
-            description: string | null; bbox: BBox | null;
-          }>;
-          jobs: Array<{ id: string; image_path: string }>;
-        };
+        const [res, wardrobeRes] = await Promise.all([
+          load({ data: { scanId } }) as unknown as Promise<{
+            items: Array<{
+              id: string; job_id: string; category: string | null; subcategory: string | null;
+              colors: string[] | null; material: string[] | null; season: string | null;
+              description: string | null; bbox: BBox | null;
+            }>;
+            jobs: Array<{ id: string; image_path: string }>;
+          }>,
+          user
+            ? supabase.from("wardrobe_items").select("*").eq("user_id", user.id)
+            : Promise.resolve({ data: [] as WardrobeItem[] }),
+        ]);
+        const wardrobe = (wardrobeRes.data ?? []) as WardrobeItem[];
 
         const pathById = new Map(res.jobs.map((j) => [j.id, j.image_path]));
         const signed = new Map<string, string>();
@@ -80,7 +89,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           if (data?.signedUrl) signed.set(j.image_path, data.signedUrl);
         }
 
-                const built: Draft[] = [];
+        const built: Draft[] = [];
         for (const it of res.items) {
           const path = pathById.get(it.job_id);
           const src = path ? signed.get(path) : undefined;
@@ -89,24 +98,31 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           // the item — losing a real detection is worse than an uncropped
           // preview.
           const cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
+          const category = it.category ?? "";
+          const colors = it.colors ?? [];
+          const dedupe = findBestMatch(
+            { category, subcategory: it.subcategory ?? undefined, colors },
+            wardrobe,
+          );
           built.push({
             id: it.id,
             jobId: it.job_id,
             bbox: it.bbox,
             cropUrl,
-            category: it.category ?? "",
+            category,
             subcategory: it.subcategory ?? "",
-            colors: it.colors ?? [],
+            colors,
             materials: it.material ?? [],
             seasons: it.season ? [it.season] : [],
             brand: "",
             description: it.description ?? "",
+            dedupe,
           });
         }
         if (!cancelled) setDrafts(built);
       } catch (e) {
         console.error("[AURA batch-review] load failed", e);
-        toast.error("Could not load this batch.");
+        toast.error("Couldn't load this batch.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -127,8 +143,15 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     }
   };
 
+  // Certain duplicates (score >= 0.9, same as the single-photo Outfit Scan
+  // flow) are excluded from what gets added — no point creating a second
+  // wardrobe row for something already there. "Maybe" duplicates are just
+  // flagged with a badge; the person decides.
+  const toSave = drafts.filter((d) => d.dedupe.verdict !== "certain");
+  const skippedCount = drafts.length - toSave.length;
+
   const saveAll = async () => {
-    if (!user || drafts.length === 0) return;
+    if (!user || toSave.length === 0) return;
     setSaving(true);
     try {
       const payload: Array<{
@@ -136,8 +159,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         brand: string; colors: string[]; material: string[]; season: string | null;
       }> = [];
 
-      for (let i = 0; i < drafts.length; i++) {
-        const d = drafts[i];
+      for (let i = 0; i < toSave.length; i++) {
+        const d = toSave[i];
         if (!d.cropUrl) continue;
         const path = `${user.id}/batch-item-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.png`;
         const file = await dataUrlToFile(d.cropUrl, "item.png");
@@ -162,12 +185,29 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         return;
       }
 
-      const res = (await confirm({ data: { items: payload } })) as unknown as { confirmed: number };
-      toast.success(`Added ${res.confirmed} piece${res.confirmed === 1 ? "" : "s"} to your closet`);
-      go("wardrobe");
+      const res = (await confirm({ data: { items: payload } })) as unknown as {
+        confirmed: number;
+        results: { id: string; ok: boolean; error?: string }[];
+      };
+
+      if (res.confirmed > 0) {
+        const dupNote = skippedCount ? ` (${skippedCount} skipped as duplicates already in your closet)` : "";
+        toast.success(`Added ${res.confirmed} piece${res.confirmed === 1 ? "" : "s"} to your closet${dupNote}`);
+      }
+      const failedItems = res.results.filter((r) => !r.ok);
+      if (failedItems.length) {
+        // Surface the REAL reason instead of hiding it behind a generic
+        // message — this is what actually tells us why something failed.
+        const reasons = Array.from(new Set(failedItems.map((r) => r.error || "unknown error")));
+        console.error("[AURA batch-review] items not confirmed:", failedItems);
+        toast.error(
+          `${failedItems.length} item${failedItems.length === 1 ? "" : "s"} not saved: ${reasons.join("; ")}`,
+        );
+      }
+      if (res.confirmed > 0) go("wardrobe");
     } catch (e) {
       console.error("[AURA batch-review] save failed", e);
-      toast.error("Some items could not be saved.");
+      toast.error(e instanceof Error ? e.message : "Some items could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -205,23 +245,35 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           </p>
 
           {drafts.map((d) => (
-            <DetectedItemCard
-              key={d.id}
-              item={d}
-              imageUrl={d.cropUrl}
-              onChange={(patch) => update(d.id, patch)}
-              onRemove={() => discard(d.id)}
-            />
+            <div key={d.id} className="relative">
+              {d.dedupe.verdict !== "new" && (
+                <div className={`mb-1.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] uppercase tracking-widest ${
+                  d.dedupe.verdict === "certain" ? "bg-secondary/70 text-muted-foreground" : "bg-amber-100 text-amber-800"
+                }`}>
+                  <AlertTriangle size={11} />
+                  {d.dedupe.verdict === "certain"
+                    ? "Already in your closet — won't be added"
+                    : "Looks similar to something you own"}
+                </div>
+              )}
+              <DetectedItemCard
+                item={d}
+                imageUrl={d.cropUrl}
+                onChange={(patch) => update(d.id, patch)}
+                onRemove={() => discard(d.id)}
+              />
+            </div>
           ))}
 
           <div className="pt-2 pb-4">
             <button
               onClick={saveAll}
-              disabled={saving}
+              disabled={saving || toSave.length === 0}
               className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              Add {drafts.length} item{drafts.length === 1 ? "" : "s"}
+              Add {toSave.length} item{toSave.length === 1 ? "" : "s"}
+              {skippedCount ? ` (${skippedCount} duplicate${skippedCount === 1 ? "" : "s"} skipped)` : ""}
             </button>
           </div>
         </div>
