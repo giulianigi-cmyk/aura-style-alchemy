@@ -80,11 +80,15 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           if (data?.signedUrl) signed.set(j.image_path, data.signedUrl);
         }
 
-        const built: Draft[] = [];
+                const built: Draft[] = [];
         for (const it of res.items) {
           const path = pathById.get(it.job_id);
           const src = path ? signed.get(path) : undefined;
-          const cropUrl = src ? await cropFromUrl(src, it.bbox) : null;
+          // If the crop fails (e.g. a canvas/CORS restriction on the signed
+          // URL), fall back to the full photo rather than silently dropping
+          // the item — losing a real detection is worse than an uncropped
+          // preview.
+          const cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
           built.push({
             id: it.id,
             jobId: it.job_id,
