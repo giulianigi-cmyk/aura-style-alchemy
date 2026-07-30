@@ -78,8 +78,8 @@ export const rejectDetectedItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => DetectedIdSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("scan_detected_items").update({ status: "rejected" }).eq("id", data.id);
+        const { error } = await supabaseAdmin
+      .from("scan_detected_items").update({ status: "rejected" }).eq("id", data.id).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
@@ -110,8 +110,8 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
         } as never);
         if (insErr) throw new Error(insErr.message);
 
-        const { error: updErr } = await supabase
-          .from("scan_detected_items").update({ status: "confirmed" }).eq("id", it.id);
+             const { error: updErr } = await supabaseAdmin
+          .from("scan_detected_items").update({ status: "confirmed" }).eq("id", it.id).eq("user_id", userId);
         if (updErr) throw new Error(updErr.message);
 
         results.push({ id: it.id, ok: true });
