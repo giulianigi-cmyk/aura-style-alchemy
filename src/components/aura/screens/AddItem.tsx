@@ -1,4 +1,4 @@
-import { X, Camera, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon } from "lucide-react";
+import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -466,7 +466,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
-      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            <input ref={fileRef} type="file" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       {step === "capture" ? (
         <div className="flex-1 flex flex-col px-6 pb-10">
@@ -477,26 +477,18 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           >
             <div className="absolute inset-0 grain opacity-30" />
             <div className="absolute inset-8 border border-white/20 rounded-2xl" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white/60">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white/60">
               <Sparkles size={28} className="mx-auto animate-float" />
               <p className="mt-3 text-[10px] uppercase tracking-[0.35em]">Add a garment</p>
-              <p className="text-[10px] uppercase tracking-[0.35em] mt-1 opacity-60">camera · gallery · upload</p>
+              <p className="text-[10px] uppercase tracking-[0.35em] mt-1 opacity-60">tap to take a photo</p>
             </div>
-            <div className="absolute bottom-5 left-0 right-0 flex items-center justify-around">
-              <button onClick={() => galleryRef.current?.click()} className="text-white/70 flex flex-col items-center gap-1">
-                <ImageIcon size={22} />
-                <span className="text-[8px] uppercase tracking-widest">Gallery</span>
-              </button>
+            <div className="absolute bottom-5 left-0 right-0 flex items-center justify-center">
               <button
                 onClick={() => cameraRef.current?.click()}
                 className="h-18 w-18 rounded-full border-4 border-white p-1 active:scale-90 transition"
                 aria-label="Take photo"
               >
                 <div className="h-14 w-14 rounded-full bg-white" />
-              </button>
-              <button onClick={() => cameraRef.current?.click()} className="text-white/70 flex flex-col items-center gap-1">
-                <Camera size={20} />
-                <span className="text-[8px] uppercase tracking-widest">Camera</span>
               </button>
             </div>
           </div>
@@ -506,15 +498,15 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               onClick={() => galleryRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
-              <ImageIcon size={16} />
-              <span className="text-[10px] uppercase tracking-widest">Gallery</span>
+                            <ImageIcon size={16} />
+              <span className="text-[10px] uppercase tracking-widest">Photo library</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
-              <Upload size={16} />
-              <span className="text-[10px] uppercase tracking-widest">Upload</span>
+                            <Upload size={16} />
+              <span className="text-[10px] uppercase tracking-widest">Choose file</span>
             </button>
             <button
               onClick={() => setStep("url")}
