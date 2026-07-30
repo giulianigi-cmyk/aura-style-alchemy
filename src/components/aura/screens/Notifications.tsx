@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Bell, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { markNotificationsRead } from "@/lib/notifications.functions";
 
 type Notification = {
   id: string;
@@ -15,6 +17,7 @@ type Notification = {
 
 export function Notifications({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
+  const markRead = useServerFn(markNotificationsRead);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,9 +35,10 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
         setItems((data ?? []) as Notification[]);
         setLoading(false);
       }
-      const unread = (data ?? []).filter((n) => !n.read_at).map((n) => n.id);
+            const unread = (data ?? []).filter((n) => !n.read_at).map((n) => n.id);
       if (unread.length) {
-        await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", unread);
+        try { await markRead({ data: { ids: unread } }); }
+        catch (e) { console.error("[AURA notifications] mark read failed", e); }
       }
     })();
     return () => { cancelled = true; };
