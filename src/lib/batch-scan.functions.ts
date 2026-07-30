@@ -78,7 +78,17 @@ export const rejectDetectedItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => DetectedIdSchema.parse(input))
   .handler(async ({ data, context }) => {
-        const { error } = await supabaseAdmin
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Verify the caller actually owns this detected item before touching it —
+    // scan_detected_items has no client-side update policy, so this check
+    // (plus the .eq("user_id", ...) below) is what stands between "your own
+    // item" and "any item".
+    const { data: row, error: findErr } = await supabaseAdmin
+      .from("scan_detected_items").select("id").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!row) throw new Error("Item not found");
+
+    const { error } = await supabaseAdmin
       .from("scan_detected_items").update({ status: "rejected" }).eq("id", data.id).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true as const };
@@ -90,9 +100,23 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ConfirmDetectedItemsSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const results: { id: string; ok: boolean; error?: string }[] = [];
 
+    // Verify every submitted id actually belongs to this user up front —
+    // scan_detected_items has no client-side update policy, so this is the
+    // only check standing between "your own detections" and "any row".
+    const ids = data.items.map((it) => it.id);
+    const { data: owned, error: ownErr } = await supabaseAdmin
+      .from("scan_detected_items").select("id").in("id", ids).eq("user_id", userId);
+    if (ownErr) throw new Error(ownErr.message);
+    const ownedIds = new Set((owned ?? []).map((r) => r.id));
+
     for (const it of data.items) {
+      if (!ownedIds.has(it.id)) {
+        results.push({ id: it.id, ok: false, error: "Item not found" });
+        continue;
+      }
       try {
         const { error: insErr } = await supabase.from("wardrobe_items").insert({
           user_id: userId,
@@ -110,7 +134,7 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
         } as never);
         if (insErr) throw new Error(insErr.message);
 
-             const { error: updErr } = await supabaseAdmin
+        const { error: updErr } = await supabaseAdmin
           .from("scan_detected_items").update({ status: "confirmed" }).eq("id", it.id).eq("user_id", userId);
         if (updErr) throw new Error(updErr.message);
 
