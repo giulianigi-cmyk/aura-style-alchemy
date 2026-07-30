@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Cropper, { type Area } from "react-easy-crop";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type Props = {
   src: string;
@@ -9,13 +10,31 @@ type Props = {
   onSave: (blob: Blob) => Promise<void> | void;
 };
 
+/** Fetches a URL and converts it to a data: URL. A data: URL can never
+ *  taint a canvas, unlike drawing a cross-origin <img> directly — even
+ *  with crossOrigin="anonymous" set, that approach silently fails on some
+ *  signed-URL responses. Same proven pattern already used in
+ *  OutfitBuilder's canvas export. */
+async function toDataUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+  const resp = await fetch(url, { mode: "cors", cache: "no-store" });
+  if (!resp.ok) throw new Error(`image fetch failed: ${resp.status}`);
+  const blob = await resp.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function getCroppedBlob(src: string, area: Area): Promise<Blob> {
+  const safeSrc = await toDataUrl(src);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
-    i.crossOrigin = "anonymous";
     i.onload = () => resolve(i);
     i.onerror = reject;
-    i.src = src;
+    i.src = safeSrc;
   });
   const size = 512;
   const canvas = document.createElement("canvas");
@@ -50,6 +69,9 @@ export function AvatarCropper({ src, onCancel, onSave }: Props) {
     try {
       const blob = await getCroppedBlob(src, area);
       await onSave(blob);
+    } catch (e) {
+      console.error("[AURA avatar] crop/save failed", e);
+      toast.error("Couldn't process that photo — please try again.");
     } finally {
       setSaving(false);
     }
