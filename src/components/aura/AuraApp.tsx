@@ -21,6 +21,7 @@ import { Insights } from "./screens/Insights";
 import { SavedOutfits } from "./screens/SavedOutfits";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
+import { StorageDebug } from "./screens/StorageDebug";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
 import { TabBar } from "./TabBar";
@@ -31,7 +32,7 @@ import { useProfile } from "@/hooks/use-profile";
 export type Screen =
     | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
-      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review";
+      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug";
 
 
 
@@ -156,6 +157,7 @@ function Inner() {
           {screen === "saved-outfits" && <SavedOutfits go={go} openBuilder={openBuilder} />}
           {screen === "notifications" && <Notifications go={go} />}
           {screen === "invite" && <Invite go={go} />}
+          {screen === "storage-debug" && <StorageDebug go={go} />}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
           {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
         </div>
