@@ -9,6 +9,7 @@ import { DetectedItemCard, type DetectedItemDraft } from "@/components/aura/Dete
 import { confirmDetectedItems, listDetectedItems, rejectDetectedItem } from "@/lib/batch-scan.functions";
 import type { BBox } from "@/lib/outfit-detect-types";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
+import { clearSegmentationCache, cropItemFromSegmentation } from "@/lib/outfit-segmentation";
 import type { WardrobeItem } from "@/lib/aura-types";
 
 type Draft = DetectedItemDraft & {
