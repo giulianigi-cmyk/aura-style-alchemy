@@ -90,14 +90,23 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         }
 
         const built: Draft[] = [];
+        clearSegmentationCache();
         for (const it of res.items) {
           const path = pathById.get(it.job_id);
           const src = path ? signed.get(path) : undefined;
-          // If the crop fails (e.g. a canvas/CORS restriction on the signed
-          // URL), fall back to the full photo rather than silently dropping
-          // the item — losing a real detection is worse than an uncropped
-          // preview.
-          const cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
+          // Prefer real per-pixel segmentation (mask ∩ bbox → connected
+          // component), composited at full source resolution. Failures are
+          // isolated per photo — any item whose photo can't be segmented
+          // falls back to the plain rectangular crop, and if that fails too
+          // we keep the full photo rather than dropping a real detection.
+          let cropUrl: string | null = null;
+          if (src && path) {
+            cropUrl = await cropItemFromSegmentation(path, src, it.category ?? "", it.bbox);
+          }
+          if (!cropUrl) {
+            cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
+          }
+
           const category = it.category ?? "";
           const colors = it.colors ?? [];
           const dedupe = findBestMatch(
