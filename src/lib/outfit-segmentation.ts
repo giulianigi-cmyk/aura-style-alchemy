@@ -308,7 +308,7 @@ export async function cropItemFromSegmentation(
       if (!src || maskNonZero(src) < minPixels) continue;
 
       // Intersect with the padded bbox.
-      let work = new Uint8Array(total);
+      let work: Uint8Array<ArrayBufferLike> = new Uint8Array(total);
       let kept = 0;
       for (let y = py0; y < py1; y++) {
         for (let x = px0; x < px1; x++) {
