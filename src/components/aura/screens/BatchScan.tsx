@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Images, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Images, Loader2, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { createBatchScan, listBatchScans } from "@/lib/batch-scan.functions";
-
+import { createBatchScan, deleteBatchScan, listBatchScans } from "@/lib/batch-scan.functions";
 type ScanRow = {
   id: string;
   status: string;
@@ -23,15 +22,16 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openReview: (scanId: string) => void }) {
   const { user } = useAuth();
-  const create = useServerFn(createBatchScan);
+    const create = useServerFn(createBatchScan);
   const list = useServerFn(listBatchScans);
+  const remove = useServerFn(deleteBatchScan);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [scans, setScans] = useState<ScanRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
 
-  const refresh = async () => {
+    const refresh = async () => {
     try {
       const rows = (await list()) as unknown as ScanRow[];
       setScans(rows);
@@ -39,6 +39,18 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       console.error("[AURA batch-scan] list failed", e);
     }
   };
+
+  const deleteScan = async (id: string) => {
+    setScans((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await remove({ data: { scanId: id } });
+    } catch (e) {
+      console.error("[AURA batch-scan] delete failed", e);
+      toast.error("Couldn't remove that batch.");
+      refresh();
+    }
+  };
+
 
   useEffect(() => {
     refresh();
@@ -137,25 +149,37 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
           {scans.length === 0 && (
             <p className="text-sm text-muted-foreground">No batches yet.</p>
           )}
-          {scans.map((s) => {
+                    {scans.map((s) => {
             const ready = s.status === "done" || s.status === "done_with_errors";
             return (
-              <button
+              <div
                 key={s.id}
-                onClick={() => ready && openReview(s.id)}
-                className="w-full text-left rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3"
+                className="w-full rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3"
               >
-                <div className="flex-1 min-w-0">
+                <button
+                  onClick={() => ready && openReview(s.id)}
+                  className="flex-1 min-w-0 text-left"
+                >
                   <p className="text-sm">{s.total_photos} photo{s.total_photos === 1 ? "" : "s"}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.created_at).toLocaleString()}
                   </p>
-                </div>
+                </button>
                 {!ready && <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />}
-                {ready && <span className="text-[10px] uppercase tracking-[0.25em] shrink-0">Review</span>}
-              </button>
+                {ready && (
+                  <button onClick={() => ready && openReview(s.id)} className="text-[10px] uppercase tracking-[0.25em] shrink-0">
+                    Review
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteScan(s.id)}
+                  aria-label="Remove this batch"
+                  className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
+                ><X size={12} /></button>
+              </div>
             );
           })}
+
         </div>
       </div>
     </div>
