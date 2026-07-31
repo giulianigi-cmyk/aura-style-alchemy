@@ -474,6 +474,7 @@ export type Database = {
           size: string | null
           source: string | null
           style: string | null
+          subcategory: string | null
           user_id: string
           worn_count: number
         }
@@ -493,6 +494,7 @@ export type Database = {
           size?: string | null
           source?: string | null
           style?: string | null
+          subcategory?: string | null
           user_id?: string
           worn_count?: number
         }
@@ -512,6 +514,7 @@ export type Database = {
           size?: string | null
           source?: string | null
           style?: string | null
+          subcategory?: string | null
           user_id?: string
           worn_count?: number
         }
