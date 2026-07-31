@@ -32,7 +32,18 @@ export const createBatchScan = createServerFn({ method: "POST" })
     return { scanId: scan.id as string, jobs: jobs.length };
   });
 
+export const deleteBatchScan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ScanIdSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("batch_scans").delete().eq("id", data.scanId).eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 export const listBatchScans = createServerFn({ method: "GET" })
+
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
