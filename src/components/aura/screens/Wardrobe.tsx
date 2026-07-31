@@ -616,7 +616,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-0 bg-card pb-1">
+                                <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-24 z-50 bg-card pb-1 rounded-2xl shadow-luxe -mx-1 px-1">
                   <button
                     onClick={() => setEditing(false)}
                     disabled={savingEdit}
@@ -628,6 +628,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
                   >
                     {savingEdit && <Loader2 size={12} className="animate-spin" />}
+
                     Save
                   </button>
                 </div>
