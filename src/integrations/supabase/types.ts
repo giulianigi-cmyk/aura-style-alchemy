@@ -472,6 +472,7 @@ export type Database = {
           price: number | null
           season: string | null
           size: string | null
+          source: string | null
           style: string | null
           user_id: string
           worn_count: number
@@ -490,6 +491,7 @@ export type Database = {
           price?: number | null
           season?: string | null
           size?: string | null
+          source?: string | null
           style?: string | null
           user_id?: string
           worn_count?: number
@@ -508,6 +510,7 @@ export type Database = {
           price?: number | null
           season?: string | null
           size?: string | null
+          source?: string | null
           style?: string | null
           user_id?: string
           worn_count?: number
