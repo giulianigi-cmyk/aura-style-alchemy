@@ -238,7 +238,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       {loading && (
         <div className="mx-6 mt-16 text-center text-muted-foreground">
           <Loader2 size={18} className="mx-auto animate-spin" />
-          <p className="mt-3 text-sm">Preparing your detections…</p>
+          <p className="mt-3 text-sm">Cutting out each piece… this can take a few seconds per photo.</p>
         </div>
       )}
 
