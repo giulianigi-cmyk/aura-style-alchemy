@@ -9,6 +9,7 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { stylistChat } from "@/lib/stylist-chat.functions";
+import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
 type ChatMsg = { role: "user" | "assistant"; content: string; itemIds?: string[] };
@@ -132,6 +133,30 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
                   {m.itemIds.map(thumb)}
                 </div>
               )}
+{m.itemIds && m.itemIds.length > 0 && (
+  <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
+    {m.itemIds.map(thumb)}
+  </div>
+)}
+{m.itemIds && m.itemIds.length > 0 && (
+  <div className="mt-2 flex gap-3">
+    <button
+      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "liked" } })}
+      className="text-lg active:scale-90"
+      aria-label="Mi piace"
+    >❤️</button>
+    <button
+      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "disliked" } })}
+      className="text-lg active:scale-90"
+      aria-label="Non fa per me"
+    >👎</button>
+    <button
+      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "saved" } })}
+      className="text-lg active:scale-90"
+      aria-label="Salva"
+    >💾</button>
+  </div>
+)}
             </div>
           </div>
         ))}
