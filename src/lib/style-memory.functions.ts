@@ -32,6 +32,8 @@ type Candidate = {
 
 const CONCENTRATION_RATIO = 0.75;
 const MIN_CONTEXT_EVIDENCE = 3;
+/** Bump when the extraction/scoring logic changes in a way that alters results. */
+const AGGREGATION_VERSION = 1;
 
 const norm = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim().toLowerCase() : null;
