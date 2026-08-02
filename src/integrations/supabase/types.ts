@@ -156,6 +156,7 @@ export type Database = {
       }
       outfit_feedback: {
         Row: {
+          aggregation_version: number
           context: Json | null
           created_at: string
           feedback_reason: string | null
@@ -163,11 +164,13 @@ export type Database = {
           id: string
           item_ids: string[]
           outfit_id: string | null
+          processed_at: string | null
           rating: number | null
           session_id: string | null
           user_id: string
         }
         Insert: {
+          aggregation_version?: number
           context?: Json | null
           created_at?: string
           feedback_reason?: string | null
@@ -175,11 +178,13 @@ export type Database = {
           id?: string
           item_ids?: string[]
           outfit_id?: string | null
+          processed_at?: string | null
           rating?: number | null
           session_id?: string | null
           user_id: string
         }
         Update: {
+          aggregation_version?: number
           context?: Json | null
           created_at?: string
           feedback_reason?: string | null
@@ -187,6 +192,7 @@ export type Database = {
           id?: string
           item_ids?: string[]
           outfit_id?: string | null
+          processed_at?: string | null
           rating?: number | null
           session_id?: string | null
           user_id?: string
