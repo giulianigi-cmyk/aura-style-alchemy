@@ -32,6 +32,8 @@ type Candidate = {
 
 const CONCENTRATION_RATIO = 0.75;
 const MIN_CONTEXT_EVIDENCE = 3;
+/** Bump when the extraction/scoring logic changes in a way that alters results. */
+const AGGREGATION_VERSION = 1;
 
 const norm = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim().toLowerCase() : null;
@@ -112,14 +114,32 @@ export const aggregateStyleMemory = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // 1. Read the new feedback event (RLS scopes it to the caller).
-    const { data: fb, error: fbErr } = await supabase
+    // 1. CLAIM the feedback event atomically (exactly-once guard).
+    //    A single UPDATE ... WHERE processed_at IS NULL RETURNING * takes the
+    //    row lock; a concurrent second call gets zero rows and exits.
+    const { data: claimed, error: claimErr } = await supabase
       .from("outfit_feedback")
-      .select("id, user_id, session_id, outfit_id, item_ids, feedback_type, rating, context")
+      .update({ processed_at: new Date().toISOString(), aggregation_version: AGGREGATION_VERSION })
       .eq("id", data.feedbackId)
+      .is("processed_at", null)
+      .select("id, user_id, session_id, outfit_id, item_ids, feedback_type, rating, context")
       .maybeSingle();
-    if (fbErr) throw new Error(fbErr.message);
-    if (!fb) return { ok: false as const, reason: "feedback_not_found" };
+    if (claimErr) throw new Error(claimErr.message);
+    if (!claimed) {
+      // Either the row does not exist / is not ours (RLS), or it was already
+      // processed. Either way: do NOT touch user_style_memory.
+      return { ok: false as const, reason: "already_processed_or_not_found" };
+    }
+    const fb = claimed;
+
+    /** Give the claim back so the event can be retried later. */
+    const release = async (reason: string) => {
+      await supabase
+        .from("outfit_feedback")
+        .update({ processed_at: null })
+        .eq("id", fb.id);
+      return { ok: false as const, reason };
+    };
 
     // 2. Resolve the involved items (from the event, or from the outfit).
     let itemIds: string[] = (fb.item_ids ?? []) as string[];
@@ -144,14 +164,17 @@ export const aggregateStyleMemory = createServerFn({ method: "POST" })
         .maybeSingle();
       if (session?.occasion) occasion = occasion ?? session.occasion;
     }
-    if (!itemIds.length) return { ok: false as const, reason: "no_items" };
+    if (!itemIds.length) return await release("no_items");
 
     const { data: items, error: itemsErr } = await supabase
       .from("wardrobe_items")
       .select("category, subcategory, brand, color, colors, material, style")
       .in("id", itemIds);
-    if (itemsErr) throw new Error(itemsErr.message);
-    if (!items?.length) return { ok: false as const, reason: "no_items" };
+    if (itemsErr) {
+      await release("items_query_failed");
+      throw new Error(itemsErr.message);
+    }
+    if (!items?.length) return await release("no_items");
 
     // 3. Weight (configurable, no deploy needed).
     const { data: weightRow } = await supabase
@@ -160,11 +183,12 @@ export const aggregateStyleMemory = createServerFn({ method: "POST" })
       .eq("feedback_type", fb.feedback_type)
       .maybeSingle();
     const weight = Number(weightRow?.weight ?? 0);
-    if (!weight) return { ok: false as const, reason: "zero_weight" };
+    if (!weight) return await release("zero_weight");
 
     const negative = weight < 0;
     const candidates = extractCandidates(items, negative);
-    if (!candidates.length) return { ok: false as const, reason: "no_candidates" };
+    if (!candidates.length) return await release("no_candidates");
+
 
     const scope = pickContext(
       (fb.context ?? null) as Record<string, unknown> | null,
