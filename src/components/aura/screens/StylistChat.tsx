@@ -23,6 +23,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, string>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,12 +70,12 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
           })),
         },
       });
-            if (!res.ok) {
+      if (!res.ok) {
         setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
         return;
       }
       setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids }]);
-      } catch (e) {
+    } catch (e) {
       console.error("[AURA stylist-chat]", e);
       setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
     } finally {
@@ -99,8 +100,19 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     );
   };
 
+  const giveFeedback = async (index: number, itemIds: string[], feedbackType: "liked" | "disliked" | "saved") => {
+    setFeedbackGiven((f) => ({ ...f, [index]: feedbackType })); // feedback visivo immediato
+    try {
+      await submitOutfitFeedback({ data: { itemIds, feedbackType } });
+    } catch (e) {
+      console.error("[AURA outfit-feedback]", e);
+      // il tap resta confermato visivamente anche se la scrittura fallisce
+      // in background — non blocchiamo l'esperienza, ma logghiamo l'errore
+    }
+  };
+
   return (
-        <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
         <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={16} />
@@ -133,30 +145,25 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
                   {m.itemIds.map(thumb)}
                 </div>
               )}
-{m.itemIds && m.itemIds.length > 0 && (
-  <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
-    {m.itemIds.map(thumb)}
-  </div>
-)}
-{m.itemIds && m.itemIds.length > 0 && (
-  <div className="mt-2 flex gap-3">
-    <button
-      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "liked" } })}
-      className="text-lg active:scale-90"
-      aria-label="Mi piace"
-    >❤️</button>
-    <button
-      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "disliked" } })}
-      className="text-lg active:scale-90"
-      aria-label="Non fa per me"
-    >👎</button>
-    <button
-      onClick={() => submitOutfitFeedback({ data: { itemIds: m.itemIds!, feedbackType: "saved" } })}
-      className="text-lg active:scale-90"
-      aria-label="Salva"
-    >💾</button>
-  </div>
-)}
+              {m.itemIds && m.itemIds.length > 0 && (
+                <div className="mt-2 flex gap-3">
+                  <button
+                    onClick={() => void giveFeedback(i, m.itemIds!, "liked")}
+                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "liked" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    aria-label="Mi piace"
+                  >❤️</button>
+                  <button
+                    onClick={() => void giveFeedback(i, m.itemIds!, "disliked")}
+                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "disliked" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    aria-label="Non fa per me"
+                  >👎</button>
+                  <button
+                    onClick={() => void giveFeedback(i, m.itemIds!, "saved")}
+                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "saved" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    aria-label="Salva"
+                  >💾</button>
+                </div>
+              )}
             </div>
           </div>
         ))}
