@@ -41,6 +41,30 @@ export type Database = {
         }
         Relationships: []
       }
+      feedback_weights: {
+        Row: {
+          created_at: string
+          feedback_type: string
+          notes: string | null
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          feedback_type: string
+          notes?: string | null
+          updated_at?: string
+          weight: number
+        }
+        Update: {
+          created_at?: string
+          feedback_type?: string
+          notes?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       friends: {
         Row: {
           addressee_id: string
@@ -130,6 +154,60 @@ export type Database = {
           },
         ]
       }
+      outfit_feedback: {
+        Row: {
+          context: Json | null
+          created_at: string
+          feedback_reason: string | null
+          feedback_type: string
+          id: string
+          item_ids: string[]
+          outfit_id: string | null
+          rating: number | null
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          feedback_reason?: string | null
+          feedback_type: string
+          id?: string
+          item_ids?: string[]
+          outfit_id?: string | null
+          rating?: number | null
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          feedback_reason?: string | null
+          feedback_type?: string
+          id?: string
+          item_ids?: string[]
+          outfit_id?: string | null
+          rating?: number | null
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_feedback_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outfit_feedback_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "outfit_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outfit_likes: {
         Row: {
           created_at: string
@@ -192,6 +270,36 @@ export type Database = {
           user_id?: string
           weather_condition?: string | null
           weather_temp?: number | null
+        }
+        Relationships: []
+      }
+      outfit_sessions: {
+        Row: {
+          context: Json | null
+          created_at: string
+          id: string
+          occasion: string | null
+          shown_item_ids: string[] | null
+          shown_outfit_ids: string[] | null
+          user_id: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          id?: string
+          occasion?: string | null
+          shown_item_ids?: string[] | null
+          shown_outfit_ids?: string[] | null
+          user_id: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          id?: string
+          occasion?: string | null
+          shown_item_ids?: string[] | null
+          shown_outfit_ids?: string[] | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -457,6 +565,57 @@ export type Database = {
           },
         ]
       }
+      user_style_memory: {
+        Row: {
+          confidence_score: number
+          context_axis: string | null
+          context_evidence_count: number
+          context_strength: number | null
+          context_value: string | null
+          created_at: string
+          evidence_count: number
+          id: string
+          last_seen: string
+          memory_type: string
+          source: string
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          confidence_score?: number
+          context_axis?: string | null
+          context_evidence_count?: number
+          context_strength?: number | null
+          context_value?: string | null
+          created_at?: string
+          evidence_count?: number
+          id?: string
+          last_seen?: string
+          memory_type: string
+          source?: string
+          updated_at?: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          confidence_score?: number
+          context_axis?: string | null
+          context_evidence_count?: number
+          context_strength?: number | null
+          context_value?: string | null
+          created_at?: string
+          evidence_count?: number
+          id?: string
+          last_seen?: string
+          memory_type?: string
+          source?: string
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: []
+      }
       wardrobe_items: {
         Row: {
           brand: string | null
@@ -522,7 +681,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_style_memory_active: {
+        Row: {
+          confidence_score: number | null
+          context_axis: string | null
+          context_evidence_count: number | null
+          context_strength: number | null
+          context_value: string | null
+          created_at: string | null
+          effective_confidence: number | null
+          effective_context_strength: number | null
+          evidence_count: number | null
+          id: string | null
+          last_seen: string | null
+          memory_type: string | null
+          source: string | null
+          user_id: string | null
+          value: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          context_axis?: string | null
+          context_evidence_count?: number | null
+          context_strength?: number | null
+          context_value?: string | null
+          created_at?: string | null
+          effective_confidence?: never
+          effective_context_strength?: never
+          evidence_count?: number | null
+          id?: string | null
+          last_seen?: string | null
+          memory_type?: string | null
+          source?: string | null
+          user_id?: string | null
+          value?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          context_axis?: string | null
+          context_evidence_count?: number | null
+          context_strength?: number | null
+          context_value?: string | null
+          created_at?: string | null
+          effective_confidence?: never
+          effective_context_strength?: never
+          evidence_count?: number | null
+          id?: string | null
+          last_seen?: string | null
+          memory_type?: string | null
+          source?: string | null
+          user_id?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       are_friends: { Args: { _a: string; _b: string }; Returns: boolean }
@@ -551,6 +763,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      effective_style_confidence: {
+        Args: { _confidence: number; _last_seen: string }
+        Returns: number
       }
       get_share_comments: {
         Args: { _share_id: string }
