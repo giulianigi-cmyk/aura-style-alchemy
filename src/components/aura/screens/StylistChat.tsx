@@ -1,6 +1,7 @@
-import { ArrowLeft, ArrowUp, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowUp, Loader2, Sparkles, Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
@@ -12,6 +13,8 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { stylistChat } from "@/lib/stylist-chat.functions";
 import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
 import { saveOutfitPlan } from "@/lib/outfit-plan.functions";
+import { transcribeVoice } from "@/lib/voice-transcribe.functions";
+import { synthesizeVoice } from "@/lib/voice-synthesize.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
 type ActionType = "save_canvas" | "add_calendar" | "dismiss";
@@ -57,7 +60,16 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [uiState, setUiState] = useState<Record<number, MsgUiState>>({});
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const speakNextReplyRef = useRef(false);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const transcribe = useServerFn(transcribeVoice);
+  const synthesize = useServerFn(synthesizeVoice);
 
   const patchUi = (i: number, patch: Partial<MsgUiState>) =>
     setUiState((s) => ({ ...s, [i]: { ...s[i], ...patch } }));
@@ -135,6 +147,10 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
           actions: res.actions,
         },
       ]);
+      if (speakNextReplyRef.current) {
+        speakNextReplyRef.current = false;
+        void speak(res.reply);
+      }
     } catch (e) {
       console.error("[AURA stylist-chat]", e);
       setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
@@ -147,6 +163,81 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     const text = input.trim();
     setInput("");
     void sendMessage(text);
+  };
+
+  /** Riproduce la risposta come audio. Non blocca la chat se fallisce. */
+  const speak = async (text: string) => {
+    if (!text.trim()) return;
+    setSpeaking(true);
+    try {
+      const res = await synthesize({ data: { text: text.slice(0, 2000) } });
+      const audio = new Audio(res.audioDataUrl);
+      audioPlayerRef.current = audio;
+      audio.onended = () => setSpeaking(false);
+      audio.onerror = () => setSpeaking(false);
+      await audio.play();
+    } catch (e) {
+      console.error("[AURA voice-synthesize]", e);
+      setSpeaking(false);
+    }
+  };
+
+  /** Tap sul microfono: avvia la registrazione con MediaRecorder. */
+  const startRecording = async () => {
+    if (recording || transcribing || busy) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const candidates = ["audio/mp4", "audio/webm", "audio/ogg"];
+      const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t));
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        void handleRecordedAudio(blob);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch (e) {
+      console.error("[AURA mic] permission/record failed", e);
+      toast.error("Non riesco ad accedere al microfono");
+    }
+  };
+
+  /** Tap di nuovo sul microfono: ferma la registrazione, il resto parte da onstop. */
+  const stopRecording = () => {
+    if (!recording) return;
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  /** Audio registrato -> Whisper -> testo -> invio come messaggio normale. */
+  const handleRecordedAudio = async (blob: Blob) => {
+    setTranscribing(true);
+    try {
+      const audioDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const res = await transcribe({ data: { audioDataUrl } });
+      if (!res.text) {
+        toast.message("Non ho sentito bene, riprova");
+        return;
+      }
+      speakNextReplyRef.current = true; // questo turno è vocale: rispondi anche a voce
+      void sendMessage(res.text);
+    } catch (e) {
+      console.error("[AURA voice-transcribe]", e);
+      toast.error("Trascrizione non riuscita");
+    } finally {
+      setTranscribing(false);
+    }
   };
 
   const thumb = (id: string) => {
@@ -376,10 +467,26 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your stylist…"
+            placeholder={recording ? "Ti ascolto…" : transcribing ? "Trascrivo…" : "Ask your stylist…"}
             rows={1}
             className="flex-1 max-h-28 bg-secondary/60 rounded-2xl px-4 py-3 text-sm outline-none placeholder:text-muted-foreground resize-none"
           />
+          <button
+            onClick={() => (recording ? stopRecording() : void startRecording())}
+            disabled={busy || transcribing}
+            aria-label={recording ? "Stop recording" : "Record voice message"}
+            className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center active:scale-90 transition disabled:opacity-40 ${
+              recording ? "bg-destructive text-destructive-foreground animate-pulse" : "border border-border"
+            }`}
+          >
+            {transcribing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : recording ? (
+              <Square size={16} />
+            ) : (
+              <Mic size={16} />
+            )}
+          </button>
           <button
             onClick={send}
             disabled={busy || !input.trim()}
@@ -389,6 +496,11 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
             <ArrowUp size={16} />
           </button>
         </div>
+        {speaking && (
+          <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+            🔊 AURA sta parlando…
+          </p>
+        )}
       </div>
     </div>
   );
