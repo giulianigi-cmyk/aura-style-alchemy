@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2 } from "lucide-react";
+import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
-import profile1 from "@/assets/profile-1.jpg";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
@@ -97,7 +96,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setCropSrc(avatarUrl || profile?.avatar_url || null);
   };
 
-  const avatarSrc = avatarUrl || profile?.avatar_url || profile1;
+  const avatarSrc = avatarUrl || profile?.avatar_url || null;
   const displayName = profile?.full_name || "Your name";
   const meta = [profile?.city, profile?.season || "Warm Autumn"].filter(Boolean).join(" · ");
 
@@ -134,7 +133,13 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           onClick={() => fileRef.current?.click()}
           className="relative h-24 w-24 rounded-full p-[3px] bg-gradient-to-br from-[var(--champagne)] to-[var(--taupe)] animate-scale-in active:scale-95 transition"
         >
-          <img src={avatarSrc} alt="" className="h-full w-full rounded-full object-cover border-2 border-background" />
+          {avatarSrc ? (
+            <img src={avatarSrc} alt="" className="h-full w-full rounded-full object-cover border-2 border-background" />
+          ) : (
+            <div className="h-full w-full rounded-full bg-secondary/80 border-2 border-background flex items-center justify-center">
+              <User size={32} className="text-muted-foreground" strokeWidth={1.5} />
+            </div>
+          )}
           <span className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center shadow-luxe">
             {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
           </span>
@@ -270,9 +275,9 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               </div>
             </section>
           )}
-                    <MyBrands />
+          <MyBrands />
           <MySizes userId={user?.id} />
-      <DressPreferencesSection userId={user?.id} />
+          <DressPreferencesSection userId={user?.id} />
 
           {/* Color analysis */}
           <button
@@ -305,7 +310,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           {/* Menu */}
           <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-card border border-border/60 overflow-hidden">
             {([
-                            { l: "Wardrobe insights", s: "insights" as Screen },
+              { l: "Wardrobe insights", s: "insights" as Screen },
               { l: "Saved outfits", s: "saved-outfits" as Screen },
               { l: "Community", s: "community" as Screen },
               { l: "Notifications", s: "notifications" as Screen },
@@ -321,7 +326,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         </>
       )}
 
-            <div className="px-6 mt-6">
+      <div className="px-6 mt-6">
         <p className="text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">{user?.email}</p>
         <button
           onClick={signOut}
@@ -515,7 +520,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
     toast.success("Sizes saved");
   };
 
-    return (
+  return (
     <section className="mx-6 mt-4 rounded-3xl bg-card border border-border/60 p-4 animate-fade-up">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
