@@ -50,6 +50,21 @@ const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * Le server function di TanStack Start non garantiscono di far arrivare
+ * un vero Error al client — spesso è un oggetto semplice serializzato.
+ * Questo estrae un messaggio leggibile in ogni caso, invece di cadere
+ * sempre sul fallback generico quando `instanceof Error` è false.
+ */
+function errorMessage(e: unknown, fallback: string): string {
+  const detail =
+    e instanceof Error ? e.message
+    : typeof e === "string" ? e
+    : typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message)
+    : null;
+  return detail ? `${fallback}: ${detail}` : fallback;
+}
+
 export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
@@ -105,8 +120,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       const dressRules = await loadDressRules(user?.id);
       const res = await stylistChat({
         data: {
-          // uiOnly esclusi: non devono mai rientrare come contesto per l'AI,
-          // altrimenti il modello impara e ripete frasi nostre come se fossero sue.
           messages: history.filter((m) => !m.uiOnly).slice(-12).map((m) => ({ role: m.role, content: m.content })),
           dressRules,
           temperature: weather?.current.temperature ?? null,
@@ -151,9 +164,9 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         speakNextReplyRef.current = false;
         void speak(res.reply);
       }
-        } catch (e) {
-      console.error("[AURA voice-transcribe]", e);
-      toast.error(e instanceof Error ? `Trascrizione non riuscita: ${e.message}` : "Trascrizione non riuscita");
+    } catch (e) {
+      console.error("[AURA stylist-chat]", e);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
     } finally {
       setBusy(false);
     }
@@ -234,7 +247,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       void sendMessage(res.text);
     } catch (e) {
       console.error("[AURA voice-transcribe]", e);
-      toast.error("Trascrizione non riuscita");
+      toast.error(errorMessage(e, "Trascrizione non riuscita"));
     } finally {
       setTranscribing(false);
     }
