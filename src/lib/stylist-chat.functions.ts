@@ -33,11 +33,14 @@ const OutputSchema = z.object({
   reply: z.string(),
   item_ids: z.array(z.string()),
   choices: z.array(z.string()).max(4).optional(),
-  actions: z.array(z.object({
-    type: z.enum(["save_canvas", "add_calendar", "dismiss"]),
-    label: z.string(),
-  })).max(3).optional(),
 });
+
+// Fisse, mai generate dal modello: eliminano qualsiasi rischio che l'AI
+// scriva queste parole come testo semplice invece che come azione reale.
+const SAVE_ACTIONS = [
+  { type: "save_canvas" as const, label: "Salva sulla tela" },
+  { type: "add_calendar" as const, label: "Aggiungi al calendario" },
+];
 
 export const stylistChat = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
@@ -64,10 +67,14 @@ export const stylistChat = createServerFn({ method: "POST" })
       size: it.size ?? "",
     }));
 
+    // Nota: NON menzioniamo mai "Salva sulla tela"/"Aggiungi al calendario"
+    // in nessuna istruzione o esempio dato al modello — quelle etichette
+    // esatte vengono decise solo dal server (vedi SAVE_ACTIONS sotto),
+    // per evitare che il modello le riscriva come testo semplice.
     const feedbackInstruction = {
-      liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Return an empty item_ids array and empty choices array. In 'actions', return exactly these two: [{\"type\": \"save_canvas\", \"label\": \"Salva sulla tela\"}, {\"type\": \"add_calendar\", \"label\": \"Aggiungi al calendario\"}] (translate the labels to the user's language).",
+      liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Do NOT offer to save it or add it anywhere — that is handled separately. Return an empty item_ids array and empty choices array.",
       disliked: "The user just tapped 'not for me, suggest an alternative' on your PREVIOUS suggestion. Propose a genuinely DIFFERENT outfit using different pieces than the ones you just suggested (check the conversation history for what you already proposed and avoid repeating those exact item_ids).",
-      saved: "The user just tapped 'save this outfit' on your PREVIOUS suggestion. Reply with a short one-line confirmation only. Do NOT re-describe the outfit again. Return an empty item_ids array and no choices or actions.",
+      saved: "The user just tapped 'save this outfit' on your PREVIOUS suggestion. Reply with a short one-line confirmation only. Do NOT re-describe the outfit again. Return an empty item_ids array and no choices.",
     } as const;
 
     const system = [
@@ -85,7 +92,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
       "",
       "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-      '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"], "choices": ["Option A", "Option B"], "actions": [{"type": "save_canvas", "label": "Salva sulla tela"}]}',
+      '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"], "choices": ["Option A", "Option B"]}',
     ].join("\n");
     try {
       const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
@@ -123,12 +130,14 @@ export const stylistChat = createServerFn({ method: "POST" })
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
+
       return {
         ok: true as const,
         reply: (parsed.reply ?? "").slice(0, 1200),
         item_ids: parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
         choices: (parsed.choices ?? []).slice(0, 4),
-        actions: (parsed.actions ?? []).slice(0, 3),
+        // Sempre e solo dal server, mai dal modello.
+        actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
       };
     } catch (err) {
       console.error("[AURA stylist-chat] failed", err);
