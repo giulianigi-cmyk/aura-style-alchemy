@@ -74,9 +74,6 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
  * corner RGBA, whether the baked-checker path fired).
  */
 function isCheckerPixel(r: number, g: number, b: number): boolean {
-  // Near-neutral grey/white covering common checker palettes:
-  // Photoshop-style (#CCCCCC / #FFFFFF) and darker Gemini variant
-  // (~#B0B0B0 / ~#E0E0E0). Chroma-key range only, not saturated colors.
   const grey = Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && Math.abs(r - b) < 10;
   if (!grey) return false;
   return r >= 235 || (r >= 175 && r <= 225);
@@ -84,21 +81,6 @@ function isCheckerPixel(r: number, g: number, b: number): boolean {
 
 /**
  * Ensure the AI-removed-background PNG has a REAL alpha channel.
- *
- * Handles the one real failure mode from the AI bg-removal step: some image
- * models (Gemini flash-image included, intermittently) return an opaque RGB
- * PNG where the "transparent" background is rasterised as a grey/white
- * checker pattern instead of true alpha=0 pixels. We detect that case by
- * sampling the four frame corners (a foreground subject cannot fill them)
- * and, when they look like checker greys/whites AND the image has no real
- * alpha variance, we zero out the ALPHA channel on every matching checker
- * pixel — producing genuine transparency instead of baking anything to
- * white.
- *
- * When the model already returned proper alpha, this function changes
- * nothing and returns the original bytes untouched.
- *
- * Search logs for "[AURA transparency]" for diagnostics.
  */
 async function ensureTransparentPng(
   dataUrl: string,
@@ -148,11 +130,8 @@ async function ensureTransparentPng(
     );
 
     if (hasAlpha) {
-      // Model already gave us real transparency — leave pixels untouched.
       isTransparent = true;
     } else if (checkerCorners >= 3) {
-      // Baked-in checkerboard: zero the ALPHA on matching pixels so they
-      // become genuinely transparent, instead of painting them white.
       console.warn("[AURA transparency] baked checkerboard detected — zeroing alpha on checker pixels");
       for (let i = 0; i < d.length; i += 4) {
         if (isCheckerPixel(d[i], d[i + 1], d[i + 2])) {
@@ -162,8 +141,6 @@ async function ensureTransparentPng(
       ctx.putImageData(imgData, 0, 0);
       isTransparent = true;
     } else {
-      // Neither real alpha nor a recognisable checker — nothing safe to do,
-      // ship the image as-is rather than guessing.
       console.warn("[AURA transparency] no alpha and no recognisable checker — leaving image untouched");
     }
   } catch (e) {
@@ -176,6 +153,38 @@ async function ensureTransparentPng(
   console.log("[AURA transparency] output bytes", blob.size, "isTransparent", isTransparent);
   return { file: new File([blob], filename, { type: "image/png" }), isTransparent };
 }
+
+/**
+ * Compressione lato client, applicata PRIMA di tutto (analisi AI, rimozione
+ * sfondo, upload finale) — non solo prima di salvare. Una foto da 10MB
+ * scattata con l'iPhone non serve mai a riconoscere un capo: riduce tempi
+ * e probabilità di timeout su tutta la pipeline, non solo sull'upload.
+ * Non peggiora mai un file già piccolo (se il risultato è più pesante
+ * dell'originale, tiene l'originale).
+ */
+async function compressImageForUpload(f: File, maxDimension = 1600, quality = 0.85): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(f);
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return f;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+    if (!blob || blob.size >= f.size) return f;
+    return new File([blob], f.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg", { type: "image/jpeg" });
+  } catch (e) {
+    console.warn("[AURA compress] failed, using original", e);
+    return f;
+  }
+}
+
 /** remove.bg only accepts JPG/PNG — CDNs sometimes serve webp/avif anyway
  *  (that's why Mytheresa imports kept their background while Zara worked).
  *  The browser decodes those natively, so we re-encode via canvas. */
@@ -221,7 +230,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
-  // Alternative product shots from the last URL import ("pick another photo").
   const [altImages, setAltImages] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState<string | null>(null);
   const [importReferer, setImportReferer] = useState<string>("");
@@ -245,8 +253,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [materials, setMaterials] = useState<string[]>([]);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("EUR");
-  // Full fabric composition with percentages from URL imports
-  // (90% linen vs 90% wool decides summer vs winter downstream).
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
@@ -257,16 +263,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setPrice(""); setCurrency("EUR"); setComposition([]);
   };
 
-  /**
-   * Full pipeline for a chosen image (from camera/gallery/upload/URL).
-   * 1. Show preview immediately.
-   * 2. Run AI analysis for form pre-fill.
-   * 3. Attempt background removal; on success, swap file+preview to the PNG.
-   *    On failure, keep the original image (non-blocking).
-   */
   const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[]; composition?: CompositionEntry[] }) => {
-    setFile(initialFile);
-    setPreview(URL.createObjectURL(initialFile));
+    const compressedFile = await compressImageForUpload(initialFile);
+    setFile(compressedFile);
+    setPreview(URL.createObjectURL(compressedFile));
     setTransparent(false);
     setStep("details");
     resetFields();
@@ -276,9 +276,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (opts?.materials?.length) setMaterials(opts.materials);
     if (opts?.composition?.length) setComposition(opts.composition);
 
-    const dataUrl = await readFileAsDataUrl(initialFile);
+    const dataUrl = await readFileAsDataUrl(compressedFile);
 
-    // Kick both off in parallel; UI shows the current stage.
     setStage("analyze");
     const analysisPromise = analyze({ data: { imageDataUrl: dataUrl } })
       .then(result => {
@@ -296,18 +295,22 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
         if (result.seasons?.length) setSeasons(result.seasons);
-        // Materials: the real composition read from the product page
-        // (opts.materials) always wins; the visual guess is only a
-        // fallback for photos or pages without composition info.
         if (!opts?.materials?.length && result.materials?.length) setMaterials(result.materials);
-        // Don't overwrite a domain-derived brand with an empty AI result.
         if (result.brand && !opts?.brand) setBrand(result.brand);
       })
       .catch(e => console.warn("[AURA] AI analysis failed", e));
 
     setStage("bgremove");
     try {
-            const bg = await removeBackgroundClient(dataUrl);
+      // Retry automatico: fino a 3 tentativi totali con backoff crescente,
+      // prima di arrendersi e tenere la foto senza sfondo rimosso.
+      let bg = await removeBackgroundClient(dataUrl);
+      let attempt = 1;
+      while (!bg.ok && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+        bg = await removeBackgroundClient(dataUrl);
+        attempt++;
+      }
       if (!bg.ok) toast.message("Background not removed", { description: bg.error });
       if (bg.ok) {
 
@@ -342,7 +345,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setImporting(true);
     try {
-      // Session token lets the server enforce the per-user Firecrawl quota.
       const { data: sess } = await supabase.auth.getSession();
       const result = await importUrl({
         data: { url: parsed.toString(), accessToken: sess.session?.access_token },
@@ -374,8 +376,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     }
   };
 
-  /** User tapped an alternative shot from the URL import — download it
-   *  server-side (CORS/hotlink safe) and re-run the pipeline on it. */
   const useAltImage = async (url: string) => {
     if (altLoading) return;
     setAltLoading(url);
@@ -416,7 +416,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
       const uid = auth.user.id;
 
-      // Prefer PNG extension after background removal; otherwise use the file's real type.
       const isPng = file.type === "image/png";
       const ext = isPng ? "png" : (file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -444,8 +443,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency: price.trim() ? currency : null,
         size: size.trim() || null,
       };
-      // New columns not yet in generated types — attach with a safe cast,
-      // same pattern already used for `composition` below.
       const compositionToSave = composition.filter((c) => materials.includes(c.material));
       const fullPayload = {
         ...payload,
@@ -460,25 +457,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         style_tags: styleTags,
       } as unknown as TablesInsert<"wardrobe_items">;
 
-            let { data: inserted, error: insErr } = await supabase
+      let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
       if (insErr && /column .* does not exist|composition/i.test(String(insErr.message))) {
-        // Schema cache stale (e.g. right after the taxonomy migration):
-        // save with the core fields only rather than failing outright.
         console.warn("[AURA wardrobe] new column not in cache yet — saving without extended attributes", insErr.message);
         ({ data: inserted, error: insErr } = await supabase
           .from("wardrobe_items").insert(payload).select("*").single());
       }
       if (insErr) throw insErr;
 
-
       toast.success("Added to your closet");
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : (typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : "Failed to save wardrobe item.");
-    
-
+      const msg = e instanceof Error ? e.message : (typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : "Failed to save wardrobe item.");
       console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
@@ -506,7 +498,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
-            <input ref={fileRef} type="file" className="hidden"
+      <input ref={fileRef} type="file" className="hidden"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
       {step === "capture" ? (
         <div className="flex-1 flex flex-col px-6 pb-10">
@@ -517,7 +509,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           >
             <div className="absolute inset-0 grain opacity-30" />
             <div className="absolute inset-8 border border-white/20 rounded-2xl" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white/60">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-white/60">
               <Sparkles size={28} className="mx-auto animate-float" />
               <p className="mt-3 text-[10px] uppercase tracking-[0.35em]">Add a garment</p>
               <p className="text-[10px] uppercase tracking-[0.35em] mt-1 opacity-60">tap to take a photo</p>
@@ -538,14 +530,14 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               onClick={() => galleryRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
-                            <ImageIcon size={16} />
+              <ImageIcon size={16} />
               <span className="text-[10px] uppercase tracking-widest">Photo library</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
-                            <Upload size={16} />
+              <Upload size={16} />
               <span className="text-[10px] uppercase tracking-widest">Choose file</span>
             </button>
             <button
