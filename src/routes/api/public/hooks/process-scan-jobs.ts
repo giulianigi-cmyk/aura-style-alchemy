@@ -6,9 +6,11 @@ export const Route = createFileRoute("/api/public/hooks/process-scan-jobs")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY;
+        // Must be a real server-only secret: the publishable key ships in
+        // the browser bundle and is not a credential.
+        const expected = process.env.SCAN_WORKER_SECRET;
         const provided =
-          request.headers.get("apikey") ??
+          request.headers.get("x-worker-secret") ??
           request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
           "";
         if (!expected || provided !== expected) {

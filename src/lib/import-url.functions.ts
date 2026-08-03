@@ -6,7 +6,7 @@ import { fetchImageAsDataUrl } from "./fetch-image";
 import { checkPublicUrl, safeFetch } from "./safe-url";
 
 const InputSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed."),
   // Supabase session token — required only for Firecrawl-powered imports,
   // where we enforce a per-user daily quota.
   accessToken: z.string().optional(),
