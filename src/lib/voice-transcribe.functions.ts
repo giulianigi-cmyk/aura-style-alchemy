@@ -46,7 +46,7 @@ export const transcribeVoice = createServerFn({ method: "POST" })
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.error("[AURA voice-transcribe] OpenAI error", res.status, errText);
-      throw new Error("Transcription failed");
+      throw new Error(`Transcription failed (${res.status}): ${errText.slice(0, 300) || "no detail"}`);
     }
 
     const json = (await res.json()) as { text?: string };
