@@ -100,3 +100,69 @@ export const analyzeWardrobeImage = createServerFn({ method: "POST" })
             ],
           },
         ],
+      });
+
+      let text: string;
+      try {
+        text = (await call()).text;
+      } catch (err) {
+        console.error("[AURA analyze] first call failed", err);
+        text = "";
+      }
+
+      let output: z.infer<typeof OutputSchema>;
+      try {
+        output = parseAiJson(text, OutputSchema);
+      } catch {
+        const r2 = await generateText({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: systemPrompt },
+                { type: "image", image: data.imageDataUrl },
+              ],
+            },
+            { role: "assistant", content: text || "(no response)" },
+            {
+              role: "user",
+              content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+            },
+          ],
+        });
+        output = parseAiJson(r2.text, OutputSchema);
+      }
+
+      // Filter to allowed values
+      const allowed = <T extends readonly string[]>(arr: string[], set: T) =>
+        arr.filter(v => (set as readonly string[]).includes(v));
+      const single = <T extends readonly string[]>(v: string, set: T) =>
+        (set as readonly string[]).includes(v) ? v : "";
+
+      const category = (CATEGORIES as readonly string[]).includes(output.category) ? output.category : "";
+      const validSubcats = category ? (SUBCATEGORY_OPTIONS[category] ?? []) : ALL_SUBCATEGORIES;
+
+      return {
+        category,
+        subcategory: validSubcats.includes(output.subcategory) ? output.subcategory : "",
+        colors: output.colors.filter(c => COLOR_NAMES.includes(c)),
+        styles: allowed(output.styles, STYLES),
+        occasions: allowed(output.occasions, OCCASIONS),
+        seasons: allowed(output.seasons, SEASONS),
+        brand: output.brand?.trim() ?? "",
+        materials: allowed(output.materials, MATERIALS),
+        length: ATTRIBUTE_APPLICABILITY.length.includes(category) ? single(output.length, LENGTH_OPTIONS) : "",
+        sleeveLength: ATTRIBUTE_APPLICABILITY.sleeveLength.includes(category) ? single(output.sleeveLength, SLEEVE_LENGTH_OPTIONS) : "",
+        fit: ATTRIBUTE_APPLICABILITY.fit.includes(category) ? single(output.fit, FIT_OPTIONS) : "",
+        heelHeight: ATTRIBUTE_APPLICABILITY.heelHeight.includes(category) ? single(output.heelHeight, HEEL_HEIGHT_OPTIONS) : "",
+        toeShape: ATTRIBUTE_APPLICABILITY.toeShape.includes(category) ? single(output.toeShape, TOE_SHAPE_OPTIONS) : "",
+        closure: ATTRIBUTE_APPLICABILITY.closure.includes(category) ? single(output.closure, CLOSURE_OPTIONS) : "",
+        gender: single(output.gender, GENDER_OPTIONS),
+        styleTags: allowed(output.styleTags, STYLE_TAG_OPTIONS).slice(0, 4),
+      };
+    } catch (err) {
+      console.error("[AURA analyze] failed", err);
+      return fallback;
+    }
+  });
