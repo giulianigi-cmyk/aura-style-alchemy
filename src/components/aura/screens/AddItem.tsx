@@ -21,7 +21,16 @@ import {
   OCCASION_OPTIONS as occasionOptions,
   MATERIAL_OPTIONS as materialOptions,
   CURRENCY_OPTIONS as currencyOptions,
+  LENGTH_OPTIONS as lengthOptions,
+  SLEEVE_LENGTH_OPTIONS as sleeveLengthOptions,
+  FIT_OPTIONS as fitOptions,
+  HEEL_HEIGHT_OPTIONS as heelHeightOptions,
+  TOE_SHAPE_OPTIONS as toeShapeOptions,
+  CLOSURE_OPTIONS as closureOptions,
+  GENDER_OPTIONS as genderOptions,
+  STYLE_TAG_OPTIONS as styleTagOptions,
   subcategoriesFor,
+  attributeAppliesTo,
 } from "@/lib/wardrobe-options";
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 
@@ -220,6 +229,14 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
   const [subcategory, setSubcategory] = useState("");
+  const [length, setLength] = useState("");
+  const [sleeveLength, setSleeveLength] = useState("");
+  const [fit, setFit] = useState("");
+  const [heelHeight, setHeelHeight] = useState("");
+  const [toeShape, setToeShape] = useState("");
+  const [closure, setClosure] = useState("");
+  const [gender, setGender] = useState("");
+  const [styleTags, setStyleTags] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
@@ -233,6 +250,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const resetFields = () => {
     setBrand(""); setSize(""); setCategory("Tops"); setSubcategory(""); setColors([]);
+    setLength(""); setSleeveLength(""); setFit(""); setHeelHeight(""); setToeShape("");
+    setClosure(""); setGender(""); setStyleTags([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
   };
@@ -264,6 +283,14 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       .then(result => {
         if (result.category) setCategory(result.category);
         if (result.subcategory) setSubcategory(result.subcategory);
+        if (result.length) setLength(result.length);
+        if (result.sleeveLength) setSleeveLength(result.sleeveLength);
+        if (result.fit) setFit(result.fit);
+        if (result.heelHeight) setHeelHeight(result.heelHeight);
+        if (result.toeShape) setToeShape(result.toeShape);
+        if (result.closure) setClosure(result.closure);
+        if (result.gender) setGender(result.gender);
+        if (result.styleTags?.length) setStyleTags(result.styleTags);
         if (result.colors?.length) setColors(result.colors);
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
@@ -416,20 +443,28 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency: price.trim() ? currency : null,
         size: size.trim() || null,
       };
-      // New column not yet in generated types — attach with a safe cast.
+      // New columns not yet in generated types — attach with a safe cast,
+      // same pattern already used for `composition` below.
       const compositionToSave = composition.filter((c) => materials.includes(c.material));
-      // Cast through unknown: the generated types don't know the new
-      // composition column yet (regenerate types after the migration).
       const fullPayload = {
         ...payload,
         composition: compositionToSave.length ? compositionToSave : null,
+        length: length || null,
+        sleeve_length: sleeveLength || null,
+        fit: fit || null,
+        heel_height: heelHeight || null,
+        toe_shape: toeShape || null,
+        closure: closure || null,
+        gender: gender || null,
+        style_tags: styleTags,
       } as unknown as TablesInsert<"wardrobe_items">;
 
             let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
-      if (insErr && String(insErr.message).includes("composition")) {
-        // Schema cache stale: save without composition rather than failing.
-        console.warn("[AURA wardrobe] composition column not in cache — saving without it");
+      if (insErr && /column .* does not exist|composition/i.test(String(insErr.message))) {
+        // Schema cache stale (e.g. right after the taxonomy migration):
+        // save with the core fields only rather than failing outright.
+        console.warn("[AURA wardrobe] new column not in cache yet — saving without extended attributes", insErr.message);
         ({ data: inserted, error: insErr } = await supabase
           .from("wardrobe_items").insert(payload).select("*").single());
       }
@@ -637,7 +672,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               label="Category"
               options={categories}
               value={category}
-              onChange={(c) => { setCategory(c); setSubcategory(""); }}
+              onChange={(c) => {
+                setCategory(c); setSubcategory("");
+                setLength(""); setSleeveLength(""); setFit("");
+                setHeelHeight(""); setToeShape(""); setClosure("");
+              }}
             />
             {subcategoriesFor(category).length > 0 && (
               <ChipGroup
@@ -647,6 +686,31 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 onChange={setSubcategory}
               />
             )}
+            {attributeAppliesTo("length", category) && (
+              <ChipGroup label="Length" options={lengthOptions} value={length} onChange={setLength} />
+            )}
+            {attributeAppliesTo("sleeveLength", category) && (
+              <ChipGroup label="Sleeve" options={sleeveLengthOptions} value={sleeveLength} onChange={setSleeveLength} />
+            )}
+            {attributeAppliesTo("fit", category) && (
+              <ChipGroup label="Fit" options={fitOptions} value={fit} onChange={setFit} />
+            )}
+            {attributeAppliesTo("heelHeight", category) && (
+              <ChipGroup label="Heel" options={heelHeightOptions} value={heelHeight} onChange={setHeelHeight} />
+            )}
+            {attributeAppliesTo("toeShape", category) && (
+              <ChipGroup label="Toe shape" options={toeShapeOptions} value={toeShape} onChange={setToeShape} />
+            )}
+            {attributeAppliesTo("closure", category) && (
+              <ChipGroup label="Closure" options={closureOptions} value={closure} onChange={setClosure} />
+            )}
+            <ChipGroup label="Gender" options={genderOptions} value={gender} onChange={setGender} />
+            <MultiChipGroup
+              label="Style tags"
+              options={styleTagOptions}
+              values={styleTags}
+              onToggle={(v: string) => toggle(styleTags, setStyleTags, v)}
+            />
             <ColorPicker value={colors} onChange={setColors} />
 
             <div className="border-b border-border/60 pb-3">
