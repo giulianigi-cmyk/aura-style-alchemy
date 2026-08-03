@@ -151,9 +151,9 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         speakNextReplyRef.current = false;
         void speak(res.reply);
       }
-    } catch (e) {
-      console.error("[AURA stylist-chat]", e);
-      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
+        } catch (e) {
+      console.error("[AURA voice-transcribe]", e);
+      toast.error(e instanceof Error ? `Trascrizione non riuscita: ${e.message}` : "Trascrizione non riuscita");
     } finally {
       setBusy(false);
     }
