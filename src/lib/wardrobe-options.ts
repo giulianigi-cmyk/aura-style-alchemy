@@ -13,11 +13,11 @@ export const MATERIAL_OPTIONS = [
 export const CURRENCY_OPTIONS = ["EUR", "USD", "GBP"];
 
 export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
-  Tops: ["T-Shirt", "Shirt", "Blouse", "Sweater", "Tank Top", "Polo", "Crop Top", "Bodysuit"],
-  Outerwear: ["Coat", "Trench Coat", "Jacket", "Blazer", "Cardigan", "Vest", "Puffer", "Parka"],
-  Bottoms: ["Jeans", "Trousers", "Shorts", "Skirt", "Leggings", "Cargo Pants"],
-  Dresses: ["Mini Dress", "Midi Dress", "Maxi Dress", "Jumpsuit", "Wrap Dress"],
-  Shoes: ["Sandals", "Flats", "Sneakers", "Loafers", "Pumps / Heels", "Boots", "Espadrilles", "Slides", "Slippers"],
+  Tops: ["T-Shirt", "Oversized T-Shirt", "Fitted T-Shirt", "Tank Top", "Crop Top", "Bodysuit", "Blouse", "Shirt", "Polo", "Sweater", "Cardigan", "Hoodie", "Sweatshirt", "Off-Shoulder Top", "Halter Top"],
+  Outerwear: ["Coat", "Wool Coat", "Trench Coat", "Puffer Jacket", "Parka", "Denim Jacket", "Leather Jacket", "Bomber Jacket", "Blazer", "Oversized Blazer", "Cropped Blazer", "Vest"],
+  Bottoms: ["Skinny Jeans", "Straight Jeans", "Wide Leg Jeans", "Bootcut Jeans", "Flared Jeans", "Mom Jeans", "Tailored Trousers", "Wide Leg Trousers", "Cargo Trousers", "Linen Trousers", "Leggings", "Denim Shorts", "Tailored Shorts", "Cargo Shorts", "Mini Skirt", "Midi Skirt", "Maxi Skirt", "Denim Skirt", "Pleated Skirt", "Pencil Skirt", "Wrap Skirt"],
+  Dresses: ["Mini Dress", "Midi Dress", "Maxi Dress", "Slip Dress", "Shirt Dress", "Wrap Dress", "Bodycon Dress", "A-line Dress", "Evening Dress", "Jumpsuit"],
+  Shoes: ["Flat Sandals", "Heeled Sandals", "Ankle Boots", "Knee-high Boots", "Over-the-knee Boots", "Running Sneakers", "Lifestyle Sneakers", "High-top Sneakers", "Loafers", "High Heel Pumps", "Mid Heel Pumps", "Low Heel Pumps", "Ballet Flats", "Mules", "Espadrilles", "Wedges", "Platform Heels", "Slides", "Slippers"],
   Bags: ["Tote", "Crossbody", "Clutch", "Backpack", "Shoulder Bag", "Bucket Bag", "Belt Bag"],
   Accessories: ["Belt", "Scarf", "Hat", "Sunglasses", "Jewelry", "Gloves", "Watch", "Hair Accessory"],
   Underwear: ["Bra", "Briefs", "Sleepwear", "Shapewear", "Socks"],
