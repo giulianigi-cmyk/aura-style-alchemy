@@ -106,17 +106,30 @@ export const analyzeWardrobeGap = createServerFn({ method: "POST" })
         parsed = parseAiJson(r2.text, OutputSchema);
       }
 
-      const category = ITEM_CATEGORIES.includes(parsed.category) ? parsed.category : ITEM_CATEGORIES[0];
+            const category = ITEM_CATEGORIES.includes(parsed.category) ? parsed.category : ITEM_CATEGORIES[0];
       const colors = parsed.colors.filter((c) => COLOR_NAMES.includes(c));
 
+      // Dresses/Jumpsuits già coprono lo slot top+bottom — abbinarli a un
+      // Top o Bottom suggerito (o viceversa) non si indossa mai davvero
+      // insieme, indipendentemente dal colore. Stessa regola già usata
+      // per la generazione outfit AI altrove in AURA.
+      const INCOMPATIBLE_CATEGORIES: Record<string, string[]> = {
+        Bottoms: ["Dresses", "Jumpsuits"],
+        Tops: ["Dresses", "Jumpsuits"],
+        Dresses: ["Tops", "Bottoms"],
+        Jumpsuits: ["Tops", "Bottoms"],
+      };
+      const excluded = new Set([category, ...(INCOMPATIBLE_CATEGORIES[category] ?? [])]);
+
       // Real matching items, computed here — not trusted from the model.
-      // Pieces from OTHER categories that share at least one color with
-      // the suggestion; if no color overlap exists, fall back to a
-      // capped list of other-category pieces. Deliberately a simple,
-      // honest heuristic, not a real outfit-compatibility engine.
-      const others = data.items.filter((it) => it.category !== category);
+      // Pieces from OTHER (compatible) categories that share at least one
+      // color with the suggestion; if no color overlap exists, fall back
+      // to a capped list of other compatible-category pieces. Deliberately
+      // a simple, honest heuristic, not a real outfit-compatibility engine.
+      const others = data.items.filter((it) => it.category && !excluded.has(it.category));
       const colorMatches = others.filter((it) => (it.colors ?? []).some((c) => colors.includes(c)));
       const pairsWithIds = (colorMatches.length > 0 ? colorMatches : others.slice(0, 12)).map((it) => it.id);
+
 
       const suggestion: GapSuggestion = {
         category,
