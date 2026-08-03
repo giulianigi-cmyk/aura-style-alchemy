@@ -16,20 +16,25 @@ export const transcribeVoice = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const key = process.env.OPENAI_API_KEY;
-    console.log("[AURA voice-transcribe] hasApiKey:", !!key);
     if (!key) throw new Error("Missing OPENAI_API_KEY");
 
-    const match = data.audioDataUrl.match(/^data:(audio\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
-    if (!match) throw new Error("Invalid audio data");
-    const mime = match[1];
-    const base64 = match[2];
+    // Parsing robusto: prendiamo tutto dopo l'ULTIMA virgola come base64,
+    // e solo il tipo base (prima del primo ';') come mime — non assumiamo
+    // che non ci siano parametri extra come ";codecs=..." nel mezzo, che
+    // Safari iOS aggiunge spesso e la vecchia regex rigida non gestiva.
+    const commaIdx = data.audioDataUrl.indexOf(",");
+    if (commaIdx === -1 || !data.audioDataUrl.startsWith("data:")) {
+      throw new Error("Invalid audio data");
+    }
+    const header = data.audioDataUrl.slice(5, commaIdx);
+    const base64 = data.audioDataUrl.slice(commaIdx + 1);
+    const mimeMatch = header.match(/^audio\/[a-zA-Z0-9.+-]+/);
+    const mime = mimeMatch ? mimeMatch[0] : "audio/webm";
     const buffer = Buffer.from(base64, "base64");
     const ext = mime.includes("webm") ? "webm" : mime.includes("mp4") ? "mp4" : mime.includes("ogg") ? "ogg" : "wav";
-    const fileName = `audio.${ext}`;
-    console.log("[AURA voice-transcribe] mime:", mime, "bytes:", buffer.length, "fileName:", fileName);
 
     const form = new FormData();
-    form.append("file", new Blob([buffer], { type: mime }), fileName);
+    form.append("file", new Blob([buffer], { type: mime }), `audio.${ext}`);
     form.append("model", "whisper-1");
 
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -38,11 +43,10 @@ export const transcribeVoice = createServerFn({ method: "POST" })
       body: form,
     });
 
-    console.log("[AURA voice-transcribe] OpenAI status:", res.status);
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.error("[AURA voice-transcribe] OpenAI error body:", res.status, errText);
-      throw new Error(`OpenAI ${res.status}: ${errText || "no response body"}`);
+      console.error("[AURA voice-transcribe] OpenAI error", res.status, errText);
+      throw new Error("Transcription failed");
     }
 
     const json = (await res.json()) as { text?: string };
