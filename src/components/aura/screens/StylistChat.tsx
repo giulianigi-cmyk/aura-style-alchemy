@@ -13,6 +13,13 @@ import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
 type ChatMsg = { role: "user" | "assistant"; content: string; itemIds?: string[] };
+type FeedbackType = "liked" | "disliked" | "saved";
+
+const FEEDBACK_LABELS: Record<FeedbackType, string> = {
+  liked: "❤️ Mi piace questo outfit",
+  disliked: "👎 Non fa per me, proponimi un'alternativa",
+  saved: "💾 Salva questo outfit",
+};
 
 export function StylistChat({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
@@ -23,7 +30,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, string>>({});
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, FeedbackType>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,12 +48,11 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  const send = async () => {
-    const text = input.trim();
+  /** Invia un messaggio (testo libero o etichetta di feedback) e continua la conversazione. */
+  const sendMessage = async (text: string) => {
     if (!text || busy) return;
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
     setMessages(history);
-    setInput("");
     setBusy(true);
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
@@ -83,6 +89,12 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     }
   };
 
+  const send = () => {
+    const text = input.trim();
+    setInput("");
+    void sendMessage(text);
+  };
+
   const thumb = (id: string) => {
     const it = items.find((x) => x.id === id);
     if (!it) return null;
@@ -100,15 +112,18 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     );
   };
 
-  const giveFeedback = async (index: number, itemIds: string[], feedbackType: "liked" | "disliked" | "saved") => {
-    setFeedbackGiven((f) => ({ ...f, [index]: feedbackType })); // feedback visivo immediato
-    try {
-      await submitOutfitFeedback({ data: { itemIds, feedbackType } });
-    } catch (e) {
-      console.error("[AURA outfit-feedback]", e);
-      // il tap resta confermato visivamente anche se la scrittura fallisce
-      // in background — non blocchiamo l'esperienza, ma logghiamo l'errore
-    }
+  /** Tap su ❤️/👎/💾: logga il feedback strutturato E lo manda come messaggio in chat. */
+  const giveFeedback = (index: number, itemIds: string[], feedbackType: FeedbackType) => {
+    if (feedbackGiven[index] || busy) return; // evita doppio invio sullo stesso outfit
+    setFeedbackGiven((f) => ({ ...f, [index]: feedbackType }));
+
+    // Log per l'Aggregator/user_style_memory — in background, non blocca la chat
+    void submitOutfitFeedback({ data: { itemIds, feedbackType } }).catch((e) =>
+      console.error("[AURA outfit-feedback]", e)
+    );
+
+    // Il feedback diventa un vero messaggio: la conversazione continua
+    void sendMessage(FEEDBACK_LABELS[feedbackType]);
   };
 
   return (
@@ -145,21 +160,21 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
                   {m.itemIds.map(thumb)}
                 </div>
               )}
-              {m.itemIds && m.itemIds.length > 0 && (
+              {m.itemIds && m.itemIds.length > 0 && !feedbackGiven[i] && (
                 <div className="mt-2 flex gap-3">
                   <button
-                    onClick={() => void giveFeedback(i, m.itemIds!, "liked")}
-                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "liked" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    onClick={() => giveFeedback(i, m.itemIds!, "liked")}
+                    className="text-xl active:scale-90"
                     aria-label="Mi piace"
                   >❤️</button>
                   <button
-                    onClick={() => void giveFeedback(i, m.itemIds!, "disliked")}
-                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "disliked" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
+                    className="text-xl active:scale-90"
                     aria-label="Non fa per me"
                   >👎</button>
                   <button
-                    onClick={() => void giveFeedback(i, m.itemIds!, "saved")}
-                    className={`text-lg transition-transform active:scale-90 ${feedbackGiven[i] === "saved" ? "opacity-100 scale-110" : "opacity-60"}`}
+                    onClick={() => giveFeedback(i, m.itemIds!, "saved")}
+                    className="text-xl active:scale-90"
                     aria-label="Salva"
                   >💾</button>
                 </div>
