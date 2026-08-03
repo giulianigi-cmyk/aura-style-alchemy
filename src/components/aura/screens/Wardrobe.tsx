@@ -4,8 +4,10 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +49,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
   const [edit, setEdit] = useState({
     brand: "",
     size: "",
@@ -139,6 +143,33 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   };
   const season = useMemo(() => currentSeason(), []);
 
+  /** One-time backfill for items saved before the taxonomy revision
+   *  (subcategory with length/heel baked in, e.g. "Mini Dress"). Uses the
+   *  already-implemented mapLegacySubcategory() via the server function —
+   *  no mapping logic here, just triggers it and refreshes the list. */
+  const runLegacyMigration = async () => {
+    if (!user || migrating) return;
+    setMigrating(true);
+    try {
+      const res = await migrateLegacy({ data: undefined });
+      toast.success(
+        res.updated > 0
+          ? `Updated ${res.updated} of ${res.total} pieces`
+          : "Your wardrobe is already up to date"
+      );
+      if (res.updated > 0) {
+        const { data } = await supabase.from("wardrobe_items")
+          .select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+        setItems((data ?? []) as WardrobeItem[]);
+      }
+    } catch (e) {
+      console.error("[AURA wardrobe] legacy migration failed", e);
+      toast.error("Could not update existing pieces");
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   // Sign whenever items change
   useEffect(() => {
     if (!items.length) { setSigned({}); return; }
@@ -191,6 +222,16 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           <h1 className="font-serif text-4xl mt-1">Your closet</h1>
         </div>
                 <div className="flex gap-2">
+          <button
+            onClick={() => void runLegacyMigration()}
+            disabled={migrating}
+            aria-label="Update existing pieces to new taxonomy"
+            title="Update existing pieces to new taxonomy"
+            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-50"
+          >
+            {migrating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+          </button>
+
           <button
             onClick={() => setScanMenuOpen(true)}
             aria-label="Scan photos"
