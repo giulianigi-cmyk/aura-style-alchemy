@@ -29,7 +29,7 @@ export const CURRENCY_OPTIONS = ["EUR", "USD", "GBP"];
 export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
   Tops: ["T-Shirt", "Shirt", "Blouse", "Tank Top", "Camisole", "Crop Top", "Bodysuit", "Polo", "Sweater", "Cardigan", "Hoodie", "Sweatshirt", "Vest Top", "Knit Top", "Tunic"],
   Bottoms: ["Jeans", "Trousers", "Cargo Pants", "Joggers", "Leggings", "Shorts", "Bermuda Shorts", "Skirt"],
-  Dresses: ["Slip Dress", "Shirt Dress", "Wrap Dress", "Bodycon Dress", "Shift Dress", "Sweater Dress"],
+  Dresses: ["Slip Dress", "Shirt Dress", "Wrap Dress", "Bodycon Dress", "A-line Dress", "Shift Dress", "Sweater Dress", "Evening Dress"],
   Jumpsuits: ["Jumpsuit", "Playsuit", "Romper"],
   Outerwear: ["Blazer", "Coat", "Trench Coat", "Puffer Jacket", "Parka", "Rain Jacket", "Windbreaker", "Denim Jacket", "Leather Jacket", "Bomber Jacket", "Shacket", "Cape", "Vest"],
   Shoes: ["Sneakers", "Running Shoes", "Sandals", "Flats", "Loafers", "Pumps", "Boots", "Chelsea Boots", "Combat Boots", "Ankle Boots", "Knee Boots", "Over-the-Knee Boots", "Espadrilles", "Slides", "Mules", "Wedges", "Clogs", "Slippers", "Flip Flops"],
@@ -41,7 +41,21 @@ export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
 };
 
 // Attributi separati — trasversali, non annidati nel Type.
-export const LENGTH_OPTIONS = ["Mini", "Midi", "Maxi", "Cropped", "Regular", "Long"];
+// Length NON è più un'unica lista piatta: i valori sensati cambiano per
+// categoria (un vestito non ha "Longline", un cappotto non ha "Mini").
+// Regola: default per categoria, con eccezioni per Type specifico quando
+// la categoria è eterogenea (Bottoms contiene sia gonne sia pantaloni —
+// solo le gonne hanno senso con Mini/Midi/Maxi).
+export const LENGTH_OPTIONS_BY_CATEGORY: Record<string, string[]> = {
+  Dresses: ["Mini", "Midi", "Maxi"],
+  Outerwear: ["Short", "Mid", "Long"],
+  Tops: ["Cropped", "Regular", "Longline"],
+};
+const LENGTH_OPTIONS_BY_TYPE: Record<string, string[]> = {
+  Skirt: ["Mini", "Midi", "Maxi"],
+};
+// Lista piatta per retrocompatibilità (usata solo da mapLegacySubcategory).
+export const LENGTH_OPTIONS = ["Mini", "Midi", "Maxi", "Cropped", "Regular", "Short", "Mid", "Long", "Longline"];
 export const SLEEVE_LENGTH_OPTIONS = ["Sleeveless", "Short Sleeve", "Three-Quarter Sleeve", "Long Sleeve"];
 export const FIT_OPTIONS = ["Slim", "Regular", "Relaxed", "Oversized", "Tailored"];
 export const HEEL_HEIGHT_OPTIONS = ["Flat", "Low", "Mid", "High"];
@@ -60,8 +74,9 @@ export const STYLE_TAG_OPTIONS = [
 
 // Categorie dove ogni attributo ha senso chiedere/mostrare — evita di
 // proporre "Heel Height" per una t-shirt o "Sleeve Length" per una borsa.
+// NOTA: 'length' non è qui — dipende anche dal Type (es. Skirt dentro
+// Bottoms), gestito da lengthAppliesTo()/lengthOptionsFor() sotto.
 export const ATTRIBUTE_APPLICABILITY: Record<string, string[]> = {
-  length: ["Dresses", "Bottoms", "Outerwear", "Jumpsuits"],
   sleeveLength: ["Tops", "Dresses", "Outerwear", "Jumpsuits"],
   fit: ["Tops", "Bottoms", "Dresses", "Outerwear", "Jumpsuits", "Activewear"],
   heelHeight: ["Shoes"],
@@ -76,6 +91,23 @@ export function subcategoriesFor(category: string | null | undefined): string[] 
 export function attributeAppliesTo(attribute: keyof typeof ATTRIBUTE_APPLICABILITY, category: string | null | undefined): boolean {
   if (!category) return false;
   return ATTRIBUTE_APPLICABILITY[attribute]?.includes(category) ?? false;
+}
+
+/**
+ * Length: un solo attributo nel database, ma i valori proposti dipendono
+ * dalla categoria (e, quando serve, dal Type — es. "Skirt" dentro
+ * Bottoms ha Mini/Midi/Maxi, mentre Jeans/Trousers nella stessa
+ * categoria non hanno length). Un Type specifico vince sempre sul
+ * default di categoria.
+ */
+export function lengthOptionsFor(category: string | null | undefined, type: string | null | undefined): string[] {
+  if (type && LENGTH_OPTIONS_BY_TYPE[type]) return LENGTH_OPTIONS_BY_TYPE[type];
+  if (category && LENGTH_OPTIONS_BY_CATEGORY[category]) return LENGTH_OPTIONS_BY_CATEGORY[category];
+  return [];
+}
+
+export function lengthAppliesTo(category: string | null | undefined, type: string | null | undefined): boolean {
+  return lengthOptionsFor(category, type).length > 0;
 }
 
 /**
