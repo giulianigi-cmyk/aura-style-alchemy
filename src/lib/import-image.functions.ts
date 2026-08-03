@@ -2,11 +2,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { fetchImageAsDataUrl } from "./fetch-image";
+import { checkPublicUrl } from "./safe-url";
 
 const InputSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed."),
   // Product page origin — sent as Referer to satisfy hotlink protection.
-  referer: z.string().url().optional(),
+  referer: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed.").optional(),
 });
 
 /** Downloads one of the alternative product images surfaced by the URL

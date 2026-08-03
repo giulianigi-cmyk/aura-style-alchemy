@@ -9,7 +9,7 @@ const InputSchema = z.object({
   outfitId: z.string().uuid().nullable().optional(),
   rating: z.number().int().min(1).max(5).nullable().optional(),
   reason: z.string().max(500).nullable().optional(),
-  context: z.record(z.string()).nullable().optional(),
+  context: z.record(z.string(), z.string()).nullable().optional(),
   // es. { occasion: "cena elegante", season: "estate" }
 });
 

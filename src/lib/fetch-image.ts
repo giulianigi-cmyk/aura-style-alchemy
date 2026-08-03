@@ -7,6 +7,8 @@
  *    outright, so no header tweak can help from a Worker).
  *  - Chunked base64 encoding (the naive byte loop was O(n²)). */
 
+import { checkPublicUrl, safeFetch } from "./safe-url";
+
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 
 const UA =
@@ -34,7 +36,7 @@ async function timedFetch(url: string, headers: Record<string, string>): Promise
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12000);
   try {
-    return await fetch(url, { signal: ctl.signal, headers });
+    return await safeFetch(url, { signal: ctl.signal, headers });
   } finally {
     clearTimeout(timer);
   }
@@ -44,6 +46,9 @@ export async function fetchImageAsDataUrl(
   imageUrl: string,
   referer?: string,
 ): Promise<FetchImageResult> {
+  const urlErr = checkPublicUrl(imageUrl);
+  if (urlErr) return { ok: false, error: urlErr };
+
   const blocked = (r: Response) => r.status === 401 || r.status === 403;
 
   let resp: Response;

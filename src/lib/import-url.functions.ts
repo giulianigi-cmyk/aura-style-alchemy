@@ -3,9 +3,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getBrandFromUrl } from "./brand-domains";
 import { fetchImageAsDataUrl } from "./fetch-image";
+import { checkPublicUrl, safeFetch } from "./safe-url";
 
 const InputSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed."),
   // Supabase session token — required only for Firecrawl-powered imports,
   // where we enforce a per-user daily quota.
   accessToken: z.string().optional(),
@@ -528,8 +529,9 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
-    const resp = await fetch(target.toString(), {
-      redirect: "follow",
+    const urlErr = checkPublicUrl(target.toString());
+    if (urlErr) return { html: null, blocked: false };
+    const resp = await safeFetch(target.toString(), {
       signal: ctl.signal,
       headers: {
         "User-Agent":

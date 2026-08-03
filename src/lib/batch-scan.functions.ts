@@ -157,3 +157,13 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
 
     return { results, confirmed: results.filter((r) => r.ok).length };
   });
+
+/** Authenticated in-app trigger for the scan worker.
+ *  The public /api/public/hooks/process-scan-jobs route stays reserved for
+ *  trusted callers holding SCAN_WORKER_SECRET (cron/ops). */
+export const triggerScanWorker = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { runScanWorker } = await import("./batch-scan.server");
+    return await runScanWorker(5);
+  });

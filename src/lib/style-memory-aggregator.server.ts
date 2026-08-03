@@ -87,9 +87,9 @@ export async function runStyleMemoryAggregator(limit = 200) {
           _memory_type: cand.memory_type,
           _value: cand.value,
           _weight: weight,
-          _context_axis: null,
-          _context_value: null,
-          _mirror_evidence_count: null,
+          _context_axis: null as unknown as string,
+          _context_value: null as unknown as string,
+          _mirror_evidence_count: null as unknown as number,
         });
         if (gErr) { console.error("[aggregator] general upsert failed", gErr); continue; }
         const generalEvidenceCount = (general as { evidence_count: number }[])[0]?.evidence_count ?? 1;
