@@ -23,12 +23,13 @@ type ChatMsg = {
   itemIds?: string[];
   choices?: string[];
   actions?: { type: ActionType; label: string }[];
+  uiOnly?: boolean; // messaggio generato localmente: mai inviato all'AI come contesto
 };
 
 type MsgUiState = {
   feedback?: FeedbackType;
   choice?: string;
-  actionsDone?: ActionType[]; // ogni azione completata indipendentemente, non una sola per messaggio
+  actionsDone?: ActionType[];
   calendarStep?: "choose" | "pick_date";
   pickedDate?: string;
 };
@@ -92,7 +93,9 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       const dressRules = await loadDressRules(user?.id);
       const res = await stylistChat({
         data: {
-          messages: history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
+          // uiOnly esclusi: non devono mai rientrare come contesto per l'AI,
+          // altrimenti il modello impara e ripete frasi nostre come se fossero sue.
+          messages: history.filter((m) => !m.uiOnly).slice(-12).map((m) => ({ role: m.role, content: m.content })),
           dressRules,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
@@ -165,8 +168,14 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     if (feedbackType === "saved") {
       setMessages((m) => [
         ...m,
-        { role: "user", content: FEEDBACK_LABELS.saved },
-        { role: "assistant", content: "Vuoi salvarlo sulla tela o aggiungerlo al calendario?", itemIds, actions: SAVE_ACTIONS },
+        { role: "user", content: FEEDBACK_LABELS.saved, uiOnly: true },
+        {
+          role: "assistant",
+          content: "Vuoi salvarlo sulla tela o aggiungerlo al calendario?",
+          itemIds,
+          actions: SAVE_ACTIONS,
+          uiOnly: true,
+        },
       ]);
       return;
     }
@@ -271,8 +280,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                   </div>
                 )}
 
-                {/* Ogni chip resta visibile finché la SUA azione non è stata completata,
-                    indipendentemente dalle altre — tela e calendario sono azioni separate. */}
                 {remainingActions.length > 0 && !ui.calendarStep && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {remainingActions.map((a) => (
