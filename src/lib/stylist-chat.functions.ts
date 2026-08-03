@@ -35,8 +35,6 @@ const OutputSchema = z.object({
   choices: z.array(z.string()).max(4).optional(),
 });
 
-// Fisse, mai generate dal modello: eliminano qualsiasi rischio che l'AI
-// scriva queste parole come testo semplice invece che come azione reale.
 const SAVE_ACTIONS = [
   { type: "save_canvas" as const, label: "Salva sulla tela" },
   { type: "add_calendar" as const, label: "Aggiungi al calendario" },
@@ -67,10 +65,6 @@ export const stylistChat = createServerFn({ method: "POST" })
       size: it.size ?? "",
     }));
 
-    // Nota: NON menzioniamo mai "Salva sulla tela"/"Aggiungi al calendario"
-    // in nessuna istruzione o esempio dato al modello — quelle etichette
-    // esatte vengono decise solo dal server (vedi SAVE_ACTIONS sotto),
-    // per evitare che il modello le riscriva come testo semplice.
     const feedbackInstruction = {
       liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Do NOT offer to save it or add it anywhere — that is handled separately. Return an empty item_ids array and empty choices array.",
       disliked: "The user just tapped 'not for me, suggest an alternative' on your PREVIOUS suggestion. Propose a genuinely DIFFERENT outfit using different pieces than the ones you just suggested (check the conversation history for what you already proposed and avoid repeating those exact item_ids).",
@@ -85,6 +79,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Never invent items the user does not own. If the wardrobe lacks something, say so honestly and suggest what kind of piece would fill the gap.",
       "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps / Heels') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
       "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
+      "IMPORTANT — unverifiable constraints: if the user states a hard requirement that the catalog data cannot confirm or deny for a given item (e.g. 'no long dresses' but items only have generic category 'Dresses' with no length field, or 'not too tight' with no fit field), do NOT guess. Either avoid proposing anything from that ambiguous category entirely, or explicitly warn the user in your reply that you cannot confirm that detail for the piece you're suggesting (e.g. 'I can't confirm the length of this dress from what I have on file — let me know if it doesn't work'). Never silently propose something that might violate a stated constraint just because the data is missing.",
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
       ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
@@ -136,7 +131,6 @@ export const stylistChat = createServerFn({ method: "POST" })
         reply: (parsed.reply ?? "").slice(0, 1200),
         item_ids: parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
         choices: (parsed.choices ?? []).slice(0, 4),
-        // Sempre e solo dal server, mai dal modello.
         actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
       };
     } catch (err) {
