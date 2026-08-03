@@ -749,6 +749,29 @@ export type Database = {
         Args: { _object_name: string }
         Returns: boolean
       }
+      claim_pending_feedback: {
+        Args: { _limit?: number }
+        Returns: {
+          aggregation_version: number
+          context: Json | null
+          created_at: string
+          feedback_reason: string | null
+          feedback_type: string
+          id: string
+          item_ids: string[]
+          outfit_id: string | null
+          processed_at: string | null
+          rating: number | null
+          session_id: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "outfit_feedback"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_scan_jobs: {
         Args: { _limit: number }
         Returns: {
@@ -825,6 +848,20 @@ export type Database = {
         }[]
       }
       unfriend: { Args: { _other: string }; Returns: undefined }
+      upsert_style_memory: {
+        Args: {
+          _context_axis: string
+          _context_value: string
+          _memory_type: string
+          _mirror_evidence_count: number
+          _user_id: string
+          _value: string
+          _weight: number
+        }
+        Returns: {
+          evidence_count: number
+        }[]
+      }
       username_available: { Args: { _username: string }; Returns: boolean }
     }
     Enums: {
