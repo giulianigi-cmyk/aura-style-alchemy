@@ -459,51 +459,75 @@ export type Database = {
         Row: {
           bbox: Json | null
           category: string | null
+          closure: string | null
           colors: string[]
           confidence: number | null
           created_at: string
           description: string | null
+          fit: string | null
+          gender: string | null
+          heel_height: string | null
           id: string
           job_id: string
+          length: string | null
           material: string[]
           scan_id: string
           season: string | null
+          sleeve_length: string | null
           status: string
+          style_tags: string[]
           subcategory: string | null
+          toe_shape: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           bbox?: Json | null
           category?: string | null
+          closure?: string | null
           colors?: string[]
           confidence?: number | null
           created_at?: string
           description?: string | null
+          fit?: string | null
+          gender?: string | null
+          heel_height?: string | null
           id?: string
           job_id: string
+          length?: string | null
           material?: string[]
           scan_id: string
           season?: string | null
+          sleeve_length?: string | null
           status?: string
+          style_tags?: string[]
           subcategory?: string | null
+          toe_shape?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
           bbox?: Json | null
           category?: string | null
+          closure?: string | null
           colors?: string[]
           confidence?: number | null
           created_at?: string
           description?: string | null
+          fit?: string | null
+          gender?: string | null
+          heel_height?: string | null
           id?: string
           job_id?: string
+          length?: string | null
           material?: string[]
           scan_id?: string
           season?: string | null
+          sleeve_length?: string | null
           status?: string
+          style_tags?: string[]
           subcategory?: string | null
+          toe_shape?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -626,60 +650,84 @@ export type Database = {
         Row: {
           brand: string | null
           category: string | null
+          closure: string | null
           color: string | null
           colors: string[]
           created_at: string
           currency: string | null
+          fit: string | null
+          gender: string | null
+          heel_height: string | null
           id: string
           image_url: string
+          length: string | null
           material: string[]
           occasion: string | null
           price: number | null
           season: string | null
           size: string | null
+          sleeve_length: string | null
           source: string | null
           style: string | null
+          style_tags: string[]
           subcategory: string | null
+          toe_shape: string | null
           user_id: string
           worn_count: number
         }
         Insert: {
           brand?: string | null
           category?: string | null
+          closure?: string | null
           color?: string | null
           colors?: string[]
           created_at?: string
           currency?: string | null
+          fit?: string | null
+          gender?: string | null
+          heel_height?: string | null
           id?: string
           image_url: string
+          length?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
           season?: string | null
           size?: string | null
+          sleeve_length?: string | null
           source?: string | null
           style?: string | null
+          style_tags?: string[]
           subcategory?: string | null
+          toe_shape?: string | null
           user_id?: string
           worn_count?: number
         }
         Update: {
           brand?: string | null
           category?: string | null
+          closure?: string | null
           color?: string | null
           colors?: string[]
           created_at?: string
           currency?: string | null
+          fit?: string | null
+          gender?: string | null
+          heel_height?: string | null
           id?: string
           image_url?: string
+          length?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
           season?: string | null
           size?: string | null
+          sleeve_length?: string | null
           source?: string | null
           style?: string | null
+          style_tags?: string[]
           subcategory?: string | null
+          toe_shape?: string | null
           user_id?: string
           worn_count?: number
         }

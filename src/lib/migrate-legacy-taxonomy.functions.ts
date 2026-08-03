@@ -22,7 +22,7 @@ export const migrateLegacyTaxonomy = createServerFn({ method: "POST" })
     let updated = 0;
     for (const item of items ?? []) {
       const mapped = mapLegacySubcategory(item.subcategory, item.category);
-      const patch: Record<string, string> = {};
+      const patch: { subcategory?: string; length?: string; heel_height?: string } = {};
 
       if (mapped.type && mapped.type !== item.subcategory) patch.subcategory = mapped.type;
       if (mapped.length && !item.length) patch.length = mapped.length;
