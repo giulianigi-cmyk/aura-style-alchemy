@@ -515,45 +515,45 @@ function MySizes({ userId }: { userId: string | undefined }) {
     toast.success("Sizes saved");
   };
 
-  return (
-    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
+    return (
+    <section className="mx-6 mt-4 rounded-3xl bg-card border border-border/60 p-4 animate-fade-up">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
         {editing ? (
           <button
             onClick={cancelEdit}
             aria-label="Cancel editing sizes"
-            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><X size={13} /></button>
+            className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><X size={12} /></button>
         ) : (
           <button
             onClick={startEdit}
             aria-label="Edit sizes"
-            className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><Pencil size={13} /></button>
+            className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+          ><Pencil size={12} /></button>
         )}
       </div>
-      <div className="mt-4 space-y-4">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
         {SIZE_FIELDS.map((f) => {
           const v = values[f.key];
           const hint = sizeEquivalences(v, f.shoes ? { shoes: true } : undefined);
           return (
-            <div key={f.key} className="border-b border-border/60 pb-3">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{f.label}</p>
+            <div key={f.key} className="border-b border-border/60 pb-2">
+              <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{f.label}</p>
               {editing ? (
                 <>
                   <input
                     value={v}
                     onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                    placeholder={f.shoes ? "e.g. 38 — optional" : "e.g. 42 or M — optional"}
-                    className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+                    placeholder={f.shoes ? "38" : "42 / M"}
+                    className="mt-0.5 w-full bg-transparent font-serif text-base outline-none placeholder:text-muted-foreground/50"
                   />
-                  {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+                  {hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
                 </>
               ) : (
                 <>
-                  <p className="mt-1 font-serif text-lg">{loading ? "…" : v || "—"}</p>
-                  {v && hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+                  <p className="mt-0.5 font-serif text-base">{loading ? "…" : v || "—"}</p>
+                  {v && hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
                 </>
               )}
             </div>
@@ -564,7 +564,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
         <button
           onClick={save}
           disabled={saving || !dirty}
-          className="mt-5 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
+          className="mt-4 w-full h-11 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           <span className="text-[10px] uppercase tracking-[0.3em]">Save sizes</span>
