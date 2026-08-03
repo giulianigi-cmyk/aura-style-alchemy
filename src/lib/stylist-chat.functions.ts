@@ -13,6 +13,14 @@ const ItemSchema = z.object({
   brand: z.string().nullable().optional(),
   material: z.array(z.string()).nullable().optional(),
   size: z.string().nullable().optional(),
+  length: z.string().nullable().optional(),
+  sleeveLength: z.string().nullable().optional(),
+  fit: z.string().nullable().optional(),
+  heelHeight: z.string().nullable().optional(),
+  toeShape: z.string().nullable().optional(),
+  closure: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  styleTags: z.array(z.string()).nullable().optional(),
 });
 
 const MessageSchema = z.object({
@@ -63,6 +71,14 @@ export const stylistChat = createServerFn({ method: "POST" })
       brand: it.brand ?? "",
       material: it.material ?? [],
       size: it.size ?? "",
+      length: it.length ?? "",
+      sleeveLength: it.sleeveLength ?? "",
+      fit: it.fit ?? "",
+      heelHeight: it.heelHeight ?? "",
+      toeShape: it.toeShape ?? "",
+      closure: it.closure ?? "",
+      gender: it.gender ?? "",
+      styleTags: it.styleTags ?? [],
     }));
 
     const feedbackInstruction = {
@@ -77,9 +93,10 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Answer styling questions conversationally, in the same language the user writes in.",
       "When you recommend an outfit or specific pieces, use ONLY items from the wardrobe catalog below and put their ids in item_ids (max 6). If no items apply, return an empty item_ids array.",
       "Never invent items the user does not own. If the wardrobe lacks something, say so honestly and suggest what kind of piece would fill the gap.",
-      "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps / Heels') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
+      "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
       "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
-      "IMPORTANT — unverifiable constraints: if the user states a hard requirement that the catalog data cannot confirm or deny for a given item (e.g. 'no long dresses' but items only have generic category 'Dresses' with no length field, or 'not too tight' with no fit field), do NOT guess. Either avoid proposing anything from that ambiguous category entirely, or explicitly warn the user in your reply that you cannot confirm that detail for the piece you're suggesting (e.g. 'I can't confirm the length of this dress from what I have on file — let me know if it doesn't work'). Never silently propose something that might violate a stated constraint just because the data is missing.",
+      "Each item also carries separate attribute fields when known: length (garment length, e.g. Mini/Midi/Maxi for dresses and skirts, Short/Mid/Long for coats, Cropped/Regular/Longline for tops), sleeveLength, fit (e.g. Oversized, Slim, Tailored), heelHeight (Flat/Low/Mid/High), toeShape, closure, gender, and styleTags (free-form aesthetic labels like Minimal, Boho, Preppy, Office, Y2K — use these to match the vibe/aesthetic the user asks for). USE THESE DIRECTLY to honor explicit user requests — e.g. 'no long dresses' means excluding items where length is 'Maxi' (or 'Long'); 'only flat shoes' means heelHeight must be 'Flat'; 'oversized sweaters' means fit is 'Oversized'; 'something more minimal/elegant/streetwear' means matching styleTags. These fields are the source of truth for that request, not subcategory.",
+      "If the relevant attribute field is empty for an item (older wardrobe pieces not yet re-classified), you cannot confirm that detail — either avoid proposing that item for a constraint you can't verify, or explicitly say so in your reply (e.g. \"I can't confirm this dress's length from what I have on file\").",
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
       ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
