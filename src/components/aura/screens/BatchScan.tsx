@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { createBatchScan, deleteBatchScan, listBatchScans } from "@/lib/batch-scan.functions";
+import { createBatchScan, deleteBatchScan, listBatchScans, triggerScanWorker } from "@/lib/batch-scan.functions";
 type ScanRow = {
   id: string;
   status: string;
@@ -25,6 +25,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     const create = useServerFn(createBatchScan);
   const list = useServerFn(listBatchScans);
   const remove = useServerFn(deleteBatchScan);
+  const processJobs = useServerFn(triggerScanWorker);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [scans, setScans] = useState<ScanRow[]>([]);
@@ -61,14 +62,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
 
   const runWorker = async () => {
     try {
-      await fetch("/api/public/hooks/process-scan-jobs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-        },
-        body: JSON.stringify({ limit: 5 }),
-      });
+      await processJobs();
     } catch (e) {
       console.warn("[AURA batch-scan] worker trigger failed", e);
     }
