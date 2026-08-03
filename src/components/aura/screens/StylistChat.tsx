@@ -22,12 +22,15 @@ type ChatMsg = {
   actions?: { type: ActionType; label: string }[];
 };
 type FeedbackType = "liked" | "disliked" | "saved";
+type CalendarPick = { step: "choose" | "pick_date" };
 
 const FEEDBACK_LABELS: Record<FeedbackType, string> = {
   liked: "❤️ Mi piace questo outfit",
   disliked: "👎 Non fa per me, proponimi un'alternativa",
   saved: "💾 Salva questo outfit",
 };
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
@@ -41,6 +44,8 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, FeedbackType>>({});
   const [choicePicked, setChoicePicked] = useState<Record<number, string>>({});
   const [actionTaken, setActionTaken] = useState<Record<number, ActionType>>({});
+  const [calendarPick, setCalendarPick] = useState<Record<number, CalendarPick>>({});
+  const [pickedDate, setPickedDate] = useState<Record<number, string>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -137,31 +142,44 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     void sendMessage(choice);
   };
 
-  /** Azioni reali: portano davvero alla tela o salvano davvero nel planner — non solo testo in chat. */
-  const takeAction = async (index: number, itemIds: string[], action: { type: ActionType; label: string }) => {
+  const takeAction = (index: number, action: { type: ActionType; label: string }, itemIds: string[]) => {
     if (actionTaken[index] || !itemIds.length) return;
-    setActionTaken((a) => ({ ...a, [index]: action.type }));
 
     if (action.type === "save_canvas") {
+      setActionTaken((a) => ({ ...a, [index]: action.type }));
       openBuilder({ itemIds }); // porta sulla tela vera: l'immagine si genera lì, non si può finguere da chat
       return;
     }
     if (action.type === "add_calendar") {
-      if (!user) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const { error } = await supabase.from("outfit_plans").insert({
-        user_id: user.id,
-        date: today,
-        item_ids: itemIds,
-      });
-      if (error) {
-        console.error("[AURA add_calendar]", error);
-        toast.error("Non sono riuscita ad aggiungerlo al calendario");
-        return;
-      }
-      toast.success("Aggiunto al calendario di oggi");
+      setCalendarPick((c) => ({ ...c, [index]: { step: "choose" } })); // chiede prima "oggi o altro giorno"
+      return;
     }
-    // "dismiss": non fa nulla, i chip semplicemente spariscono
+    setActionTaken((a) => ({ ...a, [index]: action.type })); // dismiss: solo nasconde i chip
+  };
+
+  const confirmCalendarDate = async (index: number, itemIds: string[], date: string) => {
+    if (!user) return;
+    const { error } = await supabase.from("outfit_plans").insert({
+      user_id: user.id,
+      date,
+      item_ids: itemIds,
+    });
+    if (error) {
+      console.error("[AURA add_calendar]", error);
+      toast.error("Non sono riuscita ad aggiungerlo al calendario");
+      return;
+    }
+    toast.success(
+      date === todayIso()
+        ? "Aggiunto al calendario di oggi"
+        : `Aggiunto al calendario per il ${new Date(date).toLocaleDateString("it-IT")}`
+    );
+    setActionTaken((a) => ({ ...a, [index]: "add_calendar" }));
+    setCalendarPick((c) => {
+      const next = { ...c };
+      delete next[index];
+      return next;
+    });
   };
 
   return (
@@ -211,12 +229,14 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                   ))}
                 </div>
               )}
-              {m.actions && m.actions.length > 0 && !actionTaken[i] && (
+
+              {/* Chip azioni iniziali (Salva sulla tela / Aggiungi al calendario) */}
+              {m.actions && m.actions.length > 0 && !actionTaken[i] && !calendarPick[i] && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {m.actions.map((a) => (
                     <button
                       key={a.type}
-                      onClick={() => void takeAction(i, m.itemIds ?? [], a)}
+                      onClick={() => takeAction(i, a, m.itemIds ?? [])}
                       className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
                     >
                       {a.label}
@@ -224,6 +244,45 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                   ))}
                 </div>
               )}
+
+              {/* Passo 1 del calendario: oggi o altro giorno */}
+              {calendarPick[i]?.step === "choose" && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
+                    className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                  >
+                    Oggi
+                  </button>
+                  <button
+                    onClick={() => setCalendarPick((c) => ({ ...c, [i]: { step: "pick_date" } }))}
+                    className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                  >
+                    Altro giorno
+                  </button>
+                </div>
+              )}
+
+              {/* Passo 2 del calendario: selettore data */}
+              {calendarPick[i]?.step === "pick_date" && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="date"
+                    min={todayIso()}
+                    value={pickedDate[i] ?? ""}
+                    onChange={(e) => setPickedDate((d) => ({ ...d, [i]: e.target.value }))}
+                    className="text-xs rounded-lg border border-border bg-background px-2 py-1.5"
+                  />
+                  <button
+                    disabled={!pickedDate[i]}
+                    onClick={() => pickedDate[i] && void confirmCalendarDate(i, m.itemIds ?? [], pickedDate[i])}
+                    className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
+                  >
+                    Conferma
+                  </button>
+                </div>
+              )}
+
               {m.itemIds && m.itemIds.length > 0 && !feedbackGiven[i] && (
                 <div className="mt-2 flex gap-3">
                   <button
