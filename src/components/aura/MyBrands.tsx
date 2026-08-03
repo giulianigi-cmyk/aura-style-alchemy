@@ -28,12 +28,10 @@ export function MyBrands() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local editable state from persisted profile.
   useEffect(() => {
     setBrands(profile?.owned_brands ?? []);
   }, [profile?.owned_brands]);
 
-  // Persist helper — debounced-ish: fire-and-forget, but disable UI while in flight.
   const persist = async (next: string[]) => {
     setSaving(true);
     const { error } = await update({ owned_brands: next });
@@ -71,7 +69,6 @@ export function MyBrands() {
     !suggestions.some(s => s.toLowerCase() === query.trim().toLowerCase()) &&
     !brands.some(b => b.toLowerCase() === query.trim().toLowerCase());
 
-  // Wardrobe-driven auto-suggestion.
   const checkWardrobeSuggestion = async () => {
     if (!user) return;
     const { data, error } = await supabase
@@ -111,13 +108,12 @@ export function MyBrands() {
   }, [user?.id, profile?.owned_brands, dismissed]);
 
   return (
-    <section className="mx-6 mt-6 animate-fade-up">
-      <div className="flex items-center justify-between mb-3">
+    <section className="mx-6 mt-4 animate-fade-up">
+      <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My brands</p>
         {saving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
       </div>
 
-      {/* Smart suggestion banner */}
       {suggestion && (
         <div className="mb-3 rounded-2xl border border-[var(--champagne)]/60 bg-[var(--champagne)]/10 p-3 flex items-start gap-3 animate-fade-up">
           <Sparkles size={14} className="mt-0.5 shrink-0" />
@@ -144,18 +140,18 @@ export function MyBrands() {
       )}
 
       {/* Pills */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {brands.length === 0 && (
           <p className="text-xs text-muted-foreground italic">No brands yet — search below to add your favourites.</p>
         )}
         {brands.map(b => (
-          <span key={b} className="group inline-flex items-center gap-1.5 rounded-full bg-foreground text-background pl-3 pr-1.5 py-1.5 text-xs">
+          <span key={b} className="group inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 text-foreground pl-2.5 pr-1 py-1 text-[11px]">
             {b}
             <button
               onClick={() => removeBrand(b)}
-              className="h-5 w-5 rounded-full bg-background/20 flex items-center justify-center active:scale-90"
+              className="h-4 w-4 rounded-full bg-foreground/10 flex items-center justify-center active:scale-90"
               aria-label={`Remove ${b}`}
-            ><X size={10} /></button>
+            ><X size={9} /></button>
           </span>
         ))}
       </div>
