@@ -16,6 +16,7 @@ export const transcribeVoice = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
     const key = process.env.OPENAI_API_KEY;
+    console.log("[AURA voice-transcribe] hasApiKey:", !!key);
     if (!key) throw new Error("Missing OPENAI_API_KEY");
 
     const match = data.audioDataUrl.match(/^data:(audio\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
@@ -24,9 +25,11 @@ export const transcribeVoice = createServerFn({ method: "POST" })
     const base64 = match[2];
     const buffer = Buffer.from(base64, "base64");
     const ext = mime.includes("webm") ? "webm" : mime.includes("mp4") ? "mp4" : mime.includes("ogg") ? "ogg" : "wav";
+    const fileName = `audio.${ext}`;
+    console.log("[AURA voice-transcribe] mime:", mime, "bytes:", buffer.length, "fileName:", fileName);
 
     const form = new FormData();
-    form.append("file", new Blob([buffer], { type: mime }), `audio.${ext}`);
+    form.append("file", new Blob([buffer], { type: mime }), fileName);
     form.append("model", "whisper-1");
 
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -35,10 +38,11 @@ export const transcribeVoice = createServerFn({ method: "POST" })
       body: form,
     });
 
+    console.log("[AURA voice-transcribe] OpenAI status:", res.status);
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.error("[AURA voice-transcribe] OpenAI error", res.status, errText);
-      throw new Error("Transcription failed");
+      console.error("[AURA voice-transcribe] OpenAI error body:", res.status, errText);
+      throw new Error(`OpenAI ${res.status}: ${errText || "no response body"}`);
     }
 
     const json = (await res.json()) as { text?: string };
