@@ -144,7 +144,7 @@ function Inner() {
           {screen === "wardrobe" && <Wardrobe go={go} />}
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
           {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
-          {screen === "stylist-chat" && <StylistChat go={go} />}
+          {screen === "stylist-chat" && <StylistChat go={go} openBuilder={openBuilder} />}
           {screen === "outfit-scan" && <OutfitScan go={go} />}
           {screen === "batch-scan" && <BatchScan go={go} openReview={openBatchReview} />}
           {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
