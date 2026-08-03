@@ -12,6 +12,12 @@ const STYLES = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "T
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"] as const;
 const MATERIALS = MATERIAL_OPTIONS;
 const ALL_SUBCATEGORIES = Array.from(new Set(Object.values(SUBCATEGORY_OPTIONS).flat()));
+// Written out per-category (not a flat merged list) so the model reliably
+// matches the subcategory to the category it just chose, instead of
+// picking from ~70 unrelated values (shoes/bags/tops all mixed together).
+const SUBCATEGORY_MAP_TEXT = CATEGORIES
+  .map((c) => `  - ${c}: ${SUBCATEGORY_OPTIONS[c]?.join(", ") ?? ""}`)
+  .join("\n");
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20), // data:image/...;base64,...
@@ -41,8 +47,8 @@ export const analyzeWardrobeImage = createServerFn({ method: "POST" })
 
     const systemPrompt = [
       "You analyze a single fashion garment photo and return structured wardrobe metadata.",
-      `Return category as EXACTLY one of: ${CATEGORIES.join(", ")}.`,
-      `Return subcategory as EXACTLY one value from this fixed list that best matches the item and its chosen category (e.g. if category is "Shoes", subcategory must be one of the Shoes-specific values): ${ALL_SUBCATEGORIES.join(", ")}. This distinction matters a lot (e.g. sandals vs boots changes weather suitability) — give your best guess from the list. Return an empty string only if truly none apply.`,
+      `First decide category as EXACTLY one of: ${CATEGORIES.join(", ")}.`,
+      `Then, based on that category, return subcategory as EXACTLY one value from the list for that SAME category below — never mix values from a different category:\n${SUBCATEGORY_MAP_TEXT}\nThis distinction matters a lot (e.g. sandals vs boots changes weather suitability, mini vs maxi dress changes whether it fits a "no long dresses" rule) — always give your best guess from the matching category's list rather than leaving it empty. Return an empty string only if the garment type is genuinely ambiguous even after picking a category.`,
       `Return colors as an array (1-3 items) picked EXACTLY from this fixed palette (use these names verbatim): ${COLOR_NAMES.join(", ")}. Pick the closest matches; never invent color names.`,
       `Return styles as an array (0-3) from: ${STYLES.join(", ")}.`,
       `Return occasions as an array (0-3) from: ${OCCASIONS.join(", ")}.`,
