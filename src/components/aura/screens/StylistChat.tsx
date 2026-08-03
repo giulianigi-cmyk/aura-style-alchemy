@@ -25,7 +25,6 @@ type ChatMsg = {
   actions?: { type: ActionType; label: string }[];
 };
 
-/** Stato UI per messaggio, consolidato in un solo oggetto invece di cinque Record paralleli. */
 type MsgUiState = {
   feedback?: FeedbackType;
   choice?: string;
@@ -77,7 +76,13 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  const sendMessage = async (text: string, feedbackContext?: FeedbackType) => {
+  /**
+   * overrideItemIds: quando conosciamo già gli item lato client (es. dopo ❤️,
+   * sono quelli dell'outfit appena piaciuto) non ci fidiamo di quello che torna
+   * dall'AI — le avevamo esplicitamente detto di restituire item_ids vuoto per
+   * quella risposta, per non far ridescrivere l'outfit.
+   */
+  const sendMessage = async (text: string, feedbackContext?: FeedbackType, overrideItemIds?: string[]) => {
     if (!text || busy) return;
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
     setMessages(history);
@@ -109,7 +114,16 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
         return;
       }
-      setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids, choices: res.choices, actions: res.actions }]);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: res.reply,
+          itemIds: overrideItemIds ?? res.item_ids,
+          choices: res.choices,
+          actions: res.actions,
+        },
+      ]);
     } catch (e) {
       console.error("[AURA stylist-chat]", e);
       setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
@@ -149,7 +163,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     );
 
     if (feedbackType === "saved") {
-      // Nessun giro AI: azione fissa e deterministica, immediata.
       setMessages((m) => [
         ...m,
         { role: "user", content: FEEDBACK_LABELS.saved },
@@ -158,7 +171,14 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       return;
     }
 
-    void sendMessage(FEEDBACK_LABELS[feedbackType], feedbackType);
+    if (feedbackType === "liked") {
+      // Passiamo itemIds esplicitamente: l'AI restituisce item_ids vuoto per
+      // questa risposta apposta, per non ridescrivere l'outfit.
+      void sendMessage(FEEDBACK_LABELS.liked, "liked", itemIds);
+      return;
+    }
+
+    void sendMessage(FEEDBACK_LABELS.disliked, "disliked");
   };
 
   const pickChoice = (index: number, choice: string) => {
@@ -172,7 +192,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
 
     if (action.type === "save_canvas") {
       patchUi(index, { action: action.type });
-      openBuilder({ itemIds }); // tela vera: l'immagine si genera lì, non si può finguere da chat
+      openBuilder({ itemIds });
       return;
     }
     if (action.type === "add_calendar") {
@@ -231,7 +251,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
               }`}>
                 <p className="whitespace-pre-wrap">{m.content}</p>
 
-                {/* Miniature: solo per proposte outfit vere, mai per messaggi di sola azione */}
                 {!isActionMessage && m.itemIds && m.itemIds.length > 0 && (
                   <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
                     {m.itemIds.map(thumb)}
@@ -302,7 +321,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                   </div>
                 )}
 
-                {/* Riga ❤️👎💾: solo per proposte outfit vere, mai per messaggi di sola azione */}
                 {!isActionMessage && m.itemIds && m.itemIds.length > 0 && !ui.feedback && (
                   <div className="mt-2 flex gap-3">
                     <button
