@@ -21,6 +21,7 @@ import {
   OCCASION_OPTIONS as occasionOptions,
   MATERIAL_OPTIONS as materialOptions,
   CURRENCY_OPTIONS as currencyOptions,
+  subcategoriesFor,
 } from "@/lib/wardrobe-options";
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 
@@ -218,6 +219,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
+  const [subcategory, setSubcategory] = useState("");
   const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
@@ -230,7 +232,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
-    setBrand(""); setSize(""); setCategory("Tops"); setColors([]);
+    setBrand(""); setSize(""); setCategory("Tops"); setSubcategory(""); setColors([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
   };
@@ -261,6 +263,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     const analysisPromise = analyze({ data: { imageDataUrl: dataUrl } })
       .then(result => {
         if (result.category) setCategory(result.category);
+        if (result.subcategory) setSubcategory(result.subcategory);
         if (result.colors?.length) setColors(result.colors);
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
@@ -398,6 +401,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         user_id: uid,
         image_url: path,
         category: categories.includes(category) ? category : "Tops",
+        subcategory: subcategoriesFor(category).includes(subcategory) ? subcategory : null,
         brand: brand.trim() || null,
         color: colors[0] ?? null,
         colors,
@@ -629,7 +633,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               </div>
               <p className="mt-1 text-[10px] text-muted-foreground">Powers cost-per-wear in the item card.</p>
             </div>
-            <ChipGroup label="Category" options={categories} value={category} onChange={setCategory} />
+            <ChipGroup
+              label="Category"
+              options={categories}
+              value={category}
+              onChange={(c) => { setCategory(c); setSubcategory(""); }}
+            />
+            {subcategoriesFor(category).length > 0 && (
+              <ChipGroup
+                label="Type"
+                options={subcategoriesFor(category)}
+                value={subcategory}
+                onChange={setSubcategory}
+              />
+            )}
             <ColorPicker value={colors} onChange={setColors} />
 
             <div className="border-b border-border/60 pb-3">
