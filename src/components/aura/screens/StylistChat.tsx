@@ -28,7 +28,7 @@ type ChatMsg = {
 type MsgUiState = {
   feedback?: FeedbackType;
   choice?: string;
-  action?: ActionType;
+  actionsDone?: ActionType[]; // ogni azione completata indipendentemente, non una sola per messaggio
   calendarStep?: "choose" | "pick_date";
   pickedDate?: string;
 };
@@ -61,6 +61,12 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   const patchUi = (i: number, patch: Partial<MsgUiState>) =>
     setUiState((s) => ({ ...s, [i]: { ...s[i], ...patch } }));
 
+  const markActionDone = (i: number, type: ActionType) =>
+    setUiState((s) => ({
+      ...s,
+      [i]: { ...s[i], actionsDone: [...(s[i]?.actionsDone ?? []), type] },
+    }));
+
   useEffect(() => {
     if (!user) return;
     supabase.from("wardrobe_items")
@@ -76,12 +82,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  /**
-   * overrideItemIds: quando conosciamo già gli item lato client (es. dopo ❤️,
-   * sono quelli dell'outfit appena piaciuto) non ci fidiamo di quello che torna
-   * dall'AI — le avevamo esplicitamente detto di restituire item_ids vuoto per
-   * quella risposta, per non far ridescrivere l'outfit.
-   */
   const sendMessage = async (text: string, feedbackContext?: FeedbackType, overrideItemIds?: string[]) => {
     if (!text || busy) return;
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
@@ -172,8 +172,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     }
 
     if (feedbackType === "liked") {
-      // Passiamo itemIds esplicitamente: l'AI restituisce item_ids vuoto per
-      // questa risposta apposta, per non ridescrivere l'outfit.
       void sendMessage(FEEDBACK_LABELS.liked, "liked", itemIds);
       return;
     }
@@ -188,10 +186,10 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   };
 
   const takeAction = (index: number, action: { type: ActionType; label: string }, itemIds: string[]) => {
-    if (uiState[index]?.action || !itemIds.length) return;
+    if (uiState[index]?.actionsDone?.includes(action.type) || !itemIds.length) return;
 
     if (action.type === "save_canvas") {
-      patchUi(index, { action: action.type });
+      markActionDone(index, "save_canvas");
       openBuilder({ itemIds });
       return;
     }
@@ -199,7 +197,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       patchUi(index, { calendarStep: "choose" });
       return;
     }
-    patchUi(index, { action: action.type });
+    markActionDone(index, action.type);
   };
 
   const confirmCalendarDate = async (index: number, itemIds: string[], date: string) => {
@@ -215,7 +213,8 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         ? "Aggiunto al calendario di oggi"
         : `Aggiunto al calendario per il ${new Date(date).toLocaleDateString("it-IT")}`
     );
-    patchUi(index, { action: "add_calendar", calendarStep: undefined });
+    markActionDone(index, "add_calendar");
+    patchUi(index, { calendarStep: undefined });
   };
 
   return (
@@ -244,6 +243,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         {messages.map((m, i) => {
           const isActionMessage = !!(m.actions && m.actions.length > 0);
           const ui = uiState[i] ?? {};
+          const remainingActions = (m.actions ?? []).filter((a) => !ui.actionsDone?.includes(a.type));
           return (
             <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -271,9 +271,11 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                   </div>
                 )}
 
-                {isActionMessage && !ui.action && !ui.calendarStep && (
+                {/* Ogni chip resta visibile finché la SUA azione non è stata completata,
+                    indipendentemente dalle altre — tela e calendario sono azioni separate. */}
+                {remainingActions.length > 0 && !ui.calendarStep && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {m.actions!.map((a) => (
+                    {remainingActions.map((a) => (
                       <button
                         key={a.type}
                         onClick={() => takeAction(i, a, m.itemIds ?? [])}
