@@ -21,7 +21,6 @@ import {
   OCCASION_OPTIONS as occasionOptions,
   MATERIAL_OPTIONS as materialOptions,
   CURRENCY_OPTIONS as currencyOptions,
-  LENGTH_OPTIONS as lengthOptions,
   SLEEVE_LENGTH_OPTIONS as sleeveLengthOptions,
   FIT_OPTIONS as fitOptions,
   HEEL_HEIGHT_OPTIONS as heelHeightOptions,
@@ -31,6 +30,8 @@ import {
   STYLE_TAG_OPTIONS as styleTagOptions,
   subcategoriesFor,
   attributeAppliesTo,
+  lengthOptionsFor,
+  lengthAppliesTo,
 } from "@/lib/wardrobe-options";
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
 
@@ -683,11 +684,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 label="Type"
                 options={subcategoriesFor(category)}
                 value={subcategory}
-                onChange={setSubcategory}
+                onChange={(t) => { setSubcategory(t); setLength(""); }}
               />
             )}
-            {attributeAppliesTo("length", category) && (
-              <ChipGroup label="Length" options={lengthOptions} value={length} onChange={setLength} />
+            {lengthAppliesTo(category, subcategory) && (
+              <ChipGroup label="Length" options={lengthOptionsFor(category, subcategory)} value={length} onChange={setLength} />
             )}
             {attributeAppliesTo("sleeveLength", category) && (
               <ChipGroup label="Sleeve" options={sleeveLengthOptions} value={sleeveLength} onChange={setSleeveLength} />
