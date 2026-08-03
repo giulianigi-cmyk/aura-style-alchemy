@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowUp, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Screen } from "../AuraApp";
+import { toast } from "sonner";
+import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,7 +13,14 @@ import { stylistChat } from "@/lib/stylist-chat.functions";
 import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
-type ChatMsg = { role: "user" | "assistant"; content: string; itemIds?: string[] };
+type ActionType = "save_canvas" | "add_calendar" | "dismiss";
+type ChatMsg = {
+  role: "user" | "assistant";
+  content: string;
+  itemIds?: string[];
+  choices?: string[];
+  actions?: { type: ActionType; label: string }[];
+};
 type FeedbackType = "liked" | "disliked" | "saved";
 
 const FEEDBACK_LABELS: Record<FeedbackType, string> = {
@@ -21,7 +29,7 @@ const FEEDBACK_LABELS: Record<FeedbackType, string> = {
   saved: "💾 Salva questo outfit",
 };
 
-export function StylistChat({ go }: { go: (s: Screen) => void }) {
+export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -31,6 +39,8 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, FeedbackType>>({});
+  const [choicePicked, setChoicePicked] = useState<Record<number, string>>({});
+  const [actionTaken, setActionTaken] = useState<Record<number, ActionType>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,8 +58,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  /** Invia un messaggio (testo libero o etichetta di feedback) e continua la conversazione. */
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, feedbackContext?: FeedbackType) => {
     if (!text || busy) return;
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
     setMessages(history);
@@ -63,6 +72,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
           dressRules,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
+          feedbackContext: feedbackContext ?? null,
           items: items.map((it) => ({
             id: it.id,
             category: it.category,
@@ -80,7 +90,7 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
         setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
         return;
       }
-      setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids }]);
+      setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids, choices: res.choices, actions: res.actions }]);
     } catch (e) {
       console.error("[AURA stylist-chat]", e);
       setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
@@ -112,18 +122,46 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
     );
   };
 
-  /** Tap su ❤️/👎/💾: logga il feedback strutturato E lo manda come messaggio in chat. */
   const giveFeedback = (index: number, itemIds: string[], feedbackType: FeedbackType) => {
-    if (feedbackGiven[index] || busy) return; // evita doppio invio sullo stesso outfit
+    if (feedbackGiven[index] || busy) return;
     setFeedbackGiven((f) => ({ ...f, [index]: feedbackType }));
-
-    // Log per l'Aggregator/user_style_memory — in background, non blocca la chat
     void submitOutfitFeedback({ data: { itemIds, feedbackType } }).catch((e) =>
       console.error("[AURA outfit-feedback]", e)
     );
+    void sendMessage(FEEDBACK_LABELS[feedbackType], feedbackType);
+  };
 
-    // Il feedback diventa un vero messaggio: la conversazione continua
-    void sendMessage(FEEDBACK_LABELS[feedbackType]);
+  const pickChoice = (index: number, choice: string) => {
+    if (choicePicked[index] || busy) return;
+    setChoicePicked((c) => ({ ...c, [index]: choice }));
+    void sendMessage(choice);
+  };
+
+  /** Azioni reali: portano davvero alla tela o salvano davvero nel planner — non solo testo in chat. */
+  const takeAction = async (index: number, itemIds: string[], action: { type: ActionType; label: string }) => {
+    if (actionTaken[index] || !itemIds.length) return;
+    setActionTaken((a) => ({ ...a, [index]: action.type }));
+
+    if (action.type === "save_canvas") {
+      openBuilder({ itemIds }); // porta sulla tela vera: l'immagine si genera lì, non si può finguere da chat
+      return;
+    }
+    if (action.type === "add_calendar") {
+      if (!user) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const { error } = await supabase.from("outfit_plans").insert({
+        user_id: user.id,
+        date: today,
+        item_ids: itemIds,
+      });
+      if (error) {
+        console.error("[AURA add_calendar]", error);
+        toast.error("Non sono riuscita ad aggiungerlo al calendario");
+        return;
+      }
+      toast.success("Aggiunto al calendario di oggi");
+    }
+    // "dismiss": non fa nulla, i chip semplicemente spariscono
   };
 
   return (
@@ -158,6 +196,32 @@ export function StylistChat({ go }: { go: (s: Screen) => void }) {
               {m.itemIds && m.itemIds.length > 0 && (
                 <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
                   {m.itemIds.map(thumb)}
+                </div>
+              )}
+              {m.choices && m.choices.length > 0 && !choicePicked[i] && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {m.choices.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => pickChoice(i, c)}
+                      className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {m.actions && m.actions.length > 0 && !actionTaken[i] && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {m.actions.map((a) => (
+                    <button
+                      key={a.type}
+                      onClick={() => void takeAction(i, m.itemIds ?? [], a)}
+                      className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
                 </div>
               )}
               {m.itemIds && m.itemIds.length > 0 && !feedbackGiven[i] && (
