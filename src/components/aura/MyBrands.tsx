@@ -8,15 +8,6 @@ import { useProfile } from "@/hooks/use-profile";
 
 type Suggestion = { brand: string; count: number; pct: number } | null;
 
-/**
- * "My Brands" panel for the Profile screen.
- * - Editable pills of brands the user owns / loves.
- * - Autocomplete search from BRAND_NAMES (with free-text fallback).
- * - Smart auto-suggest: reads the user's wardrobe, if any brand accounts for
- *   ≥10% of items and isn't already saved, prompts the user to add it.
- *   Re-checks whenever a wardrobe item is created (via the existing
- *   "aura:wardrobe-item-created" custom event).
- */
 export function MyBrands() {
   const { user } = useAuth();
   const { profile, update } = useProfile();
