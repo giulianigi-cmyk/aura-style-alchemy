@@ -1,216 +1,125 @@
-import { ArrowLeft, ArrowUp, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import type { Screen } from "../AuraApp";
-import { supabase } from "@/integrations/supabase/client";
-import type { WardrobeItem } from "@/lib/aura-types";
-import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "@/hooks/use-location";
-import { useWeather } from "@/hooks/use-weather";
-import { describeWeather } from "@/lib/weather";
-import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
-import { stylistChat } from "@/lib/stylist-chat.functions";
-import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
-import { loadDressRules } from "@/lib/dress-preferences";
+import { createServerFn } from "@tanstack/react-start";
+import { generateText } from "ai";
+import { z } from "zod";
+import { parseAiJson } from "./ai-json";
 
-type ChatMsg = { role: "user" | "assistant"; content: string; itemIds?: string[] };
-type FeedbackType = "liked" | "disliked" | "saved";
+const ItemSchema = z.object({
+  id: z.string(),
+  category: z.string().nullable().optional(),
+  subcategory: z.string().nullable().optional(),
+  colors: z.array(z.string()).nullable().optional(),
+  style: z.array(z.string()).nullable().optional(),
+  season: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
+  material: z.array(z.string()).nullable().optional(),
+  size: z.string().nullable().optional(),
+});
 
-const FEEDBACK_LABELS: Record<FeedbackType, string> = {
-  liked: "❤️ Mi piace questo outfit",
-  disliked: "👎 Non fa per me, proponimi un'alternativa",
-  saved: "💾 Salva questo outfit",
-};
+const MessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+});
 
-export function StylistChat({ go }: { go: (s: Screen) => void }) {
-  const { user } = useAuth();
-  const { latitude, longitude } = useLocation();
-  const { data: weather } = useWeather(latitude, longitude);
-  const [items, setItems] = useState<WardrobeItem[]>([]);
-  const [signed, setSigned] = useState<Record<string, string>>({});
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, FeedbackType>>({});
-  const endRef = useRef<HTMLDivElement>(null);
+const InputSchema = z.object({
+  messages: z.array(MessageSchema).min(1).max(30),
+  items: z.array(ItemSchema),
+  dressRules: z.string().nullable().optional(),
+  temperature: z.number().nullable().optional(),
+  condition: z.string().nullable().optional(),
+});
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("wardrobe_items")
-      .select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(async ({ data }) => {
-        const list = (data ?? []) as WardrobeItem[];
-        setItems(list);
-        setSigned(await resolveWardrobeUrls(list));
-      });
-  }, [user]);
+const OutputSchema = z.object({
+  reply: z.string(),
+  item_ids: z.array(z.string()),
+});
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, busy]);
+export const stylistChat = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
+    const gateway = createLovableAiGatewayProvider(key);
+    const model = gateway("google/gemini-2.5-flash");
 
-  /** Invia un messaggio (testo libero o etichetta di feedback) e continua la conversazione. */
-  const sendMessage = async (text: string) => {
-    if (!text || busy) return;
-    const history: ChatMsg[] = [...messages, { role: "user", content: text }];
-    setMessages(history);
-    setBusy(true);
+    const wx = data.temperature != null
+      ? `Current weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
+      : "Current weather: unknown.";
+
+    const catalog = data.items.slice(0, 200).map((it) => ({
+      id: it.id,
+      category: it.category ?? "",
+      subcategory: it.subcategory ?? "",
+      colors: it.colors ?? [],
+      style: it.style ?? [],
+      season: it.season ?? "",
+      brand: it.brand ?? "",
+      material: it.material ?? [],
+      size: it.size ?? "",
+    }));
+
+    const system = [
+      ...(data.dressRules ? [data.dressRules, ""] : []),
+      "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
+      "Answer styling questions conversationally, in the same language the user writes in.",
+      "When you recommend an outfit or specific pieces, use ONLY items from the wardrobe catalog below and put their ids in item_ids (max 6). If no items apply, return an empty item_ids array.",
+      "Never invent items the user does not own. If the wardrobe lacks something, say so honestly and suggest what kind of piece would fill the gap.",
+      "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps / Heels') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
+      "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
+      "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
+      wx,
+      `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
+      "",
+      "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
+      '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"]}',
+    ].join("\n");
     try {
-      const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
-      const dressRules = await loadDressRules(user?.id);
-      const res = await stylistChat({
-        data: {
-          messages: history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
-          dressRules,
-          temperature: weather?.current.temperature ?? null,
-          condition: desc,
-          items: items.map((it) => ({
-            id: it.id,
-            category: it.category,
-            subcategory: it.subcategory,
-            colors: it.colors ?? (it.color ? [it.color] : []),
-            style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
-            season: it.season,
-            brand: it.brand,
-            material: Array.isArray(it.material) ? it.material : [],
-            size: it.size,
-          })),
-        },
-      });
-      if (!res.ok) {
-        setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
-        return;
+      const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
+
+      let text: string;
+      try {
+        const r1 = await generateText({ model, system, messages: history });
+        text = r1.text;
+      } catch (err) {
+        console.error("[AURA stylist-chat] first call failed", err);
+        text = "";
       }
-      setMessages((m) => [...m, { role: "assistant", content: res.reply, itemIds: res.item_ids }]);
-    } catch (e) {
-      console.error("[AURA stylist-chat]", e);
-      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
-    } finally {
-      setBusy(false);
+
+      let parsed: z.infer<typeof OutputSchema>;
+      try {
+        parsed = parseAiJson(text, OutputSchema);
+      } catch {
+        try {
+          const r2 = await generateText({
+            model,
+            system,
+            messages: [
+              ...history,
+              { role: "assistant", content: text || "(no response)" },
+              {
+                role: "user",
+                content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+              },
+            ],
+          });
+          parsed = parseAiJson(r2.text, OutputSchema);
+        } catch {
+          // Graceful degradation: the model ignored the JSON format after
+          // a retry too (can happen over long conversations). Rather than
+          // showing an error, fall back to its plain-text reply with no
+          // item thumbnails — the conversation still works for the user.
+          parsed = { reply: text.trim() || "Sorry, I didn't quite catch that — could you rephrase?", item_ids: [] };
+        }
+      }
+
+      const validIds = new Set(catalog.map((c) => c.id));
+      return {
+        ok: true as const,
+        reply: (parsed.reply ?? "").slice(0, 1200),
+        item_ids: parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
+      };
+    } catch (err) {
+      console.error("[AURA stylist-chat] failed", err);
+      return { ok: false as const, error: err instanceof Error ? err.message : "AI failed" };
     }
-  };
-
-  const send = () => {
-    const text = input.trim();
-    setInput("");
-    void sendMessage(text);
-  };
-
-  const thumb = (id: string) => {
-    const it = items.find((x) => x.id === id);
-    if (!it) return null;
-    const path = toStoragePath(it.image_url);
-    const src = path ? signed[path] : null;
-    return (
-      <div key={id} className="w-16 shrink-0">
-        <div className="aspect-square rounded-xl overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
-          {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" /> : null}
-        </div>
-        <p className="mt-1 text-[8px] uppercase tracking-wide text-muted-foreground truncate text-center">
-          {it.brand ?? it.category}
-        </p>
-      </div>
-    );
-  };
-
-  /** Tap su ❤️/👎/💾: logga il feedback strutturato E lo manda come messaggio in chat. */
-  const giveFeedback = (index: number, itemIds: string[], feedbackType: FeedbackType) => {
-    if (feedbackGiven[index] || busy) return; // evita doppio invio sullo stesso outfit
-    setFeedbackGiven((f) => ({ ...f, [index]: feedbackType }));
-
-    // Log per l'Aggregator/user_style_memory — in background, non blocca la chat
-    void submitOutfitFeedback({ data: { itemIds, feedbackType } }).catch((e) =>
-      console.error("[AURA outfit-feedback]", e)
-    );
-
-    // Il feedback diventa un vero messaggio: la conversazione continua
-    void sendMessage(FEEDBACK_LABELS[feedbackType]);
-  };
-
-  return (
-    <div className="h-full flex flex-col">
-      <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
-        <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
-          <p className="font-serif text-lg italic leading-tight">Ask your stylist</p>
-        </div>
-      </header>
-
-      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 pb-3 space-y-3">
-        {messages.length === 0 && (
-          <div className="mt-10 text-center animate-fade-up">
-            <Sparkles size={20} className="mx-auto text-muted-foreground" />
-            <p className="mt-3 font-serif text-xl italic">What are you dressing for?</p>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-              Ask anything — “work dinner tonight, what should I wear?” — and I’ll style you
-              with pieces you already own.
-            </p>
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-              m.role === "user" ? "bg-foreground text-background" : "bg-secondary/60"
-            }`}>
-              <p className="whitespace-pre-wrap">{m.content}</p>
-              {m.itemIds && m.itemIds.length > 0 && (
-                <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
-                  {m.itemIds.map(thumb)}
-                </div>
-              )}
-              {m.itemIds && m.itemIds.length > 0 && !feedbackGiven[i] && (
-                <div className="mt-2 flex gap-3">
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "liked")}
-                    className="text-xl active:scale-90"
-                    aria-label="Mi piace"
-                  >❤️</button>
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
-                    className="text-xl active:scale-90"
-                    aria-label="Non fa per me"
-                  >👎</button>
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "saved")}
-                    className="text-xl active:scale-90"
-                    aria-label="Salva"
-                  >💾</button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {busy && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl px-4 py-2.5 bg-secondary/60">
-              <Loader2 size={14} className="animate-spin text-muted-foreground" />
-            </div>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shrink-0 bg-background border-t border-border/60">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your stylist…"
-            rows={1}
-            className="flex-1 max-h-28 bg-secondary/60 rounded-2xl px-4 py-3 text-sm outline-none placeholder:text-muted-foreground resize-none"
-          />
-          <button
-            onClick={send}
-            disabled={busy || !input.trim()}
-            aria-label="Send"
-            className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 disabled:opacity-40"
-          >
-            <ArrowUp size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+  });
