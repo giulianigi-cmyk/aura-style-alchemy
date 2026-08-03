@@ -11,9 +11,12 @@ import { describeWeather } from "@/lib/weather";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { stylistChat } from "@/lib/stylist-chat.functions";
 import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
+import { saveOutfitPlan } from "@/lib/outfit-plan.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 
 type ActionType = "save_canvas" | "add_calendar" | "dismiss";
+type FeedbackType = "liked" | "disliked" | "saved";
+
 type ChatMsg = {
   role: "user" | "assistant";
   content: string;
@@ -21,14 +24,26 @@ type ChatMsg = {
   choices?: string[];
   actions?: { type: ActionType; label: string }[];
 };
-type FeedbackType = "liked" | "disliked" | "saved";
-type CalendarPick = { step: "choose" | "pick_date" };
+
+/** Stato UI per messaggio, consolidato in un solo oggetto invece di cinque Record paralleli. */
+type MsgUiState = {
+  feedback?: FeedbackType;
+  choice?: string;
+  action?: ActionType;
+  calendarStep?: "choose" | "pick_date";
+  pickedDate?: string;
+};
 
 const FEEDBACK_LABELS: Record<FeedbackType, string> = {
   liked: "❤️ Mi piace questo outfit",
   disliked: "👎 Non fa per me, proponimi un'alternativa",
   saved: "💾 Salva questo outfit",
 };
+
+const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
+  { type: "save_canvas", label: "Salva sulla tela" },
+  { type: "add_calendar", label: "Aggiungi al calendario" },
+];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -41,12 +56,11 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, FeedbackType>>({});
-  const [choicePicked, setChoicePicked] = useState<Record<number, string>>({});
-  const [actionTaken, setActionTaken] = useState<Record<number, ActionType>>({});
-  const [calendarPick, setCalendarPick] = useState<Record<number, CalendarPick>>({});
-  const [pickedDate, setPickedDate] = useState<Record<number, string>>({});
+  const [uiState, setUiState] = useState<Record<number, MsgUiState>>({});
   const endRef = useRef<HTMLDivElement>(null);
+
+  const patchUi = (i: number, patch: Partial<MsgUiState>) =>
+    setUiState((s) => ({ ...s, [i]: { ...s[i], ...patch } }));
 
   useEffect(() => {
     if (!user) return;
@@ -128,44 +142,51 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
   };
 
   const giveFeedback = (index: number, itemIds: string[], feedbackType: FeedbackType) => {
-    if (feedbackGiven[index] || busy) return;
-    setFeedbackGiven((f) => ({ ...f, [index]: feedbackType }));
+    if (uiState[index]?.feedback || busy) return;
+    patchUi(index, { feedback: feedbackType });
     void submitOutfitFeedback({ data: { itemIds, feedbackType } }).catch((e) =>
       console.error("[AURA outfit-feedback]", e)
     );
+
+    if (feedbackType === "saved") {
+      // Nessun giro AI: azione fissa e deterministica, immediata.
+      setMessages((m) => [
+        ...m,
+        { role: "user", content: FEEDBACK_LABELS.saved },
+        { role: "assistant", content: "Vuoi salvarlo sulla tela o aggiungerlo al calendario?", itemIds, actions: SAVE_ACTIONS },
+      ]);
+      return;
+    }
+
     void sendMessage(FEEDBACK_LABELS[feedbackType], feedbackType);
   };
 
   const pickChoice = (index: number, choice: string) => {
-    if (choicePicked[index] || busy) return;
-    setChoicePicked((c) => ({ ...c, [index]: choice }));
+    if (uiState[index]?.choice || busy) return;
+    patchUi(index, { choice });
     void sendMessage(choice);
   };
 
   const takeAction = (index: number, action: { type: ActionType; label: string }, itemIds: string[]) => {
-    if (actionTaken[index] || !itemIds.length) return;
+    if (uiState[index]?.action || !itemIds.length) return;
 
     if (action.type === "save_canvas") {
-      setActionTaken((a) => ({ ...a, [index]: action.type }));
-      openBuilder({ itemIds }); // porta sulla tela vera: l'immagine si genera lì, non si può finguere da chat
+      patchUi(index, { action: action.type });
+      openBuilder({ itemIds }); // tela vera: l'immagine si genera lì, non si può finguere da chat
       return;
     }
     if (action.type === "add_calendar") {
-      setCalendarPick((c) => ({ ...c, [index]: { step: "choose" } })); // chiede prima "oggi o altro giorno"
+      patchUi(index, { calendarStep: "choose" });
       return;
     }
-    setActionTaken((a) => ({ ...a, [index]: action.type })); // dismiss: solo nasconde i chip
+    patchUi(index, { action: action.type });
   };
 
   const confirmCalendarDate = async (index: number, itemIds: string[], date: string) => {
-    if (!user) return;
-    const { error } = await supabase.from("outfit_plans").insert({
-      user_id: user.id,
-      date,
-      item_ids: itemIds,
-    });
-    if (error) {
-      console.error("[AURA add_calendar]", error);
+    try {
+      await saveOutfitPlan({ data: { itemIds, date } });
+    } catch (e) {
+      console.error("[AURA add_calendar]", e);
       toast.error("Non sono riuscita ad aggiungerlo al calendario");
       return;
     }
@@ -174,12 +195,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         ? "Aggiunto al calendario di oggi"
         : `Aggiunto al calendario per il ${new Date(date).toLocaleDateString("it-IT")}`
     );
-    setActionTaken((a) => ({ ...a, [index]: "add_calendar" }));
-    setCalendarPick((c) => {
-      const next = { ...c };
-      delete next[index];
-      return next;
-    });
+    patchUi(index, { action: "add_calendar", calendarStep: undefined });
   };
 
   return (
@@ -205,106 +221,111 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
             </p>
           </div>
         )}
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-              m.role === "user" ? "bg-foreground text-background" : "bg-secondary/60"
-            }`}>
-              <p className="whitespace-pre-wrap">{m.content}</p>
-              {m.itemIds && m.itemIds.length > 0 && (
-                <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
-                  {m.itemIds.map(thumb)}
-                </div>
-              )}
-              {m.choices && m.choices.length > 0 && !choicePicked[i] && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {m.choices.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => pickChoice(i, c)}
-                      className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              )}
+        {messages.map((m, i) => {
+          const isActionMessage = !!(m.actions && m.actions.length > 0);
+          const ui = uiState[i] ?? {};
+          return (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                m.role === "user" ? "bg-foreground text-background" : "bg-secondary/60"
+              }`}>
+                <p className="whitespace-pre-wrap">{m.content}</p>
 
-              {/* Chip azioni iniziali (Salva sulla tela / Aggiungi al calendario) */}
-              {m.actions && m.actions.length > 0 && !actionTaken[i] && !calendarPick[i] && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {m.actions.map((a) => (
+                {/* Miniature: solo per proposte outfit vere, mai per messaggi di sola azione */}
+                {!isActionMessage && m.itemIds && m.itemIds.length > 0 && (
+                  <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
+                    {m.itemIds.map(thumb)}
+                  </div>
+                )}
+
+                {m.choices && m.choices.length > 0 && !ui.choice && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {m.choices.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => pickChoice(i, c)}
+                        className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isActionMessage && !ui.action && !ui.calendarStep && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {m.actions!.map((a) => (
+                      <button
+                        key={a.type}
+                        onClick={() => takeAction(i, a, m.itemIds ?? [])}
+                        className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {ui.calendarStep === "choose" && (
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
-                      key={a.type}
-                      onClick={() => takeAction(i, a, m.itemIds ?? [])}
+                      onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
                       className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
                     >
-                      {a.label}
+                      Oggi
                     </button>
-                  ))}
-                </div>
-              )}
+                    <button
+                      onClick={() => patchUi(i, { calendarStep: "pick_date" })}
+                      className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                    >
+                      Altro giorno
+                    </button>
+                  </div>
+                )}
 
-              {/* Passo 1 del calendario: oggi o altro giorno */}
-              {calendarPick[i]?.step === "choose" && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
-                    className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
-                  >
-                    Oggi
-                  </button>
-                  <button
-                    onClick={() => setCalendarPick((c) => ({ ...c, [i]: { step: "pick_date" } }))}
-                    className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
-                  >
-                    Altro giorno
-                  </button>
-                </div>
-              )}
+                {ui.calendarStep === "pick_date" && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="date"
+                      min={todayIso()}
+                      value={ui.pickedDate ?? ""}
+                      onChange={(e) => patchUi(i, { pickedDate: e.target.value })}
+                      className="text-xs rounded-lg border border-border bg-background px-2 py-1.5"
+                    />
+                    <button
+                      disabled={!ui.pickedDate}
+                      onClick={() => ui.pickedDate && void confirmCalendarDate(i, m.itemIds ?? [], ui.pickedDate)}
+                      className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
+                    >
+                      Conferma
+                    </button>
+                  </div>
+                )}
 
-              {/* Passo 2 del calendario: selettore data */}
-              {calendarPick[i]?.step === "pick_date" && (
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="date"
-                    min={todayIso()}
-                    value={pickedDate[i] ?? ""}
-                    onChange={(e) => setPickedDate((d) => ({ ...d, [i]: e.target.value }))}
-                    className="text-xs rounded-lg border border-border bg-background px-2 py-1.5"
-                  />
-                  <button
-                    disabled={!pickedDate[i]}
-                    onClick={() => pickedDate[i] && void confirmCalendarDate(i, m.itemIds ?? [], pickedDate[i])}
-                    className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
-                  >
-                    Conferma
-                  </button>
-                </div>
-              )}
-
-              {m.itemIds && m.itemIds.length > 0 && !feedbackGiven[i] && (
-                <div className="mt-2 flex gap-3">
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "liked")}
-                    className="text-xl active:scale-90"
-                    aria-label="Mi piace"
-                  >❤️</button>
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
-                    className="text-xl active:scale-90"
-                    aria-label="Non fa per me"
-                  >👎</button>
-                  <button
-                    onClick={() => giveFeedback(i, m.itemIds!, "saved")}
-                    className="text-xl active:scale-90"
-                    aria-label="Salva"
-                  >💾</button>
-                </div>
-              )}
+                {/* Riga ❤️👎💾: solo per proposte outfit vere, mai per messaggi di sola azione */}
+                {!isActionMessage && m.itemIds && m.itemIds.length > 0 && !ui.feedback && (
+                  <div className="mt-2 flex gap-3">
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "liked")}
+                      className="text-xl active:scale-90"
+                      aria-label="Mi piace"
+                    >❤️</button>
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
+                      className="text-xl active:scale-90"
+                      aria-label="Non fa per me"
+                    >👎</button>
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "saved")}
+                      className="text-xl active:scale-90"
+                      aria-label="Salva"
+                    >💾</button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {busy && (
           <div className="flex justify-start">
             <div className="rounded-2xl px-4 py-2.5 bg-secondary/60">
