@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getBrandFromUrl } from "./brand-domains";
 import { fetchImageAsDataUrl } from "./fetch-image";
+import { checkPublicUrl, safeFetch } from "./safe-url";
 
 const InputSchema = z.object({
   url: z.string().url(),
@@ -528,8 +529,9 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
-    const resp = await fetch(target.toString(), {
-      redirect: "follow",
+    const urlErr = checkPublicUrl(target.toString());
+    if (urlErr) return { html: null, blocked: false };
+    const resp = await safeFetch(target.toString(), {
       signal: ctl.signal,
       headers: {
         "User-Agent":
