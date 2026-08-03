@@ -4,7 +4,8 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { COLOR_NAMES } from "./color-palette";
 import {
-  MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS, LENGTH_OPTIONS, SLEEVE_LENGTH_OPTIONS,
+  MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS, SLEEVE_LENGTH_OPTIONS,
+  LENGTH_OPTIONS_BY_CATEGORY, lengthOptionsFor,
   FIT_OPTIONS, HEEL_HEIGHT_OPTIONS, TOE_SHAPE_OPTIONS, CLOSURE_OPTIONS,
   GENDER_OPTIONS, STYLE_TAG_OPTIONS, ATTRIBUTE_APPLICABILITY,
 } from "./wardrobe-options";
@@ -69,7 +70,7 @@ export const analyzeWardrobeImage = createServerFn({ method: "POST" })
       "Return brand ONLY if a clearly visible logo/label is present in the image; otherwise return an empty string. Never guess a brand.",
       "",
       "SEPARATE ATTRIBUTES — these are independent fields, never folded into subcategory. Only fill in an attribute if it genuinely applies to this category (see rules below); otherwise return an empty string for it:",
-      `- length (applies to: ${ATTRIBUTE_APPLICABILITY.length.join(", ")}): EXACTLY one of ${LENGTH_OPTIONS.join(", ")}.`,
+      `- length: this is CATEGORY-DEPENDENT, use the matching value set only — Dresses: ${LENGTH_OPTIONS_BY_CATEGORY.Dresses.join("/")}; Outerwear: ${LENGTH_OPTIONS_BY_CATEGORY.Outerwear.join("/")}; Tops: ${LENGTH_OPTIONS_BY_CATEGORY.Tops.join("/")}; Bottoms: ONLY when subcategory is "Skirt", use Mini/Midi/Maxi (leave empty for Jeans/Trousers/Shorts/etc.). For any other category, leave length empty.`,
       `- sleeveLength (applies to: ${ATTRIBUTE_APPLICABILITY.sleeveLength.join(", ")}): EXACTLY one of ${SLEEVE_LENGTH_OPTIONS.join(", ")}.`,
       `- fit (applies to: ${ATTRIBUTE_APPLICABILITY.fit.join(", ")}): EXACTLY one of ${FIT_OPTIONS.join(", ")}.`,
       `- heelHeight (applies to: ${ATTRIBUTE_APPLICABILITY.heelHeight.join(", ")} only): EXACTLY one of ${HEEL_HEIGHT_OPTIONS.join(", ")}.`,
@@ -142,17 +143,19 @@ export const analyzeWardrobeImage = createServerFn({ method: "POST" })
 
       const category = (CATEGORIES as readonly string[]).includes(output.category) ? output.category : "";
       const validSubcats = category ? (SUBCATEGORY_OPTIONS[category] ?? []) : ALL_SUBCATEGORIES;
+      const subcategory = validSubcats.includes(output.subcategory) ? output.subcategory : "";
+      const validLengths = lengthOptionsFor(category, subcategory);
 
       return {
         category,
-        subcategory: validSubcats.includes(output.subcategory) ? output.subcategory : "",
+        subcategory,
         colors: output.colors.filter(c => COLOR_NAMES.includes(c)),
         styles: allowed(output.styles, STYLES),
         occasions: allowed(output.occasions, OCCASIONS),
         seasons: allowed(output.seasons, SEASONS),
         brand: output.brand?.trim() ?? "",
         materials: allowed(output.materials, MATERIALS),
-        length: ATTRIBUTE_APPLICABILITY.length.includes(category) ? single(output.length, LENGTH_OPTIONS) : "",
+        length: validLengths.length ? single(output.length, validLengths as readonly string[]) : "",
         sleeveLength: ATTRIBUTE_APPLICABILITY.sleeveLength.includes(category) ? single(output.sleeveLength, SLEEVE_LENGTH_OPTIONS) : "",
         fit: ATTRIBUTE_APPLICABILITY.fit.includes(category) ? single(output.fit, FIT_OPTIONS) : "",
         heelHeight: ATTRIBUTE_APPLICABILITY.heelHeight.includes(category) ? single(output.heelHeight, HEEL_HEIGHT_OPTIONS) : "",
