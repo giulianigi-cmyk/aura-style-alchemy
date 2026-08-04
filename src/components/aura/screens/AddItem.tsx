@@ -12,7 +12,7 @@ import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
-import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
+import { compressImageForUpload } from "@/lib/image-compress";
 
 import {
   ITEM_CATEGORIES as categories,
@@ -154,36 +154,7 @@ async function ensureTransparentPng(
   return { file: new File([blob], filename, { type: "image/png" }), isTransparent };
 }
 
-/**
- * Compressione lato client, applicata PRIMA di tutto (analisi AI, rimozione
- * sfondo, upload finale) — non solo prima di salvare. Una foto da 10MB
- * scattata con l'iPhone non serve mai a riconoscere un capo: riduce tempi
- * e probabilità di timeout su tutta la pipeline, non solo sull'upload.
- * Non peggiora mai un file già piccolo (se il risultato è più pesante
- * dell'originale, tiene l'originale).
- */
-async function compressImageForUpload(f: File, maxDimension = 1600, quality = 0.85): Promise<File> {
-  try {
-    const bitmap = await createImageBitmap(f);
-    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return f;
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
-    if (!blob || blob.size >= f.size) return f;
-    return new File([blob], f.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg", { type: "image/jpeg" });
-  } catch (e) {
-    console.warn("[AURA compress] failed, using original", e);
-    return f;
-  }
-}
+
 
 /** remove.bg only accepts JPG/PNG — CDNs sometimes serve webp/avif anyway
  *  (that's why Mytheresa imports kept their background while Zara worked).
