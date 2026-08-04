@@ -336,7 +336,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       </section>
 
     {/* Quick nav */}
-      <section className="px-6 mt-7 grid grid-cols-2 gap-3">
+      <section className="px-6 mt-7 grid grid-cols-2 gap-3" aria-labelledby="home-quick-nav">
+        <h2 id="home-quick-nav" className="sr-only col-span-2">Quick nav</h2>
         <button onClick={() => go("shop")} className="text-left rounded-2xl bg-[var(--champagne)]/30 border border-[var(--champagne)]/50 p-4 active:scale-[0.98] transition">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The edit</p>
           <p className="font-serif text-lg mt-1">Shop your gaps</p>
@@ -348,7 +349,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       </section>
 
       {/* Color Lab — dedicated entry point, distinct from the per-item shortcut */}
-      <section className="px-6 mt-3">
+      <section className="px-6 mt-3" aria-labelledby="home-color-lab">
+        <h2 id="home-color-lab" className="sr-only">Color Lab</h2>
         <button
           onClick={() => go("color-lab")}
           className="w-full text-left rounded-2xl p-4 active:scale-[0.98] transition border border-border/60"
@@ -360,7 +362,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       </section>
 
       {/* Stats — real counts */}
-      <section className="px-6 mt-5 grid grid-cols-3 gap-3">
+      <section className="px-6 mt-5 grid grid-cols-3 gap-3" aria-labelledby="home-stats">
+        <h2 id="home-stats" className="sr-only col-span-3">Stats</h2>
         {[
           { n: String(stats.pieces), l: "Pieces", to: "wardrobe" as Screen },
           { n: String(stats.outfits), l: "Outfits", to: "saved-outfits" as Screen },
