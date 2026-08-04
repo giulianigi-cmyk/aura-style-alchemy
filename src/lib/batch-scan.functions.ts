@@ -258,6 +258,9 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
           season: it.season || null,
           style: it.style || null,
           occasion: it.occasion || null,
+          price: it.price ?? null,
+          currency: it.price != null ? it.currency || null : null,
+          size: it.size || null,
           source: "batch_scan",
         } as never);
         if (insErr) throw new Error(insErr.message);
