@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aura-wardrobe-intelligence.lovable.app/sitemap.xml

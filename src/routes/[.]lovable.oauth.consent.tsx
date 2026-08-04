@@ -22,6 +22,15 @@ function oauthNs(): OAuthNs {
 
 export const Route = createFileRoute("/.lovable/oauth/consent")({
   ssr: false,
+  head: () => ({
+    meta: [
+      { title: "Authorize Access — AURA" },
+      { name: "description", content: "Review and approve third-party access to your AURA style profile and wardrobe before granting permission." },
+      { property: "og:title", content: "Authorize Access — AURA" },
+      { property: "og:description", content: "Review and approve third-party access to your AURA style profile and wardrobe before granting permission." },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   validateSearch: (s: Record<string, unknown>) => ({
     authorization_id: typeof s.authorization_id === "string" ? s.authorization_id : "",
   }),
