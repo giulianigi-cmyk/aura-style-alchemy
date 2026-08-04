@@ -34,6 +34,10 @@ const InputSchema = z.object({
   items: z.array(ItemSchema),
   dressRules: z.string().nullable().optional(),
   dressPreferences: z.record(z.unknown()).nullable().optional(),
+  industry: z.string().nullable().optional(),
+  workDressCode: z.string().nullable().optional(),
+  personalFormality: z.string().nullable().optional(),
+  profession: z.string().nullable().optional(),
   temperature: z.number().nullable().optional(),
   condition: z.string().nullable().optional(),
   feedbackContext: z.enum(["liked", "disliked", "saved"]).nullable().optional(),
@@ -64,9 +68,6 @@ export const stylistChat = createServerFn({ method: "POST" })
       : "Current weather: unknown.";
 
     const dressPrefs = (data.dressPreferences ?? null) as DressPreferences | null;
-    // Hard exclusion, not just a prompt instruction: an item that violates
-    // a boolean/length preference never even reaches the model, so it
-    // can't be proposed by mistake regardless of how it interprets text.
     const allowedItems = data.items.filter((it) => isItemAllowedByDressPreferences(it, dressPrefs));
 
     const catalog = allowedItems.slice(0, 200).map((it) => ({
@@ -106,6 +107,19 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Each item also carries separate attribute fields when known: length (garment length, e.g. Mini/Midi/Maxi for dresses and skirts, Short/Mid/Long for coats, Cropped/Regular/Longline for tops), sleeveLength, fit (e.g. Oversized, Slim, Tailored), heelHeight (Flat/Low/Mid/High), toeShape, closure, gender, and styleTags (free-form aesthetic labels like Minimal, Boho, Preppy, Office, Y2K — use these to match the vibe/aesthetic the user asks for). USE THESE DIRECTLY to honor explicit user requests — e.g. 'no long dresses' means excluding items where length is 'Maxi' (or 'Long'); 'only flat shoes' means heelHeight must be 'Flat'; 'oversized sweaters' means fit is 'Oversized'; 'something more minimal/elegant/streetwear' means matching styleTags. These fields are the source of truth for that request, not subcategory.",
       "If the relevant attribute field is empty for an item (older wardrobe pieces not yet re-classified), you cannot confirm that detail — either avoid proposing that item for a constraint you can't verify, or explicitly say so in your reply (e.g. \"I can't confirm this dress's length from what I have on file\").",
       "STRUCTURE RULE — ALWAYS propose a COMPLETE outfit when you propose one at all, never a partial one: either (Tops item_id + Bottoms item_id) OR (Dresses item_id OR Jumpsuits item_id), PLUS a Shoes item_id, PLUS a Bags item_id, every single time. Never suggest only a bottom, only shoes, or any partial combination. Accessories (Accessories category) are optional — include one only if it genuinely elevates the look. If the wardrobe is missing a piece needed to complete the outfit (e.g. no bag available), say so honestly in your reply instead of silently omitting that category.",
+      ...(data.industry || data.workDressCode || data.personalFormality || data.profession ? [
+        [
+          "USER CONTEXT (soft signals only — weigh them together, never as a fixed rule like 'this industry = this outfit'; the user's own words in this conversation always win over these defaults):",
+          data.profession ? `- Profession/role: ${data.profession}` : null,
+          data.industry ? `- Industry: ${data.industry}` : null,
+          data.workDressCode ? `- Usual work dress code: ${data.workDressCode}` : null,
+          data.personalFormality ? `- Personal everyday formality preference: ${data.personalFormality} — this matters MOST when it conflicts with the occasion (e.g. someone 'Molto casual' asked for a client dinner still gets something polished, but leans as relaxed as the occasion allows; never push them more formal than necessary just because their industry sounds serious).` : null,
+          "Never mention this context back to the user unprompted — it's background reasoning, not a topic.",
+        ].filter(Boolean).join("\n")
+      ] : []),
+      "DRESS CODE CHECK: when the user mentions a specific dinner, party, work event, gala, wedding or similarly formal-sounding occasion WITHOUT stating a dress code, and this is the first time they're describing that occasion in this conversation, ask ONE short clarifying question before proposing an outfit: e.g. 'Sai se è previsto un dress code specifico (es. business formal, cocktail, black tie), o posso orientarmi su un'eleganza versatile?' — with a 'choices' array like [\"Nessun dress code\", \"Business casual\", \"Business formal\", \"Cocktail\", \"Black tie\", \"Non lo so\"]. Return an empty item_ids array for that turn. Skip this entirely for casual/everyday occasions, and skip it if a dress code was already stated or already asked about earlier in this conversation. If the user picks 'Non lo so' (or says they don't know), do NOT ask a follow-up question — decide yourself using the USER CONTEXT above (industry, usual work dress code, personal formality) and propose a versatile, safely-elegant outfit right away, briefly noting in your reply that you went with something adaptable since the dress code wasn't specified.",
+      "WEDDING GUEST ETIQUETTE: if the user is attending a wedding as a guest (not the couple themselves), avoid recommending white, ivory or cream (reserved for the bride) and avoid an all-red look; avoid all-black unless it's explicitly an evening wedding. This is a social norm, not a hard rule like the dressing rules above — but treat it seriously.",
+      "BOLDNESS CHECK: for festive or expressive occasions (wedding guest, cocktail, gala, party, creative/artsy events — NOT everyday or work-formal occasions), if this hasn't been asked yet in the conversation, you may ask ONE short question like 'Vuoi restare su qualcosa di classico o preferisci osare un po' di più?' with 'choices' [\"Classico\", \"Equilibrato\", \"Creativo\", \"Audace\"]. Never use technical color-theory language (e.g. never say 'Itten' or 'color wheel' to the user) — keep it conversational. Once answered (or if skipped because it doesn't apply), calibrate internally: 'Classico'/'Equilibrato' → favor analogous, harmonious color pairings from the wardrobe; 'Creativo'/'Audace' → favor complementary or contrasting color pairings and one statement accessory, still from items the user actually owns. This is optional flair, never at the expense of the STRUCTURE RULE or any binding dress rule above.",
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
       ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
@@ -154,11 +168,6 @@ export const stylistChat = createServerFn({ method: "POST" })
       let finalItemIds = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
       let finalReply = parsed.reply;
 
-      // Structural completeness check — only when an outfit was actually
-      // proposed. Catches the failure mode seen in practice: the model
-      // suggesting only a skirt + shoes, or forgetting a bag. One
-      // corrective retry, not a loop — if it still comes back incomplete,
-      // ship what we have rather than burn calls chasing perfection.
       if (finalItemIds.length > 0) {
         const cats = new Set(
           finalItemIds.map((id) => catalog.find((c) => c.id === id)?.category).filter(Boolean)
@@ -185,8 +194,6 @@ export const stylistChat = createServerFn({ method: "POST" })
             });
             const repaired = parseAiJson(r3.text, OutputSchema);
             const repairedIds = repaired.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
-            // Only accept the repair if it actually improved completeness —
-            // otherwise keep the original rather than risk a worse result.
             if (repairedIds.length >= finalItemIds.length) {
               finalItemIds = repairedIds;
               finalReply = repaired.reply;
