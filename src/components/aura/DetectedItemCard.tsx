@@ -1,7 +1,15 @@
 import { Trash2 } from "lucide-react";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { ITEM_CATEGORIES, MATERIAL_OPTIONS, SEASON_OPTIONS, subcategoriesFor } from "@/lib/wardrobe-options";
+import {
+  ITEM_CATEGORIES,
+  MATERIAL_OPTIONS,
+  SEASON_OPTIONS,
+  STYLE_OPTIONS,
+  OCCASION_OPTIONS,
+  CURRENCY_OPTIONS,
+  subcategoriesFor,
+} from "@/lib/wardrobe-options";
 
 export type DetectedItemDraft = {
   category: string;
@@ -11,6 +19,14 @@ export type DetectedItemDraft = {
   seasons: string[];
   brand: string;
   description: string;
+  // Parity with the single-item add flow (AddItem.tsx) — previously
+  // missing here entirely, so batch-scanned pieces silently lost
+  // price/size/style/occasion even when the person had that info handy.
+  price: string;
+  currency: string;
+  size: string;
+  styles: string[];
+  occasions: string[];
 };
 
 /** Shared review/edit card for AI-detected garments.
@@ -112,6 +128,69 @@ export function DetectedItemCard({
           placeholder="leave empty if unknown"
           className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
         />
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Style</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {STYLE_OPTIONS.map((s) => {
+            const on = item.styles.includes(s);
+            return (
+              <button
+                key={s}
+                onClick={() => onChange({ styles: on ? item.styles.filter((x) => x !== s) : [...item.styles, s] })}
+                className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Occasion</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {OCCASION_OPTIONS.map((o) => {
+            const on = item.occasions.includes(o);
+            return (
+              <button
+                key={o}
+                onClick={() => onChange({ occasions: on ? item.occasions.filter((x) => x !== o) : [...item.occasions, o] })}
+                className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{o}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Size</p>
+          <input
+            value={item.size}
+            onChange={(e) => onChange({ size: e.target.value })}
+            placeholder="e.g. M, 40"
+            className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            <input
+              value={item.price}
+              onChange={(e) => onChange({ price: e.target.value })}
+              placeholder="0.00"
+              inputMode="decimal"
+              className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <select
+              value={item.currency}
+              onChange={(e) => onChange({ currency: e.target.value })}
+              className="bg-secondary/60 rounded-full px-2 py-2.5 text-xs outline-none shrink-0"
+            >
+              {CURRENCY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       {footer}
