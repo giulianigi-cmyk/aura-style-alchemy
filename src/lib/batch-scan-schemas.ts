@@ -28,6 +28,9 @@ export const ConfirmItemSchema = z.object({
   season: z.string().nullable().optional(),
   style: z.string().nullable().optional(),
   occasion: z.string().nullable().optional(),
+  price: z.number().positive().nullable().optional(),
+  currency: z.string().nullable().optional(),
+  size: z.string().nullable().optional(),
 });
 
 export const ConfirmDetectedItemsSchema = z.object({
