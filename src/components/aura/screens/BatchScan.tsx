@@ -80,20 +80,31 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const runWorker = async () => {
+  const [processingNow, setProcessingNow] = useState(false);
+
+  const runWorker = async (opts: { announce?: boolean } = {}) => {
     let claimed = 0;
     let rounds = 0;
+    let totalClaimed = 0;
+    setProcessingNow(true);
     try {
       do {
         const res = await processJobs();
         claimed = res?.claimed ?? 0;
+        totalClaimed += claimed;
         rounds++;
         // 40 rounds x 10/call = up to 400 jobs drained per trigger — comfortably
         // above the 150-photo batch ceiling, with a hard stop so a stuck job
         // can't spin this forever.
       } while (claimed > 0 && rounds < 40);
+      if (opts.announce) {
+        toast(totalClaimed > 0 ? `Processed ${totalClaimed} photo${totalClaimed === 1 ? "" : "s"}` : "Nothing to process right now");
+      }
     } catch (e) {
       console.warn("[AURA batch-scan] worker trigger failed", e);
+      if (opts.announce) toast.error("Couldn't reach the worker — try again in a moment.");
+    } finally {
+      setProcessingNow(false);
     }
     refresh();
   };
@@ -333,8 +344,12 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       <div className="mx-6 mt-8">
         <div className="flex items-center justify-between">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your batches</p>
-          <button onClick={runWorker} className="flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            <RefreshCw size={12} /> Process
+          <button
+            onClick={() => runWorker({ announce: true })}
+            disabled={processingNow}
+            className="flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground disabled:opacity-50"
+          >
+            {processingNow ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Process
           </button>
         </div>
 
