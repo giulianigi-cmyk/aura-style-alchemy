@@ -14,7 +14,11 @@ export const SEASON_OPTIONS = ["Spring", "Summer", "Autumn", "Winter", "All Seas
 // STYLE_OPTIONS invariato: alimenta ancora il campo `style` esistente,
 // usato da Wardrobe/AI/weather — nessuna modifica alla logica esistente.
 export const STYLE_OPTIONS = ["Minimal", "Editorial", "Quiet luxury", "Street", "Romantic", "Tailored", "Bohemian", "Sporty", "Vintage"];
-export const OCCASION_OPTIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
+export const OCCASION_OPTIONS = [
+  "Everyday", "Work", "Business Casual", "Business Formal", "Smart Casual",
+  "Evening", "Cocktail", "Black Tie", "Wedding Guest", "Garden Party",
+  "Weekend", "Travel", "Resort", "Formal", "Sport",
+];
 export const MATERIAL_OPTIONS = [
   "Cotton", "Linen", "Silk", "Wool", "Merino", "Cashmere", "Mohair", "Alpaca",
   "Viscose", "Modal", "Lyocell", "Cupro",
