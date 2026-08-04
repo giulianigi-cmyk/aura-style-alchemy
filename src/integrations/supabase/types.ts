@@ -663,6 +663,7 @@ export type Database = {
       }
       wardrobe_items: {
         Row: {
+          attrs_backfilled_at: string | null
           brand: string | null
           category: string | null
           closure: string | null
@@ -691,6 +692,7 @@ export type Database = {
           worn_count: number
         }
         Insert: {
+          attrs_backfilled_at?: string | null
           brand?: string | null
           category?: string | null
           closure?: string | null
@@ -719,6 +721,7 @@ export type Database = {
           worn_count?: number
         }
         Update: {
+          attrs_backfilled_at?: string | null
           brand?: string | null
           category?: string | null
           closure?: string | null
@@ -856,6 +859,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      drain_scan_jobs_if_needed: { Args: never; Returns: undefined }
       effective_style_confidence: {
         Args: { _confidence: number; _last_seen: string }
         Returns: number
