@@ -5,13 +5,13 @@ import { useAuth } from "./use-auth";
 export type Profile = {
   id: string;
   full_name: string | null;
-  birth_date: string | null; // ISO date (YYYY-MM-DD); source of truth for age
+  birth_date: string | null;
   gender: string | null;
   style_preferences: string[] | null;
   favorite_brands: string[] | null;
   owned_brands: string[];
   avatar_url: string | null;
-  profile_image: string | null; // storage path in the "avatars" bucket
+  profile_image: string | null;
   bio: string | null;
   city: string | null;
   latitude: number | null;
@@ -20,6 +20,10 @@ export type Profile = {
   undertone: string | null;
   value: string | null;
   clarity: string | null;
+  industry: string | null;
+  work_dress_code: string | null;
+  personal_formality: string | null;
+  profession: string | null;
   setup_complete: boolean;
   created_at: string;
   updated_at: string;
@@ -36,15 +40,12 @@ export function calcAge(birthDate: string | null | undefined): number | null {
   return age >= 0 ? age : null;
 }
 
-// Resolve a stored profile_image value into a viewable URL.
-// Newer uploads store a storage path (e.g. "<uid>/avatar-123.jpg") in the
-// private "avatars" bucket → sign it. Legacy values may already be full URLs.
 async function resolveAvatarUrl(value: string | null | undefined): Promise<string | null> {
   if (!value) return null;
   if (/^https?:\/\//i.test(value) || value.startsWith("data:")) return value;
   const { data, error } = await supabase.storage
     .from("avatars")
-    .createSignedUrl(value, 60 * 60); // 1h
+    .createSignedUrl(value, 60 * 60);
   if (error) {
     console.error("avatar signed url", error);
     return null;
@@ -105,7 +106,6 @@ export function useProfile() {
   }, [user, refreshAvatar]);
 
   const uploadAvatar = useCallback(async (file: File) => {
-    // Re-check the session directly so we never upload as anon after a token refresh.
     const { data: auth, error: authErr } = await supabase.auth.getUser();
     if (authErr || !auth?.user) {
       const msg = authErr?.message ?? "Not authenticated";
