@@ -1,35 +1,126 @@
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
+import { checkPublicUrl } from "./safe-url";
+import { fetchImageAsDataUrl } from "./fetch-image";
 import {
   ConfirmDetectedItemsSchema,
   CreateBatchScanSchema,
+  CreateBatchScanFromUrlsSchema,
   DetectedIdSchema,
   ScanIdSchema,
 } from "./batch-scan-schemas";
+
+/** Shared by both intake paths (file upload, URL import): register a
+ *  batch_scans row plus one scan_jobs row per already-stored image path.
+ *  Runs under the caller's own RLS-scoped client — never service role. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function insertBatchAndJobs(supabase: any, userId: string, paths: string[]) {
+  const { data: scan, error } = await supabase
+    .from("batch_scans")
+    .insert({ user_id: userId, status: "queued", total_photos: paths.length })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const jobs = paths.map((p) => ({
+    scan_id: scan.id,
+    user_id: userId,
+    image_path: p,
+    status: "queued" as const,
+  }));
+  const { error: jobErr } = await supabase.from("scan_jobs").insert(jobs);
+  if (jobErr) throw new Error(jobErr.message);
+
+  return { scanId: scan.id as string, jobs: jobs.length };
+}
 
 /** Create a batch after the client has uploaded the originals to storage. */
 export const createBatchScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateBatchScanSchema.parse(input))
   .handler(async ({ data, context }) => {
+    return insertBatchAndJobs(context.supabase, context.userId, data.paths);
+  });
+
+/** data:URL -> raw bytes, mirroring the encode side in batch-scan.server.ts.
+ *  No Buffer here: this runs on the same Worker-style runtime as the rest
+ *  of the scan pipeline. */
+function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
+  const match = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl);
+  if (!match) throw new Error("Invalid image data URL");
+  const contentType = match[1] || "image/jpeg";
+  const binary = atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return { bytes, contentType };
+}
+
+function extFromContentType(ct: string): string {
+  if (ct.includes("png")) return "png";
+  if (ct.includes("webp")) return "webp";
+  if (ct.includes("gif")) return "gif";
+  return "jpg";
+}
+
+/** Small concurrency-limited map: 150 URLs fetched 4-at-a-time so we don't
+ *  hold ~150 x up to 8MB of image data in memory at once. */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Create a batch from pasted image URLs: fetch + upload server-side,
+ *  then feed into the same batch_scans/scan_jobs pipeline as file uploads —
+ *  the worker (detection, dedupe, categorisation) doesn't know or care
+ *  which intake path produced the stored image. A URL that fails to
+ *  download is reported back and skipped; it never fails the whole batch. */
+export const createBatchScanFromUrls = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CreateBatchScanFromUrlsSchema.parse(input))
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { data: scan, error } = await supabase
-      .from("batch_scans")
-      .insert({ user_id: userId, status: "queued", total_photos: data.paths.length })
-      .select("*")
-      .single();
-    if (error) throw new Error(error.message);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const jobs = data.paths.map((p) => ({
-      scan_id: scan.id,
-      user_id: userId,
-      image_path: p,
-      status: "queued" as const,
-    }));
-    const { error: jobErr } = await supabase.from("scan_jobs").insert(jobs);
-    if (jobErr) throw new Error(jobErr.message);
+    // De-dupe pasted lines up front (users often paste the same link twice).
+    const urls = Array.from(new Set(data.urls.filter(Boolean)));
 
-    return { scanId: scan.id as string, jobs: jobs.length };
+    const outcomes = await mapWithConcurrency(urls, 4, async (rawUrl, i) => {
+      const publicErr = checkPublicUrl(rawUrl);
+      if (publicErr) return { url: rawUrl, ok: false as const, error: publicErr };
+
+      const dl = await fetchImageAsDataUrl(rawUrl);
+      if (!dl.ok) return { url: rawUrl, ok: false as const, error: dl.error };
+
+      try {
+        const { bytes, contentType } = dataUrlToBytes(dl.dataUrl);
+        const path = `${userId}/batch/${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${extFromContentType(contentType)}`;
+        const { error: upErr } = await supabaseAdmin.storage
+          .from("wardrobe")
+          .upload(path, bytes, { cacheControl: "3600", upsert: false, contentType });
+        if (upErr) return { url: rawUrl, ok: false as const, error: upErr.message };
+        return { url: rawUrl, ok: true as const, path };
+      } catch (err) {
+        return { url: rawUrl, ok: false as const, error: err instanceof Error ? err.message : "download failed" };
+      }
+    });
+
+    const paths = outcomes.filter((o) => o.ok).map((o) => (o as { path: string }).path);
+    const failed = outcomes.filter((o) => !o.ok) as { url: string; ok: false; error: string }[];
+
+    if (!paths.length) {
+      return { scanId: null, jobs: 0, failed, error: "None of those URLs could be downloaded." };
+    }
+
+    const { scanId, jobs } = await insertBatchAndJobs(supabase, userId, paths);
+    return { scanId, jobs, failed };
   });
 
 export const deleteBatchScan = createServerFn({ method: "POST" })
