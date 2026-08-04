@@ -135,7 +135,7 @@ function Inner() {
     <PhoneFrame>
       <div className="relative h-full w-full overflow-hidden bg-background">
         <div key={screen} className="absolute inset-0 animate-fade-in">
-          {screen === "splash" && <Splash />}
+          {screen === "splash" && <Splash go={go} />}
           {screen === "onboarding" && <Onboarding onDone={finishOnboarding} />}
           {screen === "auth" && <Auth />}
           {screen === "reset" && <ResetPassword onDone={() => setScreen(user ? "home" : "auth")} />}

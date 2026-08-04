@@ -33,7 +33,7 @@ const InputSchema = z.object({
   messages: z.array(MessageSchema).min(1).max(30),
   items: z.array(ItemSchema),
   dressRules: z.string().nullable().optional(),
-  dressPreferences: z.record(z.unknown()).nullable().optional(),
+  dressPreferences: z.record(z.string(), z.unknown()).nullable().optional(),
   industry: z.string().nullable().optional(),
   workDressCode: z.string().nullable().optional(),
   personalFormality: z.string().nullable().optional(),
