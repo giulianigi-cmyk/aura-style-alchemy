@@ -6,6 +6,7 @@ import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { DetectedItemCard, type DetectedItemDraft } from "@/components/aura/DetectedItemCard";
+import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
 import { confirmDetectedItems, listDetectedItems, rejectDetectedItem } from "@/lib/batch-scan.functions";
 import type { BBox } from "@/lib/outfit-detect-types";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
@@ -17,6 +18,9 @@ type Draft = DetectedItemDraft & {
   jobId: string;
   bbox: BBox | null;
   cropUrl: string | null;
+  // Signed URL of the ORIGINAL, un-cropped photo this item came from —
+  // needed to show something to drag a box over when correcting manually.
+  photoUrl: string | null;
   dedupe: DedupeResult;
   // The person always has the final word — "certain" only sets the
   // default, it never silently removes the item from what can be saved.
@@ -122,6 +126,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             jobId: it.job_id,
             bbox: it.bbox,
             cropUrl,
+            photoUrl: src ?? null,
             category,
             subcategory: it.subcategory ?? "",
             colors,
@@ -154,6 +159,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
   const update = (id: string, patch: Partial<DetectedItemDraft>) =>
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  const [adjustingId, setAdjustingId] = useState<string | null>(null);
+  const adjustingDraft = drafts.find((d) => d.id === adjustingId) ?? null;
+
+  const applyManualCrop = (id: string, dataUrl: string, box: FractionalBox) =>
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, cropUrl: dataUrl, bbox: box } : d)));
 
   const discard = async (id: string) => {
     setDrafts((prev) => prev.filter((d) => d.id !== id));
@@ -299,9 +310,29 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 imageUrl={d.cropUrl}
                 onChange={(patch) => update(d.id, patch)}
                 onRemove={() => discard(d.id)}
+                footer={
+                  d.photoUrl && (
+                    <button
+                      onClick={() => setAdjustingId(d.id)}
+                      className="mt-3 w-full h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
+                    >Adjust crop</button>
+                  )
+                }
               />
             </div>
           ))}
+
+          {adjustingDraft?.photoUrl && (
+            <ItemCropAdjuster
+              src={adjustingDraft.photoUrl}
+              initialBox={adjustingDraft.bbox}
+              onCancel={() => setAdjustingId(null)}
+              onSave={({ dataUrl, box }) => {
+                applyManualCrop(adjustingDraft.id, dataUrl, box);
+                setAdjustingId(null);
+              }}
+            />
+          )}
 
           <div className="pt-2 pb-4">
             <button
