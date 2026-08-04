@@ -157,7 +157,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanId]);
 
-  const update = (id: string, patch: Partial<DetectedItemDraft>) =>
+  const update = (id: string, patch: Partial<Draft>) =>
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
@@ -216,6 +216,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           season: d.seasons.join(", ") || null,
           price: priceNum,
           currency: priceNum != null ? d.currency : null,
+          size: d.size.trim() || null,
           style: d.styles.join(", ") || null,
           occasion: d.occasions.join(", ") || null,
         });
