@@ -32,6 +32,12 @@ type ScanItem = {
   transparent: boolean;
   dedupe: DedupeResult;
   status: "pending" | "confirmed-new" | "confirmed-duplicate";
+  // Parity with AddItem.tsx — same reasoning as batch review.
+  price: string;
+  currency: string;
+  size: string;
+  styles: string[];
+  occasions: string[];
 };
 
 
@@ -128,6 +134,11 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           transparent: true,
           dedupe,
           status: dedupe.verdict === "certain" ? "confirmed-duplicate" : dedupe.verdict === "maybe" ? "pending" : "confirmed-new",
+          price: "",
+          currency: "EUR",
+          size: "",
+          styles: [],
+          occasions: [],
         });
       }
 
@@ -175,6 +186,14 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           material: it.materials,
           season: it.seasons.join(", ") || null,
           brand: it.brand.trim() || null,
+          style: it.styles.join(", ") || null,
+          occasion: it.occasions.join(", ") || null,
+          size: it.size.trim() || null,
+          price: (() => {
+            const n = parseFloat(it.price.replace(",", "."));
+            return Number.isFinite(n) && n > 0 ? n : null;
+          })(),
+          currency: it.price.trim() ? it.currency : null,
           source: "outfit_scan",
         } as unknown as TablesInsert<"wardrobe_items">;
 
