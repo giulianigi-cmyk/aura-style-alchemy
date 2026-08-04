@@ -8,6 +8,7 @@ import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
+import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,6 +52,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [savingEdit, setSavingEdit] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
+  const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
   const [edit, setEdit] = useState({
     brand: "",
     size: "",
@@ -144,27 +146,50 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const season = useMemo(() => currentSeason(), []);
 
   /** One-time backfill for items saved before the taxonomy revision
-   *  (subcategory with length/heel baked in, e.g. "Mini Dress"). Uses the
-   *  already-implemented mapLegacySubcategory() via the server function —
-   *  no mapping logic here, just triggers it and refreshes the list. */
+*  (subcategory with length/heel baked in, e.g. "Mini Dress") — cheap,
+   *  text-only recovery. Then loops the AI re-analysis batch for fields
+   *  no old text could ever contain (sleeveLength, fit, toeShape, closure,
+   *  gender, styleTags) — one small batch per call, safe even for
+   *  wardrobes with hundreds of pieces, with a live progress toast. */
   const runLegacyMigration = async () => {
     if (!user || migrating) return;
     setMigrating(true);
+    const toastId = "reanalyze-wardrobe";
     try {
-      const res = await migrateLegacy({ data: undefined });
+      const legacy = await migrateLegacy({ data: undefined });
+
+      let totalUpdated = 0;
+      let round = 0;
+      toast.loading("Aggiornamento del guardaroba…", { id: toastId });
+      while (true) {
+        const batch = await reanalyzeBatch({ data: undefined });
+        totalUpdated += batch.updated;
+        round++;
+        if (batch.processed > 0) {
+          toast.loading(
+            `Aggiornamento in corso — ${totalUpdated} capi ri-analizzati, ${batch.remaining} rimasti…`,
+            { id: toastId }
+          );
+        }
+        if (batch.processed === 0 || batch.remaining === 0) break;
+        if (round > 400) break;
+      }
+
+      const grandTotal = legacy.updated + totalUpdated;
       toast.success(
-        res.updated > 0
-          ? `Updated ${res.updated} of ${res.total} pieces`
-          : "Your wardrobe is already up to date"
+        grandTotal > 0
+          ? `Guardaroba aggiornato: ${grandTotal} capi con nuovi dettagli`
+          : "Il tuo guardaroba è già aggiornato",
+        { id: toastId }
       );
-      if (res.updated > 0) {
+      if (grandTotal > 0) {
         const { data } = await supabase.from("wardrobe_items")
           .select("*").eq("user_id", user.id).order("created_at", { ascending: false });
         setItems((data ?? []) as WardrobeItem[]);
       }
     } catch (e) {
-      console.error("[AURA wardrobe] legacy migration failed", e);
-      toast.error("Could not update existing pieces");
+      console.error("[AURA wardrobe] update failed", e);
+      toast.error("Aggiornamento non riuscito", { id: toastId });
     } finally {
       setMigrating(false);
     }
@@ -225,8 +250,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           <button
             onClick={() => void runLegacyMigration()}
             disabled={migrating}
-            aria-label="Update existing pieces to new taxonomy"
-            title="Update existing pieces to new taxonomy"
+            aria-label="Re-analyze existing pieces with AI (may take a while for large wardrobes)"
+            title="Re-analyze existing pieces with AI (may take a while for large wardrobes)"
             className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-50"
           >
             {migrating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
