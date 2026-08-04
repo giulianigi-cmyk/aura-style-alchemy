@@ -481,14 +481,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             );
           })}
         </div>
-              <div className="px-1 mt-2">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.brand ?? it.category}</p>
-                <p className="font-serif text-base leading-tight">{[label, it.category].filter(Boolean).join(" ")}</p>
-              </div>
-            </button>
-            );
-          })}
-        </div>
       )}
       {detail && (
         <div
