@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Images, Loader2, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Images, Link2, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { createBatchScan, deleteBatchScan, listBatchScans, triggerScanWorker } from "@/lib/batch-scan.functions";
+import {
+  createBatchScan,
+  createBatchScanFromUrls,
+  deleteBatchScan,
+  listBatchScans,
+  triggerScanWorker,
+} from "@/lib/batch-scan.functions";
 type ScanRow = {
   id: string;
   status: string;
@@ -23,6 +29,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openReview: (scanId: string) => void }) {
   const { user } = useAuth();
     const create = useServerFn(createBatchScan);
+  const createFromUrls = useServerFn(createBatchScanFromUrls);
   const list = useServerFn(listBatchScans);
   const remove = useServerFn(deleteBatchScan);
   const processJobs = useServerFn(triggerScanWorker);
@@ -31,6 +38,8 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const [scans, setScans] = useState<ScanRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
+  const [mode, setMode] = useState<"photos" | "urls">("photos");
+  const [urlRows, setUrlRows] = useState<string[]>([""]);
 
     const refresh = async () => {
     try {
@@ -67,6 +76,50 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       console.warn("[AURA batch-scan] worker trigger failed", e);
     }
     refresh();
+  };
+
+  const setUrlRow = (i: number, value: string) => {
+    setUrlRows((prev) => prev.map((r, idx) => (idx === i ? value : r)));
+  };
+  const addUrlRow = () => setUrlRows((prev) => [...prev, ""]);
+  const removeUrlRow = (i: number) =>
+    setUrlRows((prev) => (prev.length === 1 ? [""] : prev.filter((_, idx) => idx !== i)));
+
+  const onSubmitUrls = async () => {
+    // Each textarea line and each row both count: paste a whole list into
+    // one row, or add rows one at a time — either way we flatten and dedupe.
+    const urls = Array.from(
+      new Set(
+        urlRows
+          .flatMap((r) => r.split(/\r?\n/))
+          .map((u) => u.trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!urls.length) return;
+    setBusy(true);
+    setLabel(`Fetching ${urls.length} image${urls.length === 1 ? "" : "s"}…`);
+    try {
+      const res = await createFromUrls({ data: { urls } });
+      if (!res.scanId) {
+        toast.error(res.error ?? "Could not fetch any of those URLs.");
+        return;
+      }
+      const failedCount = res.failed?.length ?? 0;
+      toast.success(
+        failedCount
+          ? `${res.jobs} queued · ${failedCount} URL${failedCount === 1 ? "" : "s"} failed`
+          : `${res.jobs} image${res.jobs === 1 ? "" : "s"} queued`,
+      );
+      setUrlRows([""]);
+      await runWorker();
+    } catch (e) {
+      console.error("[AURA batch-scan] URL import failed", e);
+      toast.error("Could not queue those URLs.");
+    } finally {
+      setBusy(false);
+      setLabel("");
+    }
   };
 
   const onPick = async (files: FileList | null) => {
@@ -112,23 +165,74 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       </header>
 
       <div className="mx-6 mt-6">
-        <div className="rounded-3xl border-2 border-dashed border-border p-8 text-center">
-          <Images size={22} className="mx-auto text-muted-foreground" />
-          <p className="mt-4 font-serif text-lg italic">Upload several outfit photos</p>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            AURA analyses them in the background and prepares a list of suggested pieces.
-            Nothing enters your closet until you review and confirm.
-          </p>
+        <div className="flex rounded-full border border-border p-1 mb-4">
           <button
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-            className="mt-6 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
-          >{busy ? label || "Working…" : "Choose photos"}</button>
+            onClick={() => setMode("photos")}
+            className={`flex-1 h-9 rounded-full text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 ${mode === "photos" ? "bg-foreground text-background" : "text-muted-foreground"}`}
+          ><Images size={12} /> From photos</button>
+          <button
+            onClick={() => setMode("urls")}
+            className={`flex-1 h-9 rounded-full text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 ${mode === "urls" ? "bg-foreground text-background" : "text-muted-foreground"}`}
+          ><Link2 size={12} /> From URLs</button>
         </div>
-        <input
-          ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-          onChange={(e) => onPick(e.target.files)}
-        />
+
+        {mode === "photos" && (
+          <>
+            <div className="rounded-3xl border-2 border-dashed border-border p-8 text-center">
+              <Images size={22} className="mx-auto text-muted-foreground" />
+              <p className="mt-4 font-serif text-lg italic">Upload several outfit photos</p>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                AURA analyses them in the background and prepares a list of suggested pieces.
+                Nothing enters your closet until you review and confirm.
+              </p>
+              <button
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+                className="mt-6 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
+              >{busy ? label || "Working…" : "Choose photos"}</button>
+            </div>
+            <input
+              ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+              onChange={(e) => onPick(e.target.files)}
+            />
+          </>
+        )}
+
+        {mode === "urls" && (
+          <div className="rounded-3xl border-2 border-dashed border-border p-6">
+            <p className="font-serif text-lg italic text-center">Paste image URLs</p>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
+              One link per row. AURA downloads, analyses and queues each one just like an uploaded photo.
+            </p>
+            <div className="mt-5 space-y-2">
+              {urlRows.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={row}
+                    onChange={(e) => setUrlRow(i, e.target.value)}
+                    placeholder="https://…"
+                    inputMode="url"
+                    className="flex-1 h-11 rounded-xl border border-border bg-transparent px-3 text-sm"
+                  />
+                  <button
+                    onClick={() => removeUrlRow(i)}
+                    aria-label="Remove this URL"
+                    className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
+                  ><X size={12} /></button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={addUrlRow}
+              className="mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+            ><Plus size={12} /> Add URL</button>
+            <button
+              disabled={busy}
+              onClick={onSubmitUrls}
+              className="mt-5 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
+            >{busy ? label || "Working…" : "Queue these URLs"}</button>
+          </div>
+        )}
       </div>
 
       <div className="mx-6 mt-8">
