@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
+import { isItemAllowedByDressPreferences, type DressPreferences } from "./dress-preferences";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -32,6 +33,7 @@ const InputSchema = z.object({
   messages: z.array(MessageSchema).min(1).max(30),
   items: z.array(ItemSchema),
   dressRules: z.string().nullable().optional(),
+  dressPreferences: z.record(z.unknown()).nullable().optional(),
   temperature: z.number().nullable().optional(),
   condition: z.string().nullable().optional(),
   feedbackContext: z.enum(["liked", "disliked", "saved"]).nullable().optional(),
@@ -61,7 +63,13 @@ export const stylistChat = createServerFn({ method: "POST" })
       ? `Current weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
       : "Current weather: unknown.";
 
-    const catalog = data.items.slice(0, 200).map((it) => ({
+    const dressPrefs = (data.dressPreferences ?? null) as DressPreferences | null;
+    // Hard exclusion, not just a prompt instruction: an item that violates
+    // a boolean/length preference never even reaches the model, so it
+    // can't be proposed by mistake regardless of how it interprets text.
+    const allowedItems = data.items.filter((it) => isItemAllowedByDressPreferences(it, dressPrefs));
+
+    const catalog = allowedItems.slice(0, 200).map((it) => ({
       id: it.id,
       category: it.category ?? "",
       subcategory: it.subcategory ?? "",
@@ -97,6 +105,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
       "Each item also carries separate attribute fields when known: length (garment length, e.g. Mini/Midi/Maxi for dresses and skirts, Short/Mid/Long for coats, Cropped/Regular/Longline for tops), sleeveLength, fit (e.g. Oversized, Slim, Tailored), heelHeight (Flat/Low/Mid/High), toeShape, closure, gender, and styleTags (free-form aesthetic labels like Minimal, Boho, Preppy, Office, Y2K — use these to match the vibe/aesthetic the user asks for). USE THESE DIRECTLY to honor explicit user requests — e.g. 'no long dresses' means excluding items where length is 'Maxi' (or 'Long'); 'only flat shoes' means heelHeight must be 'Flat'; 'oversized sweaters' means fit is 'Oversized'; 'something more minimal/elegant/streetwear' means matching styleTags. These fields are the source of truth for that request, not subcategory.",
       "If the relevant attribute field is empty for an item (older wardrobe pieces not yet re-classified), you cannot confirm that detail — either avoid proposing that item for a constraint you can't verify, or explicitly say so in your reply (e.g. \"I can't confirm this dress's length from what I have on file\").",
+      "STRUCTURE RULE — ALWAYS propose a COMPLETE outfit when you propose one at all, never a partial one: either (Tops item_id + Bottoms item_id) OR (Dresses item_id OR Jumpsuits item_id), PLUS a Shoes item_id, PLUS a Bags item_id, every single time. Never suggest only a bottom, only shoes, or any partial combination. Accessories (Accessories category) are optional — include one only if it genuinely elevates the look. If the wardrobe is missing a piece needed to complete the outfit (e.g. no bag available), say so honestly in your reply instead of silently omitting that category.",
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
       ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
@@ -142,11 +151,56 @@ export const stylistChat = createServerFn({ method: "POST" })
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
+      let finalItemIds = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
+      let finalReply = parsed.reply;
+
+      // Structural completeness check — only when an outfit was actually
+      // proposed. Catches the failure mode seen in practice: the model
+      // suggesting only a skirt + shoes, or forgetting a bag. One
+      // corrective retry, not a loop — if it still comes back incomplete,
+      // ship what we have rather than burn calls chasing perfection.
+      if (finalItemIds.length > 0) {
+        const cats = new Set(
+          finalItemIds.map((id) => catalog.find((c) => c.id === id)?.category).filter(Boolean)
+        );
+        const hasCore = (cats.has("Tops") && cats.has("Bottoms")) || cats.has("Dresses") || cats.has("Jumpsuits");
+        const missing: string[] = [];
+        if (!hasCore) missing.push("a top+bottom pairing OR a dress/jumpsuit");
+        if (!cats.has("Shoes")) missing.push("shoes");
+        if (!cats.has("Bags")) missing.push("a bag");
+
+        if (missing.length > 0) {
+          try {
+            const r3 = await generateText({
+              model,
+              system,
+              messages: [
+                ...history,
+                { role: "assistant", content: text || "(no response)" },
+                {
+                  role: "user",
+                  content: `Your last outfit was incomplete — it's missing ${missing.join(" and ")}. Complete it now using the wardrobe catalog, keeping the pieces you already picked. Reply again with ONLY the JSON object in the required shape.`,
+                },
+              ],
+            });
+            const repaired = parseAiJson(r3.text, OutputSchema);
+            const repairedIds = repaired.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
+            // Only accept the repair if it actually improved completeness —
+            // otherwise keep the original rather than risk a worse result.
+            if (repairedIds.length >= finalItemIds.length) {
+              finalItemIds = repairedIds;
+              finalReply = repaired.reply;
+            }
+          } catch (err) {
+            console.error("[AURA stylist-chat] completeness repair failed, shipping original", err);
+          }
+        }
+      }
 
       return {
         ok: true as const,
-        reply: (parsed.reply ?? "").slice(0, 1200),
-        item_ids: parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6),
+        reply: (finalReply ?? "").slice(0, 1200),
+        item_ids: finalItemIds,
         choices: (parsed.choices ?? []).slice(0, 4),
         actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
       };
