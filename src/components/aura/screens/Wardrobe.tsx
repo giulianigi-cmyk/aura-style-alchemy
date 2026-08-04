@@ -450,7 +450,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           )}
         </div>
       ) : (
-        <        <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
+        <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
           {filtered.map((it, i) => {
             const path = toStoragePath(it.image_url);
             const src = path ? (signed[path] ?? "") : "";
