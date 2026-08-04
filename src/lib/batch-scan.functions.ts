@@ -137,13 +137,39 @@ export const listBatchScans = createServerFn({ method: "GET" })
 
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { data: scans, error } = await context.supabase
       .from("batch_scans")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(30);
     if (error) throw new Error(error.message);
-    return data ?? [];
+
+    const ids = (scans ?? []).map((s) => s.id);
+    type Counts = { queued: number; processing: number; done: number; failed: number };
+    const countsByScan: Record<string, Counts> = {};
+
+    if (ids.length) {
+      // One extra query for ALL jobs across the visible batches, instead of
+      // one count query per batch — keeps this at 2 round-trips regardless
+      // of how many batches are shown.
+      const { data: jobs, error: jobErr } = await context.supabase
+        .from("scan_jobs")
+        .select("scan_id, status")
+        .in("scan_id", ids);
+      if (jobErr) throw new Error(jobErr.message);
+      for (const j of jobs ?? []) {
+        const c = (countsByScan[j.scan_id] ??= { queued: 0, processing: 0, done: 0, failed: 0 });
+        if (j.status === "queued") c.queued++;
+        else if (j.status === "processing") c.processing++;
+        else if (j.status === "done") c.done++;
+        else if (j.status === "failed") c.failed++;
+      }
+    }
+
+    return (scans ?? []).map((s) => ({
+      ...s,
+      jobCounts: countsByScan[s.id] ?? { queued: 0, processing: 0, done: 0, failed: 0 },
+    }));
   });
 
 export const getBatchScan = createServerFn({ method: "POST" })
@@ -256,5 +282,5 @@ export const triggerScanWorker = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { runScanWorker } = await import("./batch-scan.server");
-    return await runScanWorker(5);
+    return await runScanWorker(10);
   });
