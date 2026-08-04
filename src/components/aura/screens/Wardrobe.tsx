@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +51,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
   const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
@@ -118,6 +120,73 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  /** Fetches a signed URL and converts it to a data: URL — a data: URL can
+   *  never taint a canvas/fetch pipeline the way a cross-origin signed URL
+   *  sometimes silently does. Same proven pattern as AvatarCropper.tsx. */
+  const toDataUrl = async (url: string): Promise<string> => {
+    const resp = await fetch(url, { mode: "cors", cache: "no-store" });
+    if (!resp.ok) throw new Error(`image fetch failed: ${resp.status}`);
+    const blob = await resp.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  /** Remove the background of an ALREADY-SAVED item's photo — works
+   *  regardless of how the item was added (single photo, batch scan, URL
+   *  import). Previously this pipeline only ran during the single-item
+   *  add flow; items from batch scan or a manually-adjusted crop had no
+   *  way to get it after the fact. */
+  const removeItemBackground = async () => {
+    if (!detail || !user) return;
+    const path = toStoragePath(detail.image_url);
+    const src = path ? signed[path] : "";
+    if (!src) return;
+    setRemovingBg(true);
+    try {
+      const dataUrl = await toDataUrl(src);
+      let bg = await removeBackgroundClient(dataUrl);
+      let attempt = 1;
+      while (!bg.ok && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+        bg = await removeBackgroundClient(dataUrl);
+        attempt++;
+      }
+      if (!bg.ok) {
+        toast.error("Couldn't remove the background — try again in a moment.");
+        return;
+      }
+
+      const blob = await (await fetch(bg.imageDataUrl)).blob();
+      const newPath = `${user.id}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(newPath, blob, {
+        cacheControl: "3600", upsert: false, contentType: "image/png",
+      });
+      if (upErr) throw upErr;
+
+      const { data: updatedRow, error: updErr } = await supabase
+        .from("wardrobe_items").update({ image_url: newPath }).eq("id", detail.id).select("*").single();
+      if (updErr) throw updErr;
+
+      const updated = updatedRow as WardrobeItem;
+      setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+      setDetail(updated);
+
+      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrl(newPath, 3600);
+      if (signedData?.signedUrl) setSigned((prev) => ({ ...prev, [newPath]: signedData.signedUrl }));
+
+      toast.success("Background removed");
+    } catch (e) {
+      console.error("[AURA wardrobe] bg removal failed", e);
+      toast.error(e instanceof Error ? e.message : "Background removal failed");
+    } finally {
+      setRemovingBg(false);
     }
   };
 
@@ -455,12 +524,21 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     )}
                   </div>
                   {src && !editing && (
-                   <button
-                      onClick={() => setColorWheelOpen(true)}
-                      className="mx-auto mt-3 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
-                    >
-                      🎨 Color Harmony
-                    </button>
+                    <div className="mx-auto mt-3 flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => setColorWheelOpen(true)}
+                        className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
+                      >
+                        🎨 Color Harmony
+                      </button>
+                      <button
+                        onClick={removeItemBackground}
+                        disabled={removingBg}
+                        className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95 disabled:opacity-50"
+                      >
+                        {removingBg ? <Loader2 size={12} className="animate-spin" /> : "✂️"} Remove background
+                      </button>
+                    </div>
                   )}
                   {colorWheelOpen && src && (
                     <ColorWheelPicker imageUrl={src} onClose={() => setColorWheelOpen(false)} />
