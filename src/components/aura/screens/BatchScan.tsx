@@ -12,12 +12,22 @@ import {
   listBatchScans,
   triggerScanWorker,
 } from "@/lib/batch-scan.functions";
+import { compressImageForUpload } from "@/lib/image-compress";
+type JobCounts = { queued: number; processing: number; done: number; failed: number };
 type ScanRow = {
   id: string;
   status: string;
   total_photos: number;
   created_at: string;
+  jobCounts: JobCounts;
 };
+
+// Matches CreateBatchScanFromUrlsSchema's max — one soft ceiling per batch,
+// enforced with a visible warning instead of the old silent slice(0, 20).
+const MAX_BATCH_PHOTOS = 150;
+
+type PhotoStatus = "queued" | "compressing" | "uploading" | "uploaded" | "failed";
+type PhotoState = { name: string; status: PhotoStatus; error?: string };
 
 const STATUS_LABEL: Record<string, string> = {
   queued: "Queued",
@@ -40,6 +50,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const [label, setLabel] = useState("");
   const [mode, setMode] = useState<"photos" | "urls">("photos");
   const [urlRows, setUrlRows] = useState<string[]>([""]);
+  const [photoStates, setPhotoStates] = useState<PhotoState[]>([]);
 
     const refresh = async () => {
     try {
@@ -70,13 +81,35 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   }, []);
 
   const runWorker = async () => {
+    let claimed = 0;
+    let rounds = 0;
     try {
-      await processJobs();
+      do {
+        const res = await processJobs();
+        claimed = res?.claimed ?? 0;
+        rounds++;
+        // 40 rounds x 10/call = up to 400 jobs drained per trigger — comfortably
+        // above the 150-photo batch ceiling, with a hard stop so a stuck job
+        // can't spin this forever.
+      } while (claimed > 0 && rounds < 40);
     } catch (e) {
       console.warn("[AURA batch-scan] worker trigger failed", e);
     }
     refresh();
   };
+
+  // Safety net while the screen stays open: if any batch still has queued
+  // or processing jobs, keep nudging the worker every 8s. This does NOT
+  // help once the tab is closed — for that, a pg_cron + pg_net schedule
+  // hitting /api/public/hooks/process-scan-jobs is the durable fix (see
+  // the SQL snippet Claude can provide separately).
+  useEffect(() => {
+    const hasPending = scans.some((s) => s.status === "queued" || s.status === "processing");
+    if (!hasPending) return;
+    const t = setInterval(runWorker, 8000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scans]);
 
   const setUrlRow = (i: number, value: string) => {
     setUrlRows((prev) => prev.map((r, idx) => (idx === i ? value : r)));
@@ -124,31 +157,84 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
 
   const onPick = async (files: FileList | null) => {
     if (!files?.length || !user) return;
-    const picked = Array.from(files).slice(0, 20);
+    const all = Array.from(files);
+    const picked = all.slice(0, MAX_BATCH_PHOTOS);
+    if (all.length > MAX_BATCH_PHOTOS) {
+      toast.warning(`Only the first ${MAX_BATCH_PHOTOS} photos are used per batch — upload the rest as a second batch.`);
+    }
+
     setBusy(true);
+    setPhotoStates(picked.map((f) => ({ name: f.name, status: "queued" })));
     const paths: string[] = [];
-    try {
-      for (let i = 0; i < picked.length; i++) {
-        setLabel(`Uploading photo ${i + 1} of ${picked.length}…`);
-        const f = picked[i];
-        const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
-        const path = `${user.id}/batch/${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from("wardrobe").upload(path, f, {
-          cacheControl: "3600", upsert: false, contentType: f.type || "image/jpeg",
+    const failures: { name: string; error: string }[] = [];
+
+    const setStateAt = (i: number, patch: Partial<PhotoState>) =>
+      setPhotoStates((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+
+    // Each photo is independent: compress, then upload with one retry.
+    // A failure here is recorded and skipped — it never aborts the batch,
+    // and whatever succeeded still gets queued at the end.
+    const uploadOne = async (f: File, i: number) => {
+      setStateAt(i, { status: "compressing" });
+      const compressed = await compressImageForUpload(f);
+      setStateAt(i, { status: "uploading" });
+      const ext = (compressed.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `${user.id}/batch/${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      let lastError = "upload failed";
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { error } = await supabase.storage.from("wardrobe").upload(path, compressed, {
+          cacheControl: "3600", upsert: false, contentType: compressed.type || "image/jpeg",
         });
-        if (error) throw error;
-        paths.push(path);
+        if (!error) {
+          paths.push(path);
+          setStateAt(i, { status: "uploaded" });
+          return;
+        }
+        lastError = error.message;
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
       }
-      setLabel("Queueing…");
-      await create({ data: { paths } });
-      toast.success(`${paths.length} photo${paths.length === 1 ? "" : "s"} queued`);
-      await runWorker();
+      failures.push({ name: f.name, error: lastError });
+      setStateAt(i, { status: "failed", error: lastError });
+    };
+
+    // Limited concurrency: fast enough on a good connection, still gentle
+    // on slow ones — 150 fully parallel uploads would just time out together.
+    const CONCURRENCY = 3;
+    let next = 0;
+    const worker = async () => {
+      while (next < picked.length) {
+        const i = next++;
+        await uploadOne(picked[i], i);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, picked.length) }, worker));
+
+    try {
+      if (paths.length) {
+        setLabel("Queueing…");
+        await create({ data: { paths } });
+        const failedCount = failures.length;
+        toast.success(
+          failedCount
+            ? `${paths.length} queued · ${failedCount} photo${failedCount === 1 ? "" : "s"} failed to upload`
+            : `${paths.length} photo${paths.length === 1 ? "" : "s"} queued`,
+        );
+        await runWorker();
+      } else {
+        toast.error("None of those photos could be uploaded.");
+      }
     } catch (e) {
-      console.error("[AURA batch-scan] upload failed", e);
-      toast.error("Could not queue these photos.");
+      console.error("[AURA batch-scan] queueing failed", e);
+      toast.error(
+        paths.length
+          ? "Photos uploaded but couldn't be queued — tap Process to retry."
+          : "Could not queue these photos.",
+      );
     } finally {
       setBusy(false);
       setLabel("");
+      setPhotoStates([]);
     }
   };
 
@@ -189,7 +275,16 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                 disabled={busy}
                 onClick={() => fileRef.current?.click()}
                 className="mt-6 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
-              >{busy ? label || "Working…" : "Choose photos"}</button>
+              >{busy
+                ? (photoStates.length
+                    ? `${photoStates.filter((p) => p.status === "uploaded").length}/${photoStates.length} uploaded…`
+                    : label || "Working…")
+                : "Choose photos"}</button>
+              {busy && photoStates.some((p) => p.status === "failed") && (
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  {photoStates.filter((p) => p.status === "failed").length} photo{photoStates.filter((p) => p.status === "failed").length === 1 ? "" : "s"} failed to upload so far — the rest keep going.
+                </p>
+              )}
             </div>
             <input
               ref={fileRef} type="file" accept="image/*" multiple className="hidden"
@@ -248,24 +343,33 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
             <p className="text-sm text-muted-foreground">No batches yet.</p>
           )}
                     {scans.map((s) => {
+            const c = s.jobCounts;
             const ready = s.status === "done" || s.status === "done_with_errors";
+            // Some items are reviewable as soon as their job finished (done
+            // or failed) — no need to wait for the last straggler.
+            const reviewable = ready || c.done + c.failed > 0;
             return (
               <div
                 key={s.id}
                 className="w-full rounded-2xl border border-border bg-card px-4 py-3 flex items-center gap-3"
               >
                 <button
-                  onClick={() => ready && openReview(s.id)}
+                  onClick={() => reviewable && openReview(s.id)}
                   className="flex-1 min-w-0 text-left"
                 >
                   <p className="text-sm">{s.total_photos} photo{s.total_photos === 1 ? "" : "s"}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.created_at).toLocaleString()}
                   </p>
+                  {!ready && (c.queued + c.processing + c.done + c.failed > 0) && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      ✓ {c.done} done{c.processing ? ` · ⏳ ${c.processing} processing` : ""}{c.queued ? ` · ${c.queued} queued` : ""}{c.failed ? ` · ⚠ ${c.failed} failed` : ""}
+                    </p>
+                  )}
                 </button>
                 {!ready && <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />}
-                {ready && (
-                  <button onClick={() => ready && openReview(s.id)} className="text-[10px] uppercase tracking-[0.25em] shrink-0">
+                {reviewable && (
+                  <button onClick={() => openReview(s.id)} className="text-[10px] uppercase tracking-[0.25em] shrink-0">
                     Review
                   </button>
                 )}
