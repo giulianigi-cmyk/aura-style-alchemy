@@ -6,6 +6,7 @@ import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
@@ -26,7 +27,7 @@ type ChatMsg = {
   itemIds?: string[];
   choices?: string[];
   actions?: { type: ActionType; label: string }[];
-  uiOnly?: boolean; // messaggio generato localmente: mai inviato all'AI come contesto
+  uiOnly?: boolean;
 };
 
 type MsgUiState = {
@@ -50,12 +51,6 @@ const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-/**
- * Le server function di TanStack Start non garantiscono di far arrivare
- * un vero Error al client — spesso è un oggetto semplice serializzato.
- * Questo estrae un messaggio leggibile in ogni caso, invece di cadere
- * sempre sul fallback generico quando `instanceof Error` è false.
- */
 function errorMessage(e: unknown, fallback: string): string {
   const detail =
     e instanceof Error ? e.message
@@ -67,6 +62,7 @@ function errorMessage(e: unknown, fallback: string): string {
 
 export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
+  const { profile } = useProfile();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
   const [items, setItems] = useState<WardrobeItem[]>([]);
@@ -124,6 +120,10 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
           messages: history.filter((m) => !m.uiOnly).slice(-12).map((m) => ({ role: m.role, content: m.content })),
           dressRules,
           dressPreferences,
+          industry: profile?.industry ?? null,
+          workDressCode: profile?.work_dress_code ?? null,
+          personalFormality: profile?.personal_formality ?? null,
+          profession: profile?.profession ?? null,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           feedbackContext: feedbackContext ?? null,
@@ -180,7 +180,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     void sendMessage(text);
   };
 
-  /** Riproduce la risposta come audio. Non blocca la chat se fallisce. */
   const speak = async (text: string) => {
     if (!text.trim()) return;
     setSpeaking(true);
@@ -197,7 +196,6 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     }
   };
 
-  /** Tap sul microfono: avvia la registrazione con MediaRecorder. */
   const startRecording = async () => {
     if (recording || transcribing || busy) return;
     try {
@@ -223,14 +221,12 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     }
   };
 
-  /** Tap di nuovo sul microfono: ferma la registrazione, il resto parte da onstop. */
   const stopRecording = () => {
     if (!recording) return;
     mediaRecorderRef.current?.stop();
     setRecording(false);
   };
 
-  /** Audio registrato -> Whisper -> testo -> invio come messaggio normale. */
   const handleRecordedAudio = async (blob: Blob) => {
     setTranscribing(true);
     try {
@@ -245,7 +241,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         toast.message("Non ho sentito bene, riprova");
         return;
       }
-      speakNextReplyRef.current = true; // questo turno è vocale: rispondi anche a voce
+      speakNextReplyRef.current = true;
       void sendMessage(res.text);
     } catch (e) {
       console.error("[AURA voice-transcribe]", e);
