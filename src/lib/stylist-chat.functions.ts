@@ -54,6 +54,23 @@ const SAVE_ACTIONS = [
   { type: "add_calendar" as const, label: "Aggiungi al calendario" },
 ];
 
+/**
+ * Difesa contro un errore raro del modello: a volte, invece di restituire
+ * l'oggetto richiesto al primo livello, lo incarta due volte — mette
+ * l'intero JSON come stringa dentro il campo 'reply' invece che come
+ * oggetto vero. Se lo rileviamo, srotoliamo e usiamo l'oggetto interno
+ * (quello vero), invece di mostrare il JSON grezzo come testo in chat.
+ */
+function unwrapIfDoubleEncoded(parsed: z.infer<typeof OutputSchema>): z.infer<typeof OutputSchema> {
+  const trimmed = parsed.reply?.trim() ?? "";
+  if (!trimmed.startsWith("{") || !trimmed.includes('"reply"')) return parsed;
+  try {
+    return parseAiJson(trimmed, OutputSchema);
+  } catch {
+    return parsed;
+  }
+}
+
 export const stylistChat = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
@@ -165,6 +182,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
+      parsed = unwrapIfDoubleEncoded(parsed);
       let finalItemIds = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
       let finalReply = parsed.reply;
 
