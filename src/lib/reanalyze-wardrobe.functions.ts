@@ -74,7 +74,7 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
 
         const { error: updErr } = await context.supabase
           .from("wardrobe_items")
-          .update(patch)
+          .update(patch as never)
           .eq("id", item.id);
         if (updErr) { console.error("[AURA reanalyze] update failed", item.id, updErr); continue; }
         updated++;
