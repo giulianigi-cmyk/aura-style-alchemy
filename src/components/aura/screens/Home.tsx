@@ -231,13 +231,14 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       <header className="px-6 pt-14 pb-4 flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{today}</p>
-          <h1 className="font-serif text-3xl mt-1">Good morning, {greetingName}</h1>
+          <h1 className="font-serif text-3xl mt-1">Your Wardrobe Intelligence</h1>
+          <p className="font-serif text-lg italic text-muted-foreground mt-1">Good morning, {greetingName}</p>
         </div>
         <div className="flex gap-2">
-          <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition">
+          <button aria-label="Search your wardrobe" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition">
             <Search size={16} />
           </button>
-          <button onClick={() => go("notifications")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
+          <button onClick={() => go("notifications")} aria-label="Notifications" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
             <Bell size={16} />
             <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-[var(--champagne)]" />
           </button>
