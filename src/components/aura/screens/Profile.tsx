@@ -23,6 +23,13 @@ const BRANDS = [
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
 const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
+const INDUSTRIES = [
+  "Finance / Legal", "Consulting / Corporate", "Tech / Startup",
+  "Fashion / Creative", "Healthcare", "Education", "Hospitality / Retail",
+  "Media / Marketing", "Public sector", "Other",
+];
+const WORK_DRESS_CODES = ["Nessuno", "Casual", "Smart Casual", "Business Casual", "Business Formal", "Divisa"];
+const PERSONAL_FORMALITY = ["Molto casual", "Casual", "Smart Casual", "Elegante", "Molto elegante"];
 
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
@@ -34,6 +41,10 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [fullName, setFullName] = useState("");
   const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
+  const [industry, setIndustry] = useState<string>("");
+  const [workDressCode, setWorkDressCode] = useState<string>("");
+  const [personalFormality, setPersonalFormality] = useState<string>("");
+  const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
@@ -47,6 +58,10 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setFullName(profile.full_name ?? "");
     setBirthDate(profile.birth_date ?? "");
     setGender(profile.gender ?? "");
+    setIndustry(profile.industry ?? "");
+    setWorkDressCode(profile.work_dress_code ?? "");
+    setPersonalFormality(profile.personal_formality ?? "");
+    setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
     setStyles(profile.style_preferences ?? []);
     setBrands(profile.favorite_brands ?? []);
@@ -61,6 +76,10 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       full_name: fullName.trim() || null,
       birth_date: birthDate || null,
       gender: gender || null,
+      industry: industry || null,
+      work_dress_code: workDressCode || null,
+      personal_formality: personalFormality || null,
+      profession: profession.trim() || null,
       bio: bio.trim() || null,
       style_preferences: styles,
       favorite_brands: brands,
@@ -205,6 +224,49 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                 </button>
               ))}
             </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Industry</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Optional — soft context AURA weighs alongside your work dress code and personal style, never a fixed rule.</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {INDUSTRIES.map(i => (
+                <button key={i} onClick={() => setIndustry(i)}
+                  className={`rounded-full px-3 py-1.5 text-xs border transition ${industry === i ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                  {i}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Usual work dress code</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {WORK_DRESS_CODES.map(w => (
+                <button key={w} onClick={() => setWorkDressCode(w)}
+                  className={`rounded-full px-3 py-1.5 text-xs border transition ${workDressCode === w ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your everyday formality</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">So AURA never suggests a blazer to someone who hates them, even when "technically correct".</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {PERSONAL_FORMALITY.map(f => (
+                <button key={f} onClick={() => setPersonalFormality(f)}
+                  className={`rounded-full px-3 py-1.5 text-xs border transition ${personalFormality === f ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Profession / role</p>
+            <input
+              value={profession} onChange={e => setProfession(e.target.value)}
+              placeholder="e.g. Product Manager, Lawyer, Founder — optional"
+              className="mt-1 w-full bg-transparent border-b border-border py-1.5 text-sm outline-none focus:border-foreground transition"
+            />
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Style preferences</p>
