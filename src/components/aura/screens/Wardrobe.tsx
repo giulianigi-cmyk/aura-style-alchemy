@@ -450,7 +450,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           )}
         </div>
       ) : (
-        <        <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
+        <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
           {filtered.map((it, i) => {
             const path = toStoragePath(it.image_url);
             const src = path ? (signed[path] ?? "") : "";
@@ -476,14 +476,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
               <div className="px-0.5 mt-1.5">
                 <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
                 <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
-              </div>
-            </button>
-            );
-          })}
-        </div>
-              <div className="px-1 mt-2">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.brand ?? it.category}</p>
-                <p className="font-serif text-base leading-tight">{[label, it.category].filter(Boolean).join(" ")}</p>
               </div>
             </button>
             );
