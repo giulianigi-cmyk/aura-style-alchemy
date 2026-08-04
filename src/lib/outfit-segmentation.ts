@@ -290,12 +290,16 @@ export async function cropItemFromSegmentation(
     const minRegionPixels = Math.max(24, Math.floor(total * 0.002));
 
     // bbox in mask pixel space (original + padded).
+    // Padding widened from 12% to 28%: Gemini's bbox is a rough estimate,
+    // not a precise garment outline — a sleeve or hem that extends past a
+    // slightly-undersized box was being hard-cut here even when the
+    // segmentation model had correctly identified the whole garment.
     const bx0 = Math.max(0, Math.round(bbox.x * mw));
     const by0 = Math.max(0, Math.round(bbox.y * mh));
     const bx1 = Math.min(mw, Math.round((bbox.x + bbox.width) * mw));
     const by1 = Math.min(mh, Math.round((bbox.y + bbox.height) * mh));
-    const padX = Math.round((bx1 - bx0) * 0.12);
-    const padY = Math.round((by1 - by0) * 0.12);
+    const padX = Math.round((bx1 - bx0) * 0.28);
+    const padY = Math.round((by1 - by0) * 0.28);
     const px0 = Math.max(0, bx0 - padX);
     const py0 = Math.max(0, by0 - padY);
     const px1 = Math.min(mw, bx1 + padX);
@@ -328,9 +332,15 @@ export async function cropItemFromSegmentation(
       const comps = connectedComponents(work, mw, mh).filter((c) => c.pixels.length >= minRegionPixels);
       if (!comps.length) continue;
 
+      // Keep every component that substantially overlaps the ORIGINAL bbox
+      // (not just the single best one) — a garment split across the photo
+      // by occlusion (crossed arms, a bag strap, another layer) is still
+      // one physical item, and dropping the smaller pieces is exactly what
+      // produced crops with a missing sleeve or hem.
       let best: Component | null = null;
       let bestScore = -1;
       const cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+      const merged: Component[] = [];
       for (const c of comps) {
         let overlap = 0;
         let sx = 0, sy = 0;
@@ -339,16 +349,22 @@ export async function cropItemFromSegmentation(
           sx += x; sy += y;
           if (x >= bx0 && x < bx1 && y >= by0 && y < by1) overlap++;
         }
+        const overlapFrac = overlap / c.pixels.length;
         const ccx = sx / c.pixels.length, ccy = sy / c.pixels.length;
         const dist = Math.hypot(ccx - cx, ccy - cy) || 1;
         const score = overlap > 0 ? overlap : 1 / dist;
         if (score > bestScore) { bestScore = score; best = c; }
+        // 20%+ of this piece sits inside the AI's box → almost certainly
+        // the same garment, just visually disconnected in this photo.
+        if (overlapFrac >= 0.2) merged.push(c);
       }
       if (!best) continue;
+      if (!merged.includes(best)) merged.push(best);
 
       const final = new Uint8Array(total);
-      for (const idx of best.pixels) final[idx] = 255;
-      if (best.pixels.length < minRegionPixels) continue;
+      for (const c of merged) for (const idx of c.pixels) final[idx] = 255;
+      const mergedPixelCount = merged.reduce((n, c) => n + c.pixels.length, 0);
+      if (mergedPixelCount < minRegionPixels) continue;
       chosen = final;
       break;
     }
