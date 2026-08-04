@@ -50,12 +50,18 @@ export const MEN_SHOES: SizeRow[] = [
 
 const ALPHA = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL"];
 
-export function normalizeSize(input: string): string {
+// Import guard: these two helpers are consumed from several screens
+// (AddItem, Wardrobe, Profile, BatchReview). They must never throw on
+// undefined/null/non-string input, otherwise a single bad field crashes
+// the whole route through the error boundary.
+export function normalizeSize(input?: string | null): string {
+  if (typeof input !== "string") return "";
   return input.trim().toUpperCase().replace(/\s+/g, "");
 }
 
 export function isShoeCategory(category?: string | null): boolean {
-  return (category ?? "").toLowerCase().includes("shoe");
+  if (typeof category !== "string") return false;
+  return category.toLowerCase().includes("shoe");
 }
 
 /**
@@ -63,7 +69,7 @@ export function isShoeCategory(category?: string | null): boolean {
  * in base a categoria (abbigliamento vs scarpe) e genere (default donna).
  */
 export function findSizeRow(
-  input: string,
+  input?: string | null,
   opts?: { shoes?: boolean; gender?: Gender },
 ): SizeRow | null {
   const v = normalizeSize(input);
@@ -80,7 +86,7 @@ export function findSizeRow(
 
 /** Stringa compatta di equivalenze da mostrare in scheda, es. "IT 42 ≈ EU 38 · UK 10 · US 6 · M" */
 export function sizeEquivalences(
-  input: string,
+  input?: string | null,
   opts?: { shoes?: boolean; gender?: Gender },
 ): string | null {
   const row = findSizeRow(input, opts);
