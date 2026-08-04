@@ -388,13 +388,17 @@ export type Database = {
           city: string | null
           clarity: string | null
           created_at: string
+          dress_preferences: Json
           favorite_brands: string[] | null
           full_name: string | null
           gender: string | null
           id: string
+          industry: string | null
           latitude: number | null
           longitude: number | null
           owned_brands: string[]
+          personal_formality: string | null
+          profession: string | null
           profile_image: string | null
           season: string | null
           setup_complete: boolean
@@ -404,6 +408,7 @@ export type Database = {
           updated_at: string
           username: string | null
           value: string | null
+          work_dress_code: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -412,13 +417,17 @@ export type Database = {
           city?: string | null
           clarity?: string | null
           created_at?: string
+          dress_preferences?: Json
           favorite_brands?: string[] | null
           full_name?: string | null
           gender?: string | null
           id?: string
+          industry?: string | null
           latitude?: number | null
           longitude?: number | null
           owned_brands?: string[]
+          personal_formality?: string | null
+          profession?: string | null
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
@@ -428,6 +437,7 @@ export type Database = {
           updated_at?: string
           username?: string | null
           value?: string | null
+          work_dress_code?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -436,13 +446,17 @@ export type Database = {
           city?: string | null
           clarity?: string | null
           created_at?: string
+          dress_preferences?: Json
           favorite_brands?: string[] | null
           full_name?: string | null
           gender?: string | null
           id?: string
+          industry?: string | null
           latitude?: number | null
           longitude?: number | null
           owned_brands?: string[]
+          personal_formality?: string | null
+          profession?: string | null
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
@@ -452,6 +466,7 @@ export type Database = {
           updated_at?: string
           username?: string | null
           value?: string | null
+          work_dress_code?: string | null
         }
         Relationships: []
       }
