@@ -37,14 +37,15 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // attrs_backfilled_at, not the four is-null checks: a bag never gets
+    // heel_height, a pair of jeans never gets sleeve_length — requiring
+    // ALL FOUR to be null meant most items could never leave this list,
+    // and got silently re-processed (and re-counted) every round forever.
     const { data: candidates, error: qErr } = await context.supabase
       .from("wardrobe_items")
       .select("id, image_url, category")
       .eq("user_id", context.userId)
-      .is("length", null)
-      .is("sleeve_length", null)
-      .is("fit", null)
-      .is("heel_height", null)
+      .is("attrs_backfilled_at", null)
       .limit(BATCH_SIZE);
     if (qErr) throw new Error(qErr.message);
 
@@ -53,14 +54,31 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
 
     for (const item of items) {
       try {
-        if (!item.image_url) continue;
+        if (!item.image_url) {
+          await context.supabase.from("wardrobe_items")
+            .update({ attrs_backfilled_at: new Date().toISOString() } as never)
+            .eq("id", item.id);
+          continue;
+        }
         const { data: blob, error: dlErr } = await supabaseAdmin.storage.from(BUCKET).download(item.image_url);
-        if (dlErr || !blob) { console.error("[AURA reanalyze] download failed", item.id, dlErr); continue; }
+        if (dlErr || !blob) {
+          console.error("[AURA reanalyze] download failed", item.id, dlErr);
+          // Still mark it visited: a permanently-broken image_url would
+          // otherwise keep this item in the candidate list forever too.
+          await context.supabase.from("wardrobe_items")
+            .update({ attrs_backfilled_at: new Date().toISOString() } as never)
+            .eq("id", item.id);
+          continue;
+        }
 
         const dataUrl = toDataUrl(await blob.arrayBuffer(), blob.type || "image/jpeg");
         const result = await analyzeWardrobeImageCore(dataUrl);
 
-        const patch: Record<string, unknown> = {};
+        // Always stamp attrs_backfilled_at — this item has now been
+        // checked once. Whichever of these fields genuinely apply to its
+        // category get filled; the rest legitimately stay null forever,
+        // and that's fine, not a reason to check this item again.
+        const patch: Record<string, unknown> = { attrs_backfilled_at: new Date().toISOString() };
         if (result.length) patch.length = result.length;
         if (result.sleeveLength) patch.sleeve_length = result.sleeveLength;
         if (result.fit) patch.fit = result.fit;
@@ -70,14 +88,12 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
         if (result.gender) patch.gender = result.gender;
         if (result.styleTags?.length) patch.style_tags = result.styleTags;
 
-        if (Object.keys(patch).length === 0) continue;
-
         const { error: updErr } = await context.supabase
           .from("wardrobe_items")
           .update(patch as never)
           .eq("id", item.id);
         if (updErr) { console.error("[AURA reanalyze] update failed", item.id, updErr); continue; }
-        updated++;
+        if (Object.keys(patch).length > 1) updated++;
       } catch (e) {
         console.error("[AURA reanalyze] item failed", item.id, e);
       }
@@ -87,10 +103,7 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
       .from("wardrobe_items")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .is("length", null)
-      .is("sleeve_length", null)
-      .is("fit", null)
-      .is("heel_height", null);
+      .is("attrs_backfilled_at", null);
 
     return { processed: items.length, updated, remaining: remaining ?? 0 };
   });
