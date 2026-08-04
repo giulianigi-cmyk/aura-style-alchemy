@@ -6,9 +6,10 @@ export function Splash({ go }: { go: (s: Screen) => void }) {
       <div className="absolute inset-0 grain opacity-40" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
         <div className="animate-scale-in">
-          <p className="font-serif text-[88px] leading-none italic text-foreground tracking-tight">
+          <h1 className="font-serif text-[88px] leading-none italic text-foreground tracking-tight">
             aura
-          </p>
+            <span className="sr-only"> — Wardrobe Intelligence</span>
+          </h1>
           <div className="mx-auto mt-4 h-px w-16 bg-foreground/30" />
           <p className="mt-4 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
             Wardrobe Intelligence

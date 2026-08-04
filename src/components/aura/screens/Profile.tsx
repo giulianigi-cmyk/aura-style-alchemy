@@ -136,10 +136,11 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         onChange={e => { onPickAvatar(e.target.files?.[0] ?? null); if (fileRef.current) fileRef.current.value = ""; }} />
 
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
-        <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"><Share2 size={15} /></button>
-        <p className="font-serif text-lg italic">Profile</p>
+        <button aria-label="Share profile" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"><Share2 size={15} /></button>
+        <h1 className="font-serif text-lg italic">Profile</h1>
         <button
           onClick={() => editing ? setEditing(false) : setEditing(true)}
+          aria-label={editing ? "Cancel editing profile" : "Edit profile"}
           className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
         >
           {editing ? <X size={15} /> : <Pencil size={14} />}

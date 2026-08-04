@@ -487,10 +487,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute inset-0 z-50 bg-background animate-slide-up flex flex-col">
       <header className="flex items-center justify-between px-6 pt-14 pb-3">
-        <button onClick={onClose} className="h-10 w-10 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90">
+        <button onClick={onClose} aria-label="Close add item" className="h-10 w-10 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90">
           <X size={18} />
         </button>
-        <p className="font-serif text-lg italic">Add a piece</p>
+        <h1 className="font-serif text-lg italic">Add a New Piece</h1>
         <div className="w-10" />
       </header>
 

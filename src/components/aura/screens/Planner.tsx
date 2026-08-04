@@ -144,8 +144,8 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
         <div className="flex items-center justify-between mt-1">
           <h1 className="font-serif text-4xl">{monthLabel}</h1>
           <div className="flex gap-1">
-            <button onClick={() => shift(-1)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronLeft size={16} /></button>
-            <button onClick={() => shift(1)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronRight size={16} /></button>
+            <button onClick={() => shift(-1)} aria-label="Previous period" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronLeft size={16} /></button>
+            <button onClick={() => shift(1)} aria-label="Next period" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronRight size={16} /></button>
           </div>
         </div>
 
