@@ -15,7 +15,7 @@ import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
 import { saveOutfitPlan } from "@/lib/outfit-plan.functions";
 import { transcribeVoice } from "@/lib/voice-transcribe.functions";
 import { synthesizeVoice } from "@/lib/voice-synthesize.functions";
-import { loadDressRules } from "@/lib/dress-preferences";
+import { loadDressRules, loadDressPreferencesRaw } from "@/lib/dress-preferences";
 
 type ActionType = "save_canvas" | "add_calendar" | "dismiss";
 type FeedbackType = "liked" | "disliked" | "saved";
@@ -118,10 +118,12 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
       const dressRules = await loadDressRules(user?.id);
+      const dressPreferences = await loadDressPreferencesRaw(user?.id);
       const res = await stylistChat({
         data: {
           messages: history.filter((m) => !m.uiOnly).slice(-12).map((m) => ({ role: m.role, content: m.content })),
           dressRules,
+          dressPreferences,
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           feedbackContext: feedbackContext ?? null,
