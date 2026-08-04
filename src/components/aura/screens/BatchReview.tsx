@@ -18,6 +18,9 @@ type Draft = DetectedItemDraft & {
   bbox: BBox | null;
   cropUrl: string | null;
   dedupe: DedupeResult;
+  // The person always has the final word — "certain" only sets the
+  // default, it never silently removes the item from what can be saved.
+  included: boolean;
 };
 
 async function cropFromUrl(src: string, bbox: BBox | null): Promise<string | null> {
@@ -126,7 +129,15 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             seasons: it.season ? [it.season] : [],
             brand: "",
             description: it.description ?? "",
+            price: "",
+            currency: "EUR",
+            size: "",
+            styles: [],
+            occasions: [],
             dedupe,
+            // Same default as before (certain → not included), but now the
+            // person can flip it back on instead of it being final.
+            included: dedupe.verdict !== "certain",
           });
         }
         if (!cancelled) setDrafts(built);
@@ -153,11 +164,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     }
   };
 
-  // Certain duplicates (score >= 0.9, same as the single-photo Outfit Scan
-  // flow) are excluded from what gets added — no point creating a second
-  // wardrobe row for something already there. "Maybe" duplicates are just
-  // flagged with a badge; the person decides.
-  const toSave = drafts.filter((d) => d.dedupe.verdict !== "certain");
+  // "Certain" duplicates default to excluded (same starting point as
+  // before), but it's the person's `included` toggle that decides —
+  // never a silent, un-overridable filter.
+  const toSave = drafts.filter((d) => d.included);
   const skippedCount = drafts.length - toSave.length;
 
   const saveAll = async () => {
@@ -167,6 +177,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       const payload: Array<{
         id: string; image_path: string; category: string; subcategory: string;
         brand: string; colors: string[]; material: string[]; season: string | null;
+        price: number | null; currency: string | null; size: string | null;
+        style: string | null; occasion: string | null;
       }> = [];
 
       for (let i = 0; i < toSave.length; i++) {
@@ -178,6 +190,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           cacheControl: "3600", upsert: false, contentType: "image/png",
         });
         if (error) throw error;
+        const priceNum = (() => {
+          const n = parseFloat(d.price.replace(",", "."));
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })();
         payload.push({
           id: d.id,
           image_path: path,
@@ -187,6 +203,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           colors: d.colors,
           material: d.materials,
           season: d.seasons.join(", ") || null,
+          price: priceNum,
+          currency: priceNum != null ? d.currency : null,
+          style: d.styles.join(", ") || null,
+          occasion: d.occasions.join(", ") || null,
         });
       }
 
@@ -256,14 +276,22 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
           {drafts.map((d) => (
             <div key={d.id} className="relative">
-              {d.dedupe.verdict !== "new" && (
-                <div className={`mb-1.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] uppercase tracking-widest ${
-                  d.dedupe.verdict === "certain" ? "bg-secondary/70 text-muted-foreground" : "bg-amber-100 text-amber-800"
-                }`}>
+              {d.dedupe.verdict === "certain" && (
+                <div className="mb-1.5 flex items-center justify-between gap-2 rounded-full bg-secondary/70 px-3 py-1">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    <AlertTriangle size={11} />
+                    {d.included ? "Looks like a duplicate — will still be added" : "Already in your closet — won't be added"}
+                  </span>
+                  <button
+                    onClick={() => update(d.id, { included: !d.included })}
+                    className="shrink-0 text-[10px] uppercase tracking-widest underline"
+                  >{d.included ? "Skip it" : "Add anyway"}</button>
+                </div>
+              )}
+              {d.dedupe.verdict === "maybe" && (
+                <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] uppercase tracking-widest bg-amber-100 text-amber-800">
                   <AlertTriangle size={11} />
-                  {d.dedupe.verdict === "certain"
-                    ? "Already in your closet — won't be added"
-                    : "Looks similar to something you own"}
+                  Looks similar to something you own
                 </div>
               )}
               <DetectedItemCard
