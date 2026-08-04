@@ -29,6 +29,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       <div>
         <p className="font-serif text-3xl">Something slipped</p>
         <p className="mt-3 text-xs text-muted-foreground break-words max-w-sm mx-auto">{error.message}</p>
+        {/* TEMPORARY diagnostic: shows exactly which file/line threw this,
+         *  instead of just the bare message — remove once the root cause
+         *  behind the sizeEquivalences crash is confirmed and fixed. */}
+        {error.stack && (
+          <pre className="mt-4 max-w-sm mx-auto text-left text-[10px] leading-snug text-muted-foreground/80 whitespace-pre-wrap break-words bg-secondary/40 rounded-xl p-3">
+            {error.stack}
+          </pre>
+        )}
         <button
           onClick={() => { router.invalidate(); reset(); }}
           className="mt-6 rounded-full bg-primary px-6 py-2.5 text-xs uppercase tracking-widest text-primary-foreground"
