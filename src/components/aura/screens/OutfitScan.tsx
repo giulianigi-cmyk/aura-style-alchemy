@@ -38,6 +38,7 @@ type ScanItem = {
   size: string;
   styles: string[];
   occasions: string[];
+  purchaseDate: string;
 };
 
 
