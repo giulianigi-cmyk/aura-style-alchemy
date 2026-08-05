@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Bell, Loader2 } from "lucide-react";
+import { ArrowLeft, Bell, Loader2, X } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -44,6 +44,17 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
     return () => { cancelled = true; };
   }, [user]);
 
+  const deleteNotification = async (id: string) => {
+    // Optimistic: remove immediately, put it back if the delete fails.
+    const prev = items;
+    setItems((cur) => cur.filter((n) => n.id !== id));
+    const { error } = await supabase.from("notifications").delete().eq("id", id);
+    if (error) {
+      console.error("[AURA notifications] delete failed", error);
+      setItems(prev);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28 bg-background">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
@@ -73,13 +84,18 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
               <div className="h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0">
                 <Bell size={14} />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm">{n.title}</p>
                 {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-2">
-                  {new Date(n.created_at).toLocaleString()}
+                  {new Date(n.created_at).toLocaleString("en-US")}
                 </p>
               </div>
+              <button
+                onClick={() => void deleteNotification(n.id)}
+                aria-label="Delete notification"
+                className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90 self-start"
+              ><X size={12} /></button>
             </div>
           ))}
         </section>
