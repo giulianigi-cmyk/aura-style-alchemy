@@ -304,7 +304,7 @@ function DayDetail({
   const [saving, setSaving] = useState(false);
   const [filterSuggested, setFilterSuggested] = useState(false);
 
-  const dateLabel = new Date(date + "T00:00:00").toLocaleDateString(undefined, {
+ const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric",
   });
 
