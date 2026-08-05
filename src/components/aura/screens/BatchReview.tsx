@@ -11,6 +11,7 @@ import { confirmDetectedItems, listDetectedItems, rejectDetectedItem } from "@/l
 import type { BBox } from "@/lib/outfit-detect-types";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { clearSegmentationCache, cropItemFromSegmentation } from "@/lib/outfit-segmentation";
+import { trimWhiteMargins } from "@/lib/auto-crop";
 import type { WardrobeItem } from "@/lib/aura-types";
 
 type Draft = DetectedItemDraft & {
@@ -18,12 +19,8 @@ type Draft = DetectedItemDraft & {
   jobId: string;
   bbox: BBox | null;
   cropUrl: string | null;
-  // Signed URL of the ORIGINAL, un-cropped photo this item came from —
-  // needed to show something to drag a box over when correcting manually.
   photoUrl: string | null;
   dedupe: DedupeResult;
-  // The person always has the final word — "certain" only sets the
-  // default, it never silently removes the item from what can be saved.
   included: boolean;
 };
 
@@ -102,11 +99,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         for (const it of res.items) {
           const path = pathById.get(it.job_id);
           const src = path ? signed.get(path) : undefined;
-          // Prefer real per-pixel segmentation (mask ∩ bbox → connected
-          // component), composited at full source resolution. Failures are
-          // isolated per photo — any item whose photo can't be segmented
-          // falls back to the plain rectangular crop, and if that fails too
-          // we keep the full photo rather than dropping a real detection.
           let cropUrl: string | null = null;
           if (src && path) {
             cropUrl = await cropItemFromSegmentation(path, src, it.category ?? "", it.bbox);
@@ -140,8 +132,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             styles: [],
             occasions: [],
             dedupe,
-            // Same default as before (certain → not included), but now the
-            // person can flip it back on instead of it being final.
             included: dedupe.verdict !== "certain",
           });
         }
@@ -175,9 +165,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     }
   };
 
-  // "Certain" duplicates default to excluded (same starting point as
-  // before), but it's the person's `included` toggle that decides —
-  // never a silent, un-overridable filter.
   const toSave = drafts.filter((d) => d.included);
   const skippedCount = drafts.length - toSave.length;
 
@@ -196,7 +183,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         const d = toSave[i];
         if (!d.cropUrl) continue;
         const path = `${user.id}/batch-item-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.png`;
-        const file = await dataUrlToFile(d.cropUrl, "item.png");
+        const trimmed = await trimWhiteMargins(d.cropUrl);
+        const file = await dataUrlToFile(trimmed.dataUrl, "item.png");
         const { error } = await supabase.storage.from("wardrobe").upload(path, file, {
           cacheControl: "3600", upsert: false, contentType: "image/png",
         });
@@ -238,8 +226,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       }
       const failedItems = res.results.filter((r) => !r.ok);
       if (failedItems.length) {
-        // Surface the REAL reason instead of hiding it behind a generic
-        // message — this is what actually tells us why something failed.
         const reasons = Array.from(new Set(failedItems.map((r) => r.error || "unknown error")));
         console.error("[AURA batch-review] items not confirmed:", failedItems);
         toast.error(
