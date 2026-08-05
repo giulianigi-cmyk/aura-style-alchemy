@@ -385,7 +385,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           <WeatherPanel />
 
           {/* Menu */}
-          <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl gradient-warm border border-border/60 overflow-hidden">
+          <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-background border border-border/60 overflow-hidden">
             {([
               { l: "Wardrobe insights", s: "insights" as Screen },
               { l: "Saved outfits", s: "saved-outfits" as Screen },
