@@ -137,7 +137,20 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
         onChange={e => { onPickAvatar(e.target.files?.[0] ?? null); if (fileRef.current) fileRef.current.value = ""; }} />
 
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
-        <button aria-label="Share profile" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"><Share2 size={15} /></button>
+       <button
+          onClick={async () => {
+            const who = profile?.full_name || "me";
+            const result = await nativeShareText({
+              title: "AURA",
+              text: `Follow ${who} on AURA — download the app:`,
+              url: AURA_APP_URL,
+            });
+            if (result === "copied") toast.success("Link copied");
+            if (result === "failed") toast.error("Couldn't share right now");
+          }}
+          aria-label="Share profile"
+          className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+        ><Share2 size={15} /></button>
         <h1 className="font-serif text-lg italic">Profile</h1>
         <button
           onClick={() => editing ? setEditing(false) : setEditing(true)}
