@@ -306,14 +306,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
 
       let totalUpdated = 0;
       let round = 0;
-      toast.loading("Aggiornamento del guardaroba…", { id: toastId });
+      toast.loading("Updating your wardrobe…", { id: toastId });
       while (true) {
         const batch = await reanalyzeBatch({ data: undefined });
         totalUpdated += batch.updated;
         round++;
         if (batch.processed > 0) {
           toast.loading(
-            `Aggiornamento in corso — ${totalUpdated} capi ri-analizzati, ${batch.remaining} rimasti…`,
+            `Updating — ${totalUpdated} pieces re-analyzed, ${batch.remaining} left…`,
             { id: toastId }
           );
         }
@@ -324,8 +324,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       const grandTotal = legacy.updated + totalUpdated;
       toast.success(
         grandTotal > 0
-          ? `Guardaroba aggiornato: ${grandTotal} capi con nuovi dettagli`
-          : "Il tuo guardaroba è già aggiornato",
+          ? `Wardrobe updated: ${grandTotal} pieces with new details`
+          : "Your wardrobe is already up to date",
         { id: toastId }
       );
       if (grandTotal > 0) {
@@ -335,7 +335,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       }
     } catch (e) {
       console.error("[AURA wardrobe] update failed", e);
-      toast.error("Aggiornamento non riuscito", { id: toastId });
+      toast.error("Update failed", { id: toastId });
     } finally {
       setMigrating(false);
     }
@@ -655,7 +655,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   {detail.season && <p className="text-xs text-muted-foreground mt-1">{detail.season}</p>}
                   {detail.size && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Taglia {detail.size}
+                      Size {detail.size}
                       {(() => {
                         const eq = sizeEquivalences(detail.size, { shoes: isShoeCategory(detail.category) });
                         return eq ? ` — ${eq}` : "";
@@ -770,11 +770,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 </div>
 
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Taglia</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Size</p>
                   <input
                     value={edit.size}
                     onChange={(e) => setEdit((s) => ({ ...s, size: e.target.value }))}
-                    placeholder="es. 42 o M — facoltativa"
+                    placeholder="e.g. 42 or M — optional"
                     className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
                   />
                   {(() => {
