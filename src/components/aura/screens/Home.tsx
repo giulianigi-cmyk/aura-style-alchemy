@@ -275,13 +275,13 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           <h2 className="font-serif text-2xl italic">Today's edit</h2>
           <button onClick={() => go("ai")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Style a look</button>
         </div>
-        {looksLoading ? (
-          <div className="rounded-[2rem] bg-secondary/40 aspect-[4/5] flex items-center justify-center">
+       {looksLoading ? (
+          <div className="rounded-[2rem] gradient-warm aspect-[4/5] flex items-center justify-center">
             <Loader2 className="animate-spin text-muted-foreground" />
           </div>
         ) : todayLook && todayLook.item_ids.length > 0 ? (
           <button onClick={() => go("ai")} className="block w-full text-left">
-            <div className="relative overflow-hidden rounded-[2rem] shadow-luxe bg-[#FFFFFF] p-4">
+            <div className="relative overflow-hidden rounded-[2rem] shadow-luxe gradient-warm p-4">
               <div className="grid grid-cols-2 gap-2">
                 {todayLook.item_ids.slice(0, 4).map((id) => {
                   const src = thumbFor(id);
