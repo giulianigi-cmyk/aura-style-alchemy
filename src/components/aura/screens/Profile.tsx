@@ -215,7 +215,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
       {/* Editable details */}
       {editing && (
-        <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 space-y-5 animate-fade-up">
+        <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-5 space-y-5 animate-fade-up">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</p>
             <input
