@@ -11,6 +11,7 @@ import { DetectedItemCard } from "@/components/aura/DetectedItemCard";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { segmentOutfitPhoto } from "@/lib/outfit-segmentation";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
+import { trimFileMargins } from "@/lib/auto-crop";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 
 async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
@@ -32,7 +33,6 @@ type ScanItem = {
   transparent: boolean;
   dedupe: DedupeResult;
   status: "pending" | "confirmed-new" | "confirmed-duplicate";
-  // Parity with AddItem.tsx — same reasoning as batch review.
   price: string;
   currency: string;
   size: string;
@@ -170,7 +170,8 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       try {
         const ext = it.transparent ? "png" : "jpg";
         const path = `${user.id}/scan-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const file = await dataUrlToFile(it.imageDataUrl, `scan.${ext}`);
+        const rawFile = await dataUrlToFile(it.imageDataUrl, `scan.${ext}`);
+        const file = await trimFileMargins(rawFile);
         const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
           cacheControl: "3600", upsert: false, contentType: file.type || (it.transparent ? "image/png" : "image/jpeg"),
         });
@@ -331,7 +332,6 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
               );
             }
 
-            // confirmed-new: full editable card (shared with batch review)
             return (
               <DetectedItemCard
                 key={it.key}
