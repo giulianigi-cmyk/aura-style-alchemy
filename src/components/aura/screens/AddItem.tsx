@@ -14,6 +14,7 @@ import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.fu
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
+import { trimFileMargins } from "@/lib/auto-crop";
 
 
 import {
@@ -275,8 +276,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setStage("bgremove");
     try {
-      // Retry automatico: fino a 3 tentativi totali con backoff crescente,
-      // prima di arrendersi e tenere la foto senza sfondo rimosso.
       let bg = await removeBackgroundClient(dataUrl);
       let attempt = 1;
       while (!bg.ok && attempt < 3) {
@@ -389,11 +388,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
       const uid = auth.user.id;
 
-      const isPng = file.type === "image/png";
-      const ext = isPng ? "png" : (file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
+      const trimmedFile = await trimFileMargins(file);
+      const isPng = trimmedFile.type === "image/png";
+      const ext = isPng ? "png" : (trimmedFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, file, {
-        cacheControl: "3600", upsert: false, contentType: file.type || "image/png",
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(path, trimmedFile, {
+        cacheControl: "3600", upsert: false, contentType: trimmedFile.type || "image/png",
       });
       if (upErr) throw upErr;
 
