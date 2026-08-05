@@ -357,7 +357,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             />
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Style preferences</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Style preferences</p>
+              <button onClick={() => setInfoPopup("style")} aria-label="What do these terms mean?" className="text-muted-foreground active:scale-90">
+                <Info size={12} />
+              </button>
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {STYLES.map(s => {
                 const on = styles.includes(s);
