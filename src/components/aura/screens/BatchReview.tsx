@@ -126,11 +126,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             seasons: it.season ? [it.season] : [],
             brand: "",
             description: it.description ?? "",
-            price: "",
+           price: "",
             currency: "EUR",
             size: "",
             styles: [],
             occasions: [],
+            purchaseDate: new Date().toISOString().slice(0, 10),
             dedupe,
             included: dedupe.verdict !== "certain",
           });
@@ -176,7 +177,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         id: string; image_path: string; category: string; subcategory: string;
         brand: string; colors: string[]; material: string[]; season: string | null;
         price: number | null; currency: string | null; size: string | null;
-        style: string | null; occasion: string | null;
+        style: string | null; occasion: string | null; purchase_date: string | null;
       }> = [];
 
       for (let i = 0; i < toSave.length; i++) {
