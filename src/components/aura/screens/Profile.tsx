@@ -117,7 +117,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
   const avatarSrc = avatarUrl || profile?.avatar_url || null;
   const displayName = profile?.full_name || "Your name";
-  const meta = [profile?.city, profile?.season || "Warm Autumn"].filter(Boolean).join(" · ");
+  const meta = [profile?.city, profile?.season].filter(Boolean).join(" · ");
 
   if (loading) {
     return (
