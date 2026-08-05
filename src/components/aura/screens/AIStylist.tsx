@@ -1,5 +1,5 @@
-import { Copy, Loader2, Share2, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,42 +11,60 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
+import { logWardrobeEvent } from "@/lib/wardrobe-events";
 
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
+/**
+ * The Stylist tab: everything to do with outfits in one place — create
+ * (AI suggest, build manually, ask the chat stylist), search your saved
+ * ones, and plan/duplicate/share/delete them. Previously this was split
+ * across this screen (a thin "Saved looks" grid) and a separate
+ * "saved-outfits" screen with the fuller feature set — Home's "Today's
+ * edit" / "Curated for you" already covers daily suggestions, so this
+ * screen no longer needs to duplicate that; it's purely the outfit
+ * library + creation entry points.
+ */
 export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
-  const [outfitCovers, setOutfitCovers] = useState<Record<string, string>>({});
+  const [signed, setSigned] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [occasion, setOccasion] = useState<string>("Everyday");
   const [aiBusy, setAiBusy] = useState(false);
+  const [query, setQuery] = useState("");
   const [shareFor, setShareFor] = useState<string | null>(null);
+  const [assignFor, setAssignFor] = useState<Outfit | null>(null);
+  const [assignDate, setAssignDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     const [{ data: i }, { data: o }] = await Promise.all([
       supabase.from("wardrobe_items").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("outfits").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
-    const list = (i ?? []) as WardrobeItem[];
-    setItems(list);
+    setItems((i ?? []) as WardrobeItem[]);
     const olist = (o ?? []) as Outfit[];
     setOutfits(olist);
-    // Sign cover images (stored in the "outfits" bucket as canvas_image_url,
-    // the composed export from the builder — not a raw wardrobe photo).
-    const covers: Record<string, string> = {};
-    for (const outfit of olist) {
-      if (!outfit.canvas_image_url) continue;
-      if (/^https?:\/\//i.test(outfit.canvas_image_url)) { covers[outfit.id] = outfit.canvas_image_url; continue; }
-      const { data: signedData } = await supabase.storage.from("outfits").createSignedUrl(outfit.canvas_image_url, 60 * 60);
-      if (signedData?.signedUrl) covers[outfit.id] = signedData.signedUrl;
+    const paths = olist.map((x) => x.canvas_image_url).filter(Boolean) as string[];
+    if (paths.length) {
+      const { data: urls } = await supabase.storage.from("outfits").createSignedUrls(paths, 60 * 60);
+      const map: Record<string, string> = {};
+      urls?.forEach((r, idx) => { if (r.signedUrl) map[paths[idx]] = r.signedUrl; });
+      setSigned(map);
+    } else {
+      setSigned({});
     }
-    setOutfitCovers(covers);
-  };
-  useEffect(() => { load(); }, [user]);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => { void load(); }, [load]);
 
   const aiPick = async () => {
     if (items.length < 3) {
@@ -91,8 +109,6 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         toast.error("Not enough matching pieces in your wardrobe yet for a complete outfit — try adding more items.");
         return;
       }
-      // Hand off straight to the drag-and-arrange canvas, pre-loaded with
-      // the AI's picks — the user can move pieces around and save from there.
       openBuilder({
         itemIds: res.item_ids,
         name: "AI styled look",
@@ -106,11 +122,71 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       setAiBusy(false);
     }
   };
+
+  const filteredOutfits = outfits.filter((o) => {
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    const hay = `${o.name} ${(o.occasion ?? []).join(" ")} ${(o.season ?? []).join(" ")} ${o.notes ?? ""}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  const openOutfit = (o: Outfit) => openBuilder({
+    itemIds: o.item_ids, name: o.name, occasion: o.occasion?.[0],
+    notes: o.notes ?? undefined, outfitId: o.id,
+  });
+  const duplicateOutfit = (o: Outfit) => openBuilder({
+    itemIds: o.item_ids, name: `${o.name} Copy`, occasion: o.occasion?.[0],
+    notes: o.notes ?? undefined,
+  });
+
+  const assignToDay = async () => {
+    if (!assignFor || !user) return;
+    await supabase.from("outfit_plans").delete().eq("user_id", user.id).eq("date", assignDate);
+    const { data, error } = await supabase.from("outfit_plans").insert({
+      user_id: user.id,
+      date: assignDate,
+      item_ids: assignFor.item_ids,
+      occasion: assignFor.occasion?.[0] ?? null,
+      notes: assignFor.notes ?? assignFor.name ?? null,
+      status: "planned",
+    } as never).select("id").single();
+    if (error) { toast.error(error.message); return; }
+    const { error: eventErr } = await logWardrobeEvent({
+      userId: user.id,
+      eventType: "planned",
+      date: assignDate,
+      itemIds: assignFor.item_ids,
+      outfitPlanId: (data as { id: string }).id,
+      outfitId: assignFor.id,
+      occasion: assignFor.occasion?.[0] ?? null,
+      notes: assignFor.notes ?? assignFor.name ?? null,
+    });
+    if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+    toast.success("Added to calendar");
+    setAssignFor(null);
+    go("planner");
+  };
+
+  const deleteOutfit = async (id: string) => {
+    if (!user) return;
+    const outfit = outfits.find((o) => o.id === id);
+    setDeleting(true);
+    const { error } = await supabase.from("outfits").delete().eq("id", id).eq("user_id", user.id);
+    if (error) { setDeleting(false); toast.error(error.message); return; }
+    if (outfit?.canvas_image_url) {
+      try { await supabase.storage.from("outfits").remove([outfit.canvas_image_url]); } catch { /* best-effort */ }
+    }
+    setOutfits((prev) => prev.filter((o) => o.id !== id));
+    setConfirmDelete(null);
+    setDeleting(false);
+    toast.success("Outfit deleted");
+  };
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
-        <h1 className="font-serif text-4xl mt-1 italic">Style a look</h1>
+        <h1 className="font-serif text-4xl mt-1 italic">Stylist</h1>
       </header>
 
       <div className="mx-6 mt-4">
@@ -146,51 +222,85 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       ><Sparkles size={13} /> Ask your stylist</button>
 
       <section className="px-6 mt-10">
-        <h2 className="font-serif text-2xl italic mb-3">Saved looks</h2>
-        {outfits.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No outfits yet. Compose your first.</p>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="font-serif text-2xl italic">Outfit library</h2>
+          {outfits.length > 0 && <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{outfits.length}</span>}
+        </div>
+
+        {outfits.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5">
+            <Search size={15} className="text-muted-foreground" />
+            <input
+              value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, occasion, season…"
+              className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+            />
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-muted-foreground" /></div>
+        ) : outfits.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No outfits yet. Compose your first with AI suggest or build manually above.</p>
+        ) : filteredOutfits.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No outfits match "{query}".</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {outfits.map(o => {
-              const cover = outfitCovers[o.id];
-              const open = () => openBuilder({
-                itemIds: o.item_ids,
-                name: o.name,
-                occasion: o.occasion?.[0],
-                notes: o.notes ?? undefined,
-                outfitId: o.id,
-              });
-              const duplicate = () => openBuilder({
-                itemIds: o.item_ids,
-                name: `${o.name} Copy`,
-                occasion: o.occasion?.[0],
-                notes: o.notes ?? undefined,
-              });
+            {filteredOutfits.map((o) => {
+              const url = o.canvas_image_url ? signed[o.canvas_image_url] : null;
               return (
-                <div key={o.id} className="animate-fade-up relative">
-                  <button onClick={open} className="block w-full text-left active:scale-[0.98]">
-                    <div className="rounded-2xl overflow-hidden aspect-[3/4] shadow-soft" style={{ background: "#FFFFFF" }}>
-                      {cover ? (
-                        <img src={cover} alt={o.name} className="h-full w-full object-contain p-2" />
+                <div key={o.id} className="animate-fade-up relative rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft">
+                  <button onClick={() => openOutfit(o)} className="block w-full text-left active:scale-[0.98]">
+                    <div className="aspect-square" style={{ background: "#FFFFFF" }}>
+                      {url ? (
+                        <img src={url} alt={o.name} className="w-full h-full object-contain p-2" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">Open canvas</div>
                       )}
                     </div>
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); duplicate(); }}
+                    onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
                     aria-label="Duplicate outfit"
-                    className="absolute top-2 right-11 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                    className="absolute top-2 right-20 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                   ><Copy size={14} /></button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setShareFor(o.id); }}
                     aria-label="Share outfit"
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                    className="absolute top-2 right-11 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                   ><Share2 size={14} /></button>
-                  <button onClick={open} className="block w-full text-left">
-                    <p className="mt-2 font-serif text-base">{o.name}</p>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
-                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmDelete(o.id); }}
+                    aria-label="Delete outfit"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
+                  ><Trash2 size={14} /></button>
+                  <div className="p-3">
+                    <button onClick={() => openOutfit(o)} className="block w-full text-left">
+                      <p className="font-serif text-base truncate">{o.name}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
+                    </button>
+                    <button
+                      onClick={() => setAssignFor(o)}
+                      className="mt-2 h-8 w-full rounded-full border border-border text-[10px] uppercase tracking-[0.25em] active:scale-[0.98] inline-flex items-center justify-center gap-1.5"
+                    ><CalendarIcon size={11} /> Plan</button>
+                  </div>
+
+                  {confirmDelete === o.id && (
+                    <div className="absolute inset-0 z-10 bg-background/90 backdrop-blur flex flex-col items-center justify-center gap-2 p-3 text-center">
+                      <p className="text-xs">Delete this outfit?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setConfirmDelete(null)}
+                          className="h-8 px-4 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]"
+                        >Cancel</button>
+                        <button
+                          disabled={deleting}
+                          onClick={() => void deleteOutfit(o.id)}
+                          className="h-8 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] disabled:opacity-60"
+                        >{deleting ? "…" : "Delete"}</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -199,6 +309,24 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       </section>
 
       {shareFor && <ShareOutfitSheet outfitId={shareFor} onClose={() => setShareFor(null)} />}
+
+      {assignFor && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setAssignFor(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
+            <p className="font-serif italic text-lg">Assign to a date</p>
+            <input
+              type="date"
+              value={assignDate}
+              onChange={(e) => setAssignDate(e.target.value)}
+              className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+            />
+            <button
+              onClick={() => void assignToDay()}
+              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98]"
+            >Save to calendar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
