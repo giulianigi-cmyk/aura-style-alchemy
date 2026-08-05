@@ -251,6 +251,7 @@ export type Database = {
           item_ids: string[]
           notes: string | null
           occasion: string | null
+          status: string
           user_id: string
           weather_condition: string | null
           weather_temp: number | null
@@ -262,6 +263,7 @@ export type Database = {
           item_ids?: string[]
           notes?: string | null
           occasion?: string | null
+          status?: string
           user_id?: string
           weather_condition?: string | null
           weather_temp?: number | null
@@ -273,6 +275,7 @@ export type Database = {
           item_ids?: string[]
           notes?: string | null
           occasion?: string | null
+          status?: string
           user_id?: string
           weather_condition?: string | null
           weather_temp?: number | null
@@ -661,6 +664,118 @@ export type Database = {
         }
         Relationships: []
       }
+      wardrobe_event_items: {
+        Row: {
+          event_id: string
+          item_id: string
+        }
+        Insert: {
+          event_id: string
+          item_id: string
+        }
+        Update: {
+          event_id?: string
+          item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wardrobe_event_items_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wardrobe_event_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wardrobe_events: {
+        Row: {
+          confidence: string | null
+          created_at: string
+          event_date: string
+          event_type: string
+          id: string
+          imported_calendar_event_id: string | null
+          is_repeat: boolean
+          location: Json | null
+          mood: string | null
+          notes: string | null
+          occasion: string | null
+          outfit_id: string | null
+          outfit_plan_id: string | null
+          repeated_from_event_id: string | null
+          temperature: number | null
+          user_id: string
+          weather_snapshot: Json | null
+        }
+        Insert: {
+          confidence?: string | null
+          created_at?: string
+          event_date: string
+          event_type: string
+          id?: string
+          imported_calendar_event_id?: string | null
+          is_repeat?: boolean
+          location?: Json | null
+          mood?: string | null
+          notes?: string | null
+          occasion?: string | null
+          outfit_id?: string | null
+          outfit_plan_id?: string | null
+          repeated_from_event_id?: string | null
+          temperature?: number | null
+          user_id: string
+          weather_snapshot?: Json | null
+        }
+        Update: {
+          confidence?: string | null
+          created_at?: string
+          event_date?: string
+          event_type?: string
+          id?: string
+          imported_calendar_event_id?: string | null
+          is_repeat?: boolean
+          location?: Json | null
+          mood?: string | null
+          notes?: string | null
+          occasion?: string | null
+          outfit_id?: string | null
+          outfit_plan_id?: string | null
+          repeated_from_event_id?: string | null
+          temperature?: number | null
+          user_id?: string
+          weather_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wardrobe_events_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wardrobe_events_outfit_plan_id_fkey"
+            columns: ["outfit_plan_id"]
+            isOneToOne: false
+            referencedRelation: "outfit_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wardrobe_events_repeated_from_event_id_fkey"
+            columns: ["repeated_from_event_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wardrobe_items: {
         Row: {
           attrs_backfilled_at: string | null
@@ -676,10 +791,12 @@ export type Database = {
           heel_height: string | null
           id: string
           image_url: string
+          last_worn: string | null
           length: string | null
           material: string[]
           occasion: string | null
           price: number | null
+          purchase_date: string | null
           season: string | null
           size: string | null
           sleeve_length: string | null
@@ -705,10 +822,12 @@ export type Database = {
           heel_height?: string | null
           id?: string
           image_url: string
+          last_worn?: string | null
           length?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
+          purchase_date?: string | null
           season?: string | null
           size?: string | null
           sleeve_length?: string | null
@@ -734,10 +853,12 @@ export type Database = {
           heel_height?: string | null
           id?: string
           image_url?: string
+          last_worn?: string | null
           length?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
+          purchase_date?: string | null
           season?: string | null
           size?: string | null
           sleeve_length?: string | null
