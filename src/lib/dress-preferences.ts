@@ -76,9 +76,9 @@ export function activePreferenceLabels(p: DressPreferences): string[] {
     const o = SKIRT_OPTIONS.find((x) => x.value === p.min_skirt_length);
     if (o) out.push(`Skirts: ${o.label} or longer`);
   }
-  if (p.min_sleeve_length && p.min_sleeve_length !== "none") {
+  if (p.min_sleeve_length) {
     const o = SLEEVE_OPTIONS.find((x) => x.value === p.min_sleeve_length);
-    if (o) out.push(`Sleeves: ${o.label} or longer`);
+    if (o) out.push(`Sleeves: ${o.label}${p.min_sleeve_length === "none" ? "" : " or longer"}`);
   }
   if (p.custom_notes?.trim()) out.push(p.custom_notes.trim());
   return out;
