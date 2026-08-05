@@ -5,10 +5,6 @@ export const CreateBatchScanSchema = z.object({
   paths: z.array(z.string().min(3)).min(1).max(200),
 });
 
-// Format-only check here (cheap, runs before auth/network work). The
-// SSRF-sensitive check (private IPs, blocked hosts) happens per-URL in the
-// handler via checkPublicUrl, so one bad URL can be skipped instead of
-// failing validation for the whole batch.
 export const CreateBatchScanFromUrlsSchema = z.object({
   urls: z.array(z.string().trim().min(5)).min(1).max(150),
 });
@@ -31,6 +27,7 @@ export const ConfirmItemSchema = z.object({
   price: z.number().positive().nullable().optional(),
   currency: z.string().nullable().optional(),
   size: z.string().nullable().optional(),
+  purchase_date: z.string().nullable().optional(),
 });
 
 export const ConfirmDetectedItemsSchema = z.object({
