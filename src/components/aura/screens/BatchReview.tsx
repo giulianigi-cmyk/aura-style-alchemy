@@ -208,6 +208,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           size: d.size.trim() || null,
           style: d.styles.join(", ") || null,
           occasion: d.occasions.join(", ") || null,
+          purchase_date: d.purchaseDate || null,
         });
       }
 
