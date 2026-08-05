@@ -19,18 +19,14 @@ export type DetectedItemDraft = {
   seasons: string[];
   brand: string;
   description: string;
-  // Parity with the single-item add flow (AddItem.tsx) — previously
-  // missing here entirely, so batch-scanned pieces silently lost
-  // price/size/style/occasion even when the person had that info handy.
   price: string;
   currency: string;
   size: string;
   styles: string[];
   occasions: string[];
+  purchaseDate: string;
 };
 
-/** Shared review/edit card for AI-detected garments.
- *  Used by both the single-photo OutfitScan flow and the batch review. */
 export function DetectedItemCard({
   item,
   imageUrl,
@@ -191,6 +187,17 @@ export function DetectedItemCard({
             </select>
           </div>
         </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Purchase date</p>
+        <input
+          type="date"
+          value={item.purchaseDate}
+          max={new Date().toISOString().slice(0, 10)}
+          onChange={(e) => onChange({ purchaseDate: e.target.value })}
+          className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+        />
       </div>
 
       {footer}
