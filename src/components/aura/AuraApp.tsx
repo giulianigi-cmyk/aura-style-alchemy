@@ -18,7 +18,6 @@ import { ColorLab } from "./screens/ColorLab";
 import { Community } from "./screens/Community";
 import { Profile } from "./screens/Profile";
 import { Insights } from "./screens/Insights";
-import { SavedOutfits } from "./screens/SavedOutfits";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
 import { StorageDebug } from "./screens/StorageDebug";
@@ -154,7 +153,7 @@ function Inner() {
           {screen === "community" && <Community go={go} />}
           {screen === "profile" && <Profile go={go} />}
           {screen === "insights" && <Insights go={go} />}
-          {screen === "saved-outfits" && <SavedOutfits go={go} openBuilder={openBuilder} />}
+                        {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "notifications" && <Notifications go={go} />}
           {screen === "invite" && <Invite go={go} />}
           {screen === "storage-debug" && <StorageDebug go={go} />}
