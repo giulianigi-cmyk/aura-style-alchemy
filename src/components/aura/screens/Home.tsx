@@ -21,7 +21,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
   const generateLooks = useServerFn(suggestDailyLooks);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualCity, setManualCity] = useState("");
@@ -38,7 +38,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   const [looksLoading, setLooksLoading] = useState(true);
   const [looksError, setLooksError] = useState<string | null>(null);
 
-  // Load real stats + recent wardrobe items
   useEffect(() => {
     if (!user) return;
     void (async () => {
@@ -65,9 +64,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     })();
   }, [user]);
 
-  // Real AI-generated daily looks, cached once per day in home_suggestions —
-  // but invalidated immediately (not just by date) whenever the wardrobe
-  // itself changes, via a fingerprint of item count + latest edit time.
   useEffect(() => {
     if (!user || allItems.length === 0) return;
     void (async () => {
@@ -79,11 +75,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       try {
         const today = todayISO();
 
-        // Fingerprint: item count (catches adds/deletes) + the most recent
-        // updated_at across all items (catches edits to an existing item).
-        // Reuses wardrobe_items.updated_at rather than a separate versioning
-        // system — this IS the cache's invalidation signal, not a copy of
-        // the wardrobe.
         const latestEdit = allItems.reduce((max, it) => {
           const t = (it as unknown as { updated_at?: string }).updated_at ?? it.created_at;
           return t && t > max ? t : max;
@@ -104,17 +95,11 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         }
 
         const realIds = new Set(allItems.map((it) => it.id));
-        // Fully fresh: same day, wardrobe unchanged since generation, and
-        // every referenced item still exists.
         const cacheStillValid = (row: CachedRow | null) => {
           if (!row || row.date !== today || row.wardrobe_fingerprint !== fingerprint) return false;
           const ids = [...(row.today_item_ids ?? []), ...((row.curated ?? []).flatMap((l) => l.item_ids))];
           return ids.length > 0 && ids.every((id) => realIds.has(id));
         };
-        // Stale (different day or wardrobe has since changed) but every
-        // referenced item still genuinely exists — good enough as a last
-        // resort if a fresh generation attempt fails, rather than showing
-        // nothing.
         const cacheItemsStillReal = (row: CachedRow | null) => {
           if (!row) return false;
           const ids = [...(row.today_item_ids ?? []), ...((row.curated ?? []).flatMap((l) => l.item_ids))];
@@ -158,8 +143,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   generated_at: new Date().toISOString(),
                 } as never);
               } catch (err) {
-                // Non-fatal: we still show the freshly generated (real,
-                // validated) result even if persisting the cache row failed.
                 console.error("[AURA home] failed to save suggestion cache", err);
               }
             } else if (cacheItemsStillReal(cachedRow)) {
@@ -176,9 +159,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
             }
           }
         } else if (cacheItemsStillReal(cachedRow)) {
-          // Wardrobe currently too small to generate fresh, but an older
-          // cache with still-real items exists — use it rather than
-          // nothing.
           useRow(cachedRow!);
         }
       } catch (err) {
@@ -214,7 +194,6 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     return path ? looksSigned[path] ?? null : null;
   };
 
-  // Try geolocation once on first visit if no location stored yet.
   useEffect(() => {
     if (autoTried) return;
     if (profile && !city && status === "idle") {
@@ -224,7 +203,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   }, [profile, city, status, detect, autoTried]);
 
   const greetingName = profile?.full_name?.split(" ")[0] || "there";
-  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
@@ -290,8 +269,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         )}
       </div>
 
-      {/* Today's edit — a real AI-composed look from the user's own wardrobe,
-          weather-aware, cached once per day (see home_suggestions). */}
+      {/* Today's edit */}
       <section className="px-6 mt-8 animate-fade-up">
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="font-serif text-2xl italic">Today's edit</h2>
@@ -348,7 +326,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </button>
       </section>
 
-      {/* Color Lab — dedicated entry point, distinct from the per-item shortcut */}
+      {/* Color Lab */}
       <section className="px-6 mt-3" aria-labelledby="home-color-lab">
         <h2 id="home-color-lab" className="sr-only">Color Lab</h2>
         <button
@@ -361,7 +339,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </button>
       </section>
 
-      {/* Stats — real counts */}
+      {/* Stats */}
       <section className="px-6 mt-5 grid grid-cols-3 gap-3" aria-labelledby="home-stats">
         <h2 id="home-stats" className="sr-only col-span-3">Stats</h2>
         {[
@@ -381,8 +359,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         ))}
       </section>
 
-      {/* Curated for you — real AI-composed looks for different real
-          occasions, from the user's own wardrobe. Same cache as Today's edit. */}
+      {/* Curated for you */}
       <section className="mt-10 animate-fade-up" style={{ animationDelay: "0.1s" }}>
         <div className="flex items-baseline justify-between px-6 mb-3">
           <h2 className="font-serif text-2xl italic">Curated for you</h2>
@@ -422,7 +399,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         )}
       </section>
 
-      {/* From your wardrobe — real signed items */}
+      {/* From your wardrobe */}
       <section className="px-6 mt-10 animate-fade-up" style={{ animationDelay: "0.15s" }}>
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="font-serif text-2xl italic">From your wardrobe</h2>
