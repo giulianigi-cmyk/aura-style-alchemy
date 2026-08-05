@@ -39,14 +39,14 @@ type MsgUiState = {
 };
 
 const FEEDBACK_LABELS: Record<FeedbackType, string> = {
-  liked: "❤️ Mi piace questo outfit",
-  disliked: "👎 Non fa per me, proponimi un'alternativa",
-  saved: "💾 Salva questo outfit",
+  liked: "❤️ I like this outfit",
+  disliked: "👎 Not for me, suggest something else",
+  saved: "💾 Save this outfit",
 };
 
 const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
-  { type: "save_canvas", label: "Salva sulla tela" },
-  { type: "add_calendar", label: "Aggiungi al calendario" },
+  { type: "save_canvas", label: "Save to canvas" },
+  { type: "add_calendar", label: "Add to calendar" },
 ];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -217,7 +217,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       setRecording(true);
     } catch (e) {
       console.error("[AURA mic] permission/record failed", e);
-      toast.error("Non riesco ad accedere al microfono");
+      toast.error("Couldn't access the microphone");
     }
   };
 
@@ -238,14 +238,14 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       });
       const res = await transcribe({ data: { audioDataUrl } });
       if (!res.text) {
-        toast.message("Non ho sentito bene, riprova");
+        toast.message("Didn't catch that, try again");
         return;
       }
       speakNextReplyRef.current = true;
       void sendMessage(res.text);
     } catch (e) {
       console.error("[AURA voice-transcribe]", e);
-      toast.error(errorMessage(e, "Trascrizione non riuscita"));
+      toast.error(errorMessage(e, "Transcription failed"));
     } finally {
       setTranscribing(false);
     }
@@ -281,7 +281,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         { role: "user", content: FEEDBACK_LABELS.saved, uiOnly: true },
         {
           role: "assistant",
-          content: "Vuoi salvarlo sulla tela o aggiungerlo al calendario?",
+          content: "Want to save it to your canvas, or add it to your calendar?",
           itemIds,
           actions: SAVE_ACTIONS,
           uiOnly: true,
@@ -324,13 +324,13 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       await saveOutfitPlan({ data: { itemIds, date } });
     } catch (e) {
       console.error("[AURA add_calendar]", e);
-      toast.error("Non sono riuscita ad aggiungerlo al calendario");
+      toast.error("Couldn't add it to your calendar");
       return;
     }
     toast.success(
       date === todayIso()
-        ? "Aggiunto al calendario di oggi"
-        : `Aggiunto al calendario per il ${new Date(date).toLocaleDateString("it-IT")}`
+        ? "Added to today's calendar"
+        : `Added to your calendar for ${new Date(date).toLocaleDateString("en-US")}`
     );
     markActionDone(index, "add_calendar");
     patchUi(index, { calendarStep: undefined });
@@ -410,13 +410,13 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                       onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
                       className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
                     >
-                      Oggi
+                      Today
                     </button>
                     <button
                       onClick={() => patchUi(i, { calendarStep: "pick_date" })}
                       className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
                     >
-                      Altro giorno
+                      Another day
                     </button>
                   </div>
                 )}
@@ -435,7 +435,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                       onClick={() => ui.pickedDate && void confirmCalendarDate(i, m.itemIds ?? [], ui.pickedDate)}
                       className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
                     >
-                      Conferma
+                      Confirm
                     </button>
                   </div>
                 )}
@@ -445,17 +445,17 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "liked")}
                       className="text-xl active:scale-90"
-                      aria-label="Mi piace"
+                      aria-label="Like"
                     >❤️</button>
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
                       className="text-xl active:scale-90"
-                      aria-label="Non fa per me"
+                      aria-label="Not for me"
                     >👎</button>
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "saved")}
                       className="text-xl active:scale-90"
-                      aria-label="Salva"
+                      aria-label="Save"
                     >💾</button>
                   </div>
                 )}
@@ -478,7 +478,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={recording ? "Ti ascolto…" : transcribing ? "Trascrivo…" : "Ask your stylist…"}
+            placeholder={recording ? "Listening…" : transcribing ? "Transcribing…" : "Ask your stylist…"}
             rows={1}
             className="flex-1 max-h-28 bg-secondary/60 rounded-2xl px-4 py-3 text-sm outline-none placeholder:text-muted-foreground resize-none"
           />
@@ -509,7 +509,7 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
         </div>
         {speaking && (
           <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            🔊 AURA sta parlando…
+            🔊 AURA is speaking…
           </p>
         )}
       </div>
