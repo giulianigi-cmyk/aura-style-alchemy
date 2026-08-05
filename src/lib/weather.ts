@@ -39,7 +39,7 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherBun
     "temperature_2m_min,temperature_2m_max,precipitation_probability_max,weather_code"
   );
   url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "7");
+  url.searchParams.set("forecast_days", "15");
 
   const r = await fetch(url.toString());
   if (!r.ok) throw new Error(`Weather request failed (${r.status})`);
@@ -102,18 +102,10 @@ export type OutfitSuggestion = {
   rainy: boolean;
   headline: string;
   tips: string[];
-  /** wardrobe category keywords to match against the user's pieces */
   categories: string[];
-  /** preferred fabrics for this weather band, used to boost/filter matches */
   materials: string[];
 };
 
-/**
- * Per-band outfit guidance. Each band lists a broader set of pieces (not just
- * one silhouette) plus the fabrics that suit that temperature range, so
- * "hot" isn't limited to slip dresses/shorts and "warm"/"mild"/"cool"/"cold"
- * each get their own material logic instead of only categories.
- */
 const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> = {
   cold: {
     headline: "Wrap up — layered tailoring weather",
@@ -165,4 +157,3 @@ export function suggestOutfit(current: CurrentWeather | { temperature: number; w
     materials: rainy ? [...base.materials, "Waterproof"] : base.materials,
   };
 }
-
