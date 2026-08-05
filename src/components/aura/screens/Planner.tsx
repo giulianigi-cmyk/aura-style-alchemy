@@ -13,6 +13,7 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { logWardrobeEvent } from "@/lib/wardrobe-events";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
+type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -68,6 +69,7 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
   const [view, setView] = useState<"month" | "week">("month");
   const [anchor, setAnchor] = useState<Date>(startOfDay(new Date()));
   const [plans, setPlans] = useState<OutfitPlan[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<ImportedEvent[]>([]);
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -77,18 +79,32 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
   const reload = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     setLoading(true);
-    const [{ data: it }, { data: pl }] = await Promise.all([
+    const [{ data: it }, { data: pl }, { data: ev }] = await Promise.all([
       supabase.from("wardrobe_items").select("*").eq("user_id", user.id),
       supabase.from("outfit_plans").select("*").eq("user_id", user.id).order("date"),
+      (supabase.from("calendar_events_cache" as never) as any)
+        .select("id, title, start_time, end_time, location, all_day")
+        .eq("user_id", user.id)
+        .order("start_time"),
     ]);
     const list = (it ?? []) as WardrobeItem[];
     setItems(list);
     setPlans((pl ?? []) as OutfitPlan[]);
+    setCalendarEvents((ev ?? []) as ImportedEvent[]);
     setSigned(await resolveWardrobeUrls(list));
     setLoading(false);
   }, [user]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  const eventsByDate = useMemo(() => {
+    const m: Record<string, ImportedEvent[]> = {};
+    calendarEvents.forEach((e) => {
+      const iso = toISO(new Date(e.start_time));
+      (m[iso] ??= []).push(e);
+    });
+    return m;
+  }, [calendarEvents]);
 
   const plansByDate = useMemo(() => {
     const m: Record<string, OutfitPlan> = {};
@@ -239,7 +255,12 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
               >
                 <div className="flex items-start justify-between">
                   <span className={`font-serif text-sm leading-none pt-0.5 pl-1`}>{d.getDate()}</span>
-                  {wIcon && <span className="text-[10px] leading-none">{wIcon}</span>}
+                  <div className="flex items-center gap-1">
+                    {(eventsByDate[iso]?.length ?? 0) > 0 && (
+                      <span className={`h-1.5 w-1.5 rounded-full ${isToday ? "bg-background" : "bg-[var(--champagne)]"}`} title={`${eventsByDate[iso].length} calendar event${eventsByDate[iso].length === 1 ? "" : "s"}`} />
+                    )}
+                    {wIcon && <span className="text-[10px] leading-none">{wIcon}</span>}
+                  </div>
                 </div>
                 {daily && (
                   <span className={`text-[8px] uppercase tracking-wider pl-1 ${isToday ? "opacity-80" : "text-muted-foreground"}`}>
@@ -263,6 +284,7 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
         <DayDetail
           date={selectedDate}
           plan={selectedPlan}
+          calendarEvents={eventsByDate[selectedDate] ?? []}
           items={items}
           signed={signed}
           weather={dailyByDate[selectedDate] ?? null}
@@ -280,10 +302,11 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
 // ============================================================================
 
 function DayDetail({
-  date, plan, items, signed, weather, currentTempC, onClose, onSaved,
+  date, plan, calendarEvents, items, signed, weather, currentTempC, onClose, onSaved,
 }: {
   date: string;
   plan: OutfitPlan | null;
+  calendarEvents: ImportedEvent[];
   items: WardrobeItem[];
   signed: Record<string, string>;
   weather: DailyForecast | null;
@@ -430,6 +453,22 @@ function DayDetail({
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-5">
+          {calendarEvents.length > 0 && (
+            <div className="rounded-2xl bg-secondary/40 p-4 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">From your calendar</p>
+              {calendarEvents.map((e) => (
+                <div key={e.id} className="text-xs">
+                  <span className="font-medium">{e.title || "Untitled event"}</span>
+                  {!e.all_day && (
+                    <span className="text-muted-foreground">
+                      {" · "}{new Date(e.start_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  )}
+                  {e.location && <span className="text-muted-foreground"> · {e.location}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           {weather && (
             <div className="rounded-2xl bg-card border border-border/60 p-4">
               <div className="flex items-center justify-between">
