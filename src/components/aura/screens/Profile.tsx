@@ -329,7 +329,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               >
                 <div className="flex items-center justify-between">
                   <p className="font-serif text-lg italic">
-                    {infoPopup === "work" ? "Dress code terms" : "Formality terms"}
+                    {infoPopup === "work" ? "Dress code terms" : infoPopup === "formality" ? "Formality terms" : "Style terms"}
                   </p>
                   <button
                     onClick={() => setInfoPopup(null)}
@@ -338,7 +338,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                   ><X size={14} /></button>
                 </div>
                 <div className="mt-4 space-y-3">
-                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : FORMALITY_DEFINITIONS).map((d) => (
+                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : infoPopup === "formality" ? FORMALITY_DEFINITIONS : STYLE_DEFINITIONS).map((d) => (
                     <div key={d.term}>
                       <p className="text-sm font-medium">{d.term}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
