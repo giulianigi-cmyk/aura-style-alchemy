@@ -10,8 +10,9 @@ import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { logWardrobeEvent } from "@/lib/wardrobe-events";
 
-type OutfitPlan = Tables<"outfit_plans">;
+type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -35,9 +36,8 @@ function addDays(d: Date, n: number): Date {
 }
 
 function monthGrid(anchor: Date): Date[] {
-  // 6 weeks (42 days) starting on Monday of the week containing the 1st.
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  const dow = (first.getDay() + 6) % 7; // 0=Mon
+  const dow = (first.getDay() + 6) % 7;
   const start = addDays(first, -dow);
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
@@ -74,7 +74,6 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [manualCity, setManualCity] = useState("");
 
-  // Load items + plans
   const reload = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     setLoading(true);
@@ -93,7 +92,7 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
 
   const plansByDate = useMemo(() => {
     const m: Record<string, OutfitPlan> = {};
-    plans.forEach((p) => { m[p.date] = p; });
+    plans.forEach((p) => { if (p.status !== "cancelled") m[p.date] = p; });
     return m;
   }, [plans]);
 
@@ -174,7 +173,6 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
         </div>
       </header>
 
-      {/* Location prompt if missing */}
       {latitude == null && (
         <div className="mx-6 mt-3 rounded-2xl border border-border/60 bg-card p-4">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Weather</p>
@@ -211,14 +209,12 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
         </p>
       )}
 
-      {/* Day-of-week header */}
       <div className="mx-4 mt-4 grid grid-cols-7 gap-1 text-center">
         {DOW.map((d, i) => (
           <span key={i} className="text-[9px] uppercase tracking-widest text-muted-foreground">{d}</span>
         ))}
       </div>
 
-      {/* Grid */}
       {loading ? (
         <div className="flex items-center justify-center mt-16 text-muted-foreground"><Loader2 className="animate-spin" /></div>
       ) : (
@@ -308,7 +304,6 @@ function DayDetail({
     weekday: "long", month: "long", day: "numeric",
   });
 
-  // Weather suggestion basis (forecast for the day if available, otherwise current)
   const suggestTempC = weather ? (weather.tempMin + weather.tempMax) / 2 : currentTempC;
   const band = suggestTempC != null ? classifyTemp(suggestTempC) : null;
   const suggestion = band ? suggestOutfit({
@@ -335,6 +330,11 @@ function DayDetail({
     if (!user) return;
     if (!selected.length) { toast.error("Pick at least one piece"); return; }
     setSaving(true);
+
+    const wasAlreadyWorn = plan?.status === "worn";
+    const confirmingWear = log && !wasAlreadyWorn;
+    const status = confirmingWear ? "worn" : (plan?.status ?? "planned");
+
     const payload = {
       user_id: user.id,
       date,
@@ -343,48 +343,73 @@ function DayDetail({
       notes: notes || null,
       weather_temp: weather?.tempMax ?? currentTempC ?? null,
       weather_condition: weather ? describeWeather(weather.weatherCode).label : null,
+      status,
     };
-    const q = plan
-      ? supabase.from("outfit_plans").update(payload).eq("id", plan.id)
-      : supabase.from("outfit_plans").insert(payload);
-    const { error } = await q;
-    if (error) {
-      setSaving(false);
-      toast.error(error.message);
-      return;
+
+    let planId = plan?.id ?? null;
+    if (plan) {
+      const { error } = await supabase.from("outfit_plans").update(payload as never).eq("id", plan.id);
+      if (error) { setSaving(false); toast.error(error.message); return; }
+    } else {
+      const { data, error } = await supabase.from("outfit_plans").insert(payload as never).select("id").single();
+      if (error) { setSaving(false); toast.error(error.message); return; }
+      planId = (data as { id: string }).id;
     }
-    // For "log" (past outfit) — increment worn_count on chosen items.
-    // Only bump on the newly added items relative to the existing plan.
-    if (log) {
-      const prev = new Set(plan?.item_ids ?? []);
-      const toBump = selected.filter((id) => !prev.has(id));
-      if (toBump.length) {
-        // Fetch current worn_counts, then per-item update (RLS scoped).
-        const { data: rows } = await supabase
-          .from("wardrobe_items")
-          .select("id,worn_count")
-          .in("id", toBump);
-        await Promise.all(
-          (rows ?? []).map((r) =>
-            supabase.from("wardrobe_items")
-              .update({ worn_count: (r.worn_count ?? 0) + 1 })
-              .eq("id", r.id),
-          ),
-        );
-      }
-    }
+
+    const eventType = !plan ? (log ? "worn" : "planned") : (confirmingWear ? "worn" : "edited");
+    const { error: eventErr } = await logWardrobeEvent({
+      userId: user.id,
+      eventType,
+      date,
+      itemIds: selected,
+      outfitPlanId: planId,
+      occasion: occasion || null,
+      notes: notes || null,
+      weatherCondition: weather ? describeWeather(weather.weatherCode).label : null,
+      temperature: weather?.tempMax ?? currentTempC ?? null,
+    });
+    if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+
     setSaving(false);
     toast.success(plan ? "Outfit updated" : log ? "Outfit logged" : "Outfit planned");
     onSaved();
     onClose();
   };
 
-  const remove = async () => {
-    if (!plan) return;
+  const confirmWorn = async () => {
+    if (!plan || !user) return;
     setSaving(true);
-    const { error } = await supabase.from("outfit_plans").delete().eq("id", plan.id);
+    const { error } = await supabase.from("outfit_plans").update({ status: "worn" } as never).eq("id", plan.id);
+    if (error) { setSaving(false); toast.error(error.message); return; }
+    const { error: eventErr } = await logWardrobeEvent({
+      userId: user.id,
+      eventType: "worn",
+      date: plan.date,
+      itemIds: plan.item_ids,
+      outfitPlanId: plan.id,
+      occasion: plan.occasion,
+      notes: plan.notes,
+    });
+    if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+    setSaving(false);
+    toast.success("Marked as worn");
+    onSaved();
+  };
+
+  const remove = async () => {
+    if (!plan || !user) return;
+    setSaving(true);
+    const { error } = await supabase.from("outfit_plans").update({ status: "cancelled" } as never).eq("id", plan.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
+    const { error: eventErr } = await logWardrobeEvent({
+      userId: user.id,
+      eventType: "cancelled",
+      date: plan.date,
+      itemIds: plan.item_ids,
+      outfitPlanId: plan.id,
+    });
+    if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
     toast.success("Removed");
     onSaved();
     onClose();
@@ -436,7 +461,14 @@ function DayDetail({
           {plan && !editing ? (
             <>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Look</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Look</p>
+                  <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                    plan.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"
+                  }`}>
+                    {plan.status === "worn" ? "Worn" : "Planned"}
+                  </span>
+                </div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {plan.item_ids.map((id) => {
                     const it = items.find((i) => i.id === id);
@@ -541,6 +573,16 @@ function DayDetail({
                 disabled={saving}
                 className="h-11 w-11 rounded-full border border-border flex items-center justify-center"
               ><Trash2 size={15} /></button>
+              {isPast && plan.status !== "worn" && (
+                <button
+                  onClick={() => void confirmWorn()}
+                  disabled={saving}
+                  className="h-11 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
+                >
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+                  Mark as worn
+                </button>
+              )}
               <button
                 onClick={() => setEditing(true)}
                 className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
