@@ -22,7 +22,7 @@ export function WeatherPanel() {
   const needsLocation = latitude == null || longitude == null;
 
   return (
-    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-4 animate-fade-up">
+    <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Weather</p>
