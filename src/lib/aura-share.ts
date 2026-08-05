@@ -18,6 +18,26 @@ export async function nativeShareFile(file: File, text: string): Promise<boolean
   return false;
 }
 
+/** Native share sheet for a link/text (no file) — e.g. "share my profile".
+ *  Falls back to clipboard copy when the Web Share API isn't available. */
+export async function nativeShareText(data: { title: string; text: string; url: string }): Promise<"shared" | "copied" | "failed"> {
+  const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+  try {
+    if (nav.share) {
+      await nav.share(data);
+      return "shared";
+    }
+  } catch {
+    /* user cancelled or unsupported — fall through to clipboard */
+  }
+  try {
+    await navigator.clipboard.writeText(`${data.text}\n${data.url}`);
+    return "copied";
+  } catch {
+    return "failed";
+  }
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
