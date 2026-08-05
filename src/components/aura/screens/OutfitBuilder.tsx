@@ -426,7 +426,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
       const seasonTag = weather ? [season] : [];
       const payload = {
-        name: name.trim() || `Outfit ${new Date().toLocaleDateString()}`,
+        name: name.trim() || `Outfit ${new Date().toLocaleDateString("en-US")}`,
         item_ids: placed.map((p) => p.itemId),
         canvas_image_url: path,
         occasion: occasion ? [occasion] : [],
