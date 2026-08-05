@@ -300,7 +300,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
             </div>
           </button>
         ) : (
-          <div className="rounded-[2rem] bg-secondary/40 p-6 text-center">
+          <div className="rounded-[2rem] gradient-warm p-6 text-center">
             <p className="font-serif text-lg italic">
               {looksError ?? (stats.pieces < 3 ? "Add a few more pieces first" : "No look yet")}
             </p>
