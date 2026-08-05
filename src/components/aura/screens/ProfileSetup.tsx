@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Camera, Check, Loader2, Sparkles } from "lucide-react";
 import { useProfile } from "@/hooks/use-profile";
+import { supabase } from "@/integrations/supabase/client";
+import { USERNAME_RE } from "@/lib/community";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -11,7 +13,7 @@ const BRANDS = [
   "Bottega Veneta", "Celine", "Hermès", "Prada", "Chloé", "Acne Studios",
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
-const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
+const GENDERS = ["Woman", "Man", "Prefer not to say"];
 
 export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const { update, uploadAvatar } = useProfile();
@@ -20,12 +22,28 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const usernameValid = USERNAME_RE.test(username);
+
+  useEffect(() => {
+    if (!usernameValid) { setUsernameAvailable(null); return; }
+    setUsernameChecking(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("username_available", { _username: username });
+      setUsernameChecking(false);
+      setUsernameAvailable(error ? null : Boolean(data));
+    }, 400);
+    return () => { clearTimeout(t); setUsernameChecking(false); };
+  }, [username, usernameValid]);
 
   const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
     setList(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
@@ -39,8 +57,10 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   ];
   const last = step === steps.length - 1;
 
+  const identityComplete = fullName.trim().length > 1 && usernameValid && usernameAvailable === true;
+
   const canAdvance = () => {
-    if (step === 0) return fullName.trim().length > 1;
+    if (step === 0) return identityComplete;
     if (step === 1) return birthDate !== "" && gender !== "";
     if (step === 2) return styles.length > 0;
     if (step === 3) return brands.length > 0;
@@ -51,6 +71,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
     setSaving(true); setErr(null);
     const patch: any = {
       full_name: fullName.trim(),
+      username,
       birth_date: birthDate || null,
       gender: gender || null,
       style_preferences: styles,
@@ -73,7 +94,10 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           <Sparkles size={12} />
           <span className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">AURA</span>
         </div>
-        <button onClick={finish} className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Skip</button>
+        <button
+          onClick={() => (identityComplete ? finish() : setErr("Please pick a username before continuing."))}
+          className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
+        >Skip</button>
       </header>
 
       <div className="px-8 mt-4 flex gap-1.5">
@@ -88,13 +112,38 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
         <div className="mt-8">
           {step === 0 && (
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Full name</label>
-              <input
-                autoFocus value={fullName} onChange={e => setFullName(e.target.value)}
-                placeholder="Elise Moreau"
-                className="w-full bg-transparent border-b border-border py-2 font-serif text-2xl outline-none focus:border-foreground transition"
-              />
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Full name</label>
+                <input
+                  autoFocus value={fullName} onChange={e => setFullName(e.target.value)}
+                  placeholder="Elise Moreau"
+                  className="w-full bg-transparent border-b border-border py-2 font-serif text-2xl outline-none focus:border-foreground transition"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Username</label>
+                <div className="flex items-center border-b border-border focus-within:border-foreground transition">
+                  <span className="text-2xl font-serif text-muted-foreground">@</span>
+                  <input
+                    value={username}
+                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="username"
+                    className="flex-1 bg-transparent py-2 pl-1 font-serif text-2xl outline-none"
+                  />
+                  {usernameChecking && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground h-4">
+                  {username.length === 0 ? "3-20 characters: lowercase letters, numbers, underscores." :
+                    !usernameValid ? "3-20 characters: lowercase letters, numbers, underscores." :
+                    usernameChecking ? "Checking…" :
+                    usernameAvailable === true ? "Available" :
+                    usernameAvailable === false ? "Already taken" : ""}
+                </p>
+              </div>
             </div>
           )}
 
