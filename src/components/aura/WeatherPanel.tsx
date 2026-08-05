@@ -12,10 +12,7 @@ const dayLabel = (iso: string, i: number) => {
 };
 
 /** Compact weather summary for the "You" profile section — current
- *  conditions + a slim forecast strip, nothing more. The full outfit
- *  suggestion + matched-wardrobe grid this used to include duplicated
- *  what Home's "Today's Edit" already shows, and made this section by
- *  far the tallest thing on the profile screen. */
+ *  conditions + a swipeable 7-day forecast strip, nothing more. */
 export function WeatherPanel() {
   useAuth(); // location/weather still need an authed session to be meaningful here
   const { city, latitude, longitude, status, error, detect, setManual } = useLocation();
@@ -88,8 +85,8 @@ export function WeatherPanel() {
       )}
 
       {data && (
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 shrink-0">
+        <div className="mt-3">
+          <div className="flex items-center gap-2.5">
             <span className="text-3xl leading-none">
               {describeWeather(data.current.weatherCode, data.current.isDay).icon}
             </span>
@@ -102,14 +99,15 @@ export function WeatherPanel() {
               </p>
             </div>
           </div>
-          <div className="flex gap-1 overflow-x-auto no-scrollbar">
-            {data.daily.slice(0, 5).map((d, i) => {
+          <div className="mt-3 -mx-4 px-4 flex gap-1.5 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {data.daily.slice(0, 7).map((d, i) => {
               const w = describeWeather(d.weatherCode, true);
               return (
-                <div key={d.date} className="shrink-0 rounded-xl bg-secondary/40 px-2 py-1.5 flex flex-col items-center gap-0.5 min-w-[38px]">
+                <div key={d.date} className="shrink-0 snap-start rounded-xl bg-secondary/40 px-2.5 py-2 flex flex-col items-center gap-1 min-w-[46px]">
                   <span className="text-[8px] uppercase tracking-widest text-muted-foreground">{dayLabel(d.date, i)}</span>
-                  <span className="text-sm leading-none">{w.icon}</span>
-                  <span className="text-[9px] font-serif">{Math.round(d.tempMax)}°</span>
+                  <span className="text-base leading-none">{w.icon}</span>
+                  <span className="text-[10px] font-serif">{Math.round(d.tempMax)}°</span>
+                  <span className="text-[9px] text-muted-foreground">{Math.round(d.tempMin)}°</span>
                 </div>
               );
             })}
