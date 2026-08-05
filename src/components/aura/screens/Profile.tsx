@@ -11,6 +11,7 @@ import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
 import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
+import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
 
 
 const STYLES = [
