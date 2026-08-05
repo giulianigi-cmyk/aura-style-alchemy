@@ -49,6 +49,21 @@ const FORMALITY_DEFINITIONS: { term: string; description: string }[] = [
   { term: "Very elegant", description: "Consistently dresses in a formal, elevated style." },
 ];
 
+const STYLE_DEFINITIONS: { term: string; description: string }[] = [
+  { term: "Minimal", description: "Clean lines, few colors, no clutter — quality over decoration." },
+  { term: "Editorial", description: "Fashion-forward, styled like a magazine spread — bold silhouettes and combinations." },
+  { term: "Quiet luxury", description: "Understated, high-quality basics with no visible logos." },
+  { term: "Parisian", description: "Effortless, timeless French style — trench coats, striped tops, tailored basics." },
+  { term: "Street", description: "Casual, urban-inspired — sneakers, oversized fits, streetwear brands." },
+  { term: "Romantic", description: "Soft, feminine details — ruffles, florals, flowing fabrics." },
+  { term: "Tailored", description: "Structured, fitted pieces — blazers, precise cuts." },
+  { term: "Bohemian", description: "Free-spirited, textured, layered — prints, fringe, natural fabrics." },
+  { term: "Sporty", description: "Athletic-inspired — activewear, sneakers, technical fabrics." },
+  { term: "Vintage", description: "Inspired by past decades — retro cuts, patterns and details." },
+  { term: "Avant-garde", description: "Experimental, unconventional shapes and combinations." },
+  { term: "Coastal", description: "Relaxed, breezy, beach-inspired — linen, light colors, natural textures." },
+];
+
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
