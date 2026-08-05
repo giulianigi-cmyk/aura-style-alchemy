@@ -44,7 +44,17 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
   const dirty = JSON.stringify(prefs) !== JSON.stringify(snapshot);
 
   const toggle = (key: keyof DressPreferences) =>
-    setPrefs((p) => ({ ...p, [key]: !p[key] || undefined }));
+    setPrefs((p) => {
+      const turningOn = !p[key];
+      const next: DressPreferences = { ...p, [key]: turningOn || undefined };
+      // "Cover arms" without "long sleeves only" (or "cover legs" without
+      // "long skirts only") is a direct contradiction — enforce the
+      // matching minimum length the moment the coverage rule turns on,
+      // instead of letting the two disagree with each other.
+      if (key === "cover_arms" && turningOn) next.min_sleeve_length = "long";
+      if (key === "cover_legs" && turningOn) next.min_skirt_length = "long";
+      return next;
+    });
 
   const save = async () => {
     if (!userId) return;
@@ -115,27 +125,41 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Minimum skirt / dress length</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {SKIRT_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  onClick={() => setPrefs((p) => ({ ...p, min_skirt_length: p.min_skirt_length === o.value ? undefined : (o.value as SkirtLength) }))}
-                  className={chip(prefs.min_skirt_length === o.value)}
-                >{o.label}</button>
-              ))}
+              {SKIRT_OPTIONS.map((o) => {
+                const locked = Boolean(prefs.cover_legs) && o.value !== "long";
+                return (
+                  <button
+                    key={o.value}
+                    disabled={locked}
+                    onClick={() => setPrefs((p) => ({ ...p, min_skirt_length: p.min_skirt_length === o.value ? undefined : (o.value as SkirtLength) }))}
+                    className={`${chip(prefs.min_skirt_length === o.value)} ${locked ? "opacity-30" : ""}`}
+                  >{o.label}</button>
+                );
+              })}
             </div>
+            {prefs.cover_legs && (
+              <p className="mt-1 text-[10px] text-muted-foreground">Locked to Long — Cover legs requires full-length coverage.</p>
+            )}
           </div>
 
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Minimum sleeve length</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {SLEEVE_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  onClick={() => setPrefs((p) => ({ ...p, min_sleeve_length: p.min_sleeve_length === o.value ? undefined : (o.value as SleeveLength) }))}
-                  className={chip(prefs.min_sleeve_length === o.value)}
-                >{o.label}</button>
-              ))}
+              {SLEEVE_OPTIONS.map((o) => {
+                const locked = Boolean(prefs.cover_arms) && o.value !== "long";
+                return (
+                  <button
+                    key={o.value}
+                    disabled={locked}
+                    onClick={() => setPrefs((p) => ({ ...p, min_sleeve_length: p.min_sleeve_length === o.value ? undefined : (o.value as SleeveLength) }))}
+                    className={`${chip(prefs.min_sleeve_length === o.value)} ${locked ? "opacity-30" : ""}`}
+                  >{o.label}</button>
+                );
+              })}
             </div>
+            {prefs.cover_arms && (
+              <p className="mt-1 text-[10px] text-muted-foreground">Locked to Long — Cover arms requires full-arm coverage.</p>
+            )}
           </div>
 
           <div>
