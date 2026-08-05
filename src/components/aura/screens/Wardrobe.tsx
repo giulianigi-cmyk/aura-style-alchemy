@@ -10,6 +10,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
+import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
+import { trimWhiteMargins } from "@/lib/auto-crop";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +54,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [removingBg, setRemovingBg] = useState(false);
+  const [adjustingCrop, setAdjustingCrop] = useState(false);
+  const [tidying, setTidying] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
   const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
@@ -123,9 +127,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     }
   };
 
-  /** Fetches a signed URL and converts it to a data: URL — a data: URL can
-   *  never taint a canvas/fetch pipeline the way a cross-origin signed URL
-   *  sometimes silently does. Same proven pattern as AvatarCropper.tsx. */
   const toDataUrl = async (url: string): Promise<string> => {
     const resp = await fetch(url, { mode: "cors", cache: "no-store" });
     if (!resp.ok) throw new Error(`image fetch failed: ${resp.status}`);
@@ -138,11 +139,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     });
   };
 
-  /** Remove the background of an ALREADY-SAVED item's photo — works
-   *  regardless of how the item was added (single photo, batch scan, URL
-   *  import). Previously this pipeline only ran during the single-item
-   *  add flow; items from batch scan or a manually-adjusted crop had no
-   *  way to get it after the fact. */
   const removeItemBackground = async () => {
     if (!detail || !user) return;
     const path = toStoragePath(detail.image_url);
@@ -164,8 +160,16 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       }
 
       const blob = await (await fetch(bg.imageDataUrl)).blob();
+      const bgRemovedDataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const trimmed = await trimWhiteMargins(bgRemovedDataUrl);
+      const finalBlob = await (await fetch(trimmed.dataUrl)).blob();
       const newPath = `${user.id}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
-      const { error: upErr } = await supabase.storage.from("wardrobe").upload(newPath, blob, {
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(newPath, finalBlob, {
         cacheControl: "3600", upsert: false, contentType: "image/png",
       });
       if (upErr) throw upErr;
@@ -190,12 +194,91 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     }
   };
 
+  const saveManualCrop = async ({ dataUrl }: { dataUrl: string; box: FractionalBox }) => {
+    if (!detail || !user) return;
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const newPath = `${user.id}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(newPath, blob, {
+        cacheControl: "3600", upsert: false, contentType: "image/png",
+      });
+      if (upErr) throw upErr;
+
+      const { data: updatedRow, error: updErr } = await supabase
+        .from("wardrobe_items").update({ image_url: newPath }).eq("id", detail.id).select("*").single();
+      if (updErr) throw updErr;
+
+      const updated = updatedRow as WardrobeItem;
+      setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+      setDetail(updated);
+
+      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrl(newPath, 3600);
+      if (signedData?.signedUrl) setSigned((prev) => ({ ...prev, [newPath]: signedData.signedUrl }));
+
+      toast.success("Crop updated");
+    } catch (e) {
+      console.error("[AURA wardrobe] manual crop save failed", e);
+      toast.error(e instanceof Error ? e.message : "Couldn't save that crop");
+    } finally {
+      setAdjustingCrop(false);
+    }
+  };
+
+  const tidyAllPhotos = async () => {
+    if (!user || tidying) return;
+    const toastId = "tidy-photos";
+    setTidying(true);
+    let changed = 0, checked = 0, failed = 0;
+    try {
+      toast.loading("Checking photos…", { id: toastId });
+      for (const it of items) {
+        const path = toStoragePath(it.image_url);
+        const src = path ? signed[path] : "";
+        if (!src) continue;
+        checked++;
+        try {
+          const result = await trimWhiteMargins(src);
+          if (result.changed) {
+            const blob = await (await fetch(result.dataUrl)).blob();
+            const newPath = `${user.id}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+            const { error: upErr } = await supabase.storage.from("wardrobe").upload(newPath, blob, {
+              cacheControl: "3600", upsert: false, contentType: "image/png",
+            });
+            if (upErr) throw upErr;
+            const { error: updErr } = await supabase
+              .from("wardrobe_items").update({ image_url: newPath }).eq("id", it.id);
+            if (updErr) throw updErr;
+            changed++;
+          }
+        } catch (e) {
+          console.error("[AURA wardrobe] tidy failed for item", it.id, e);
+          failed++;
+        }
+        if (checked % 5 === 0 || checked === items.length) {
+          toast.loading(`Checking photos… ${checked}/${items.length}`, { id: toastId });
+        }
+      }
+
+      if (changed > 0) {
+        const { data } = await supabase.from("wardrobe_items")
+          .select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+        setItems((data ?? []) as WardrobeItem[]);
+      }
+      const failNote = failed ? ` · ${failed} skipped (couldn't process)` : "";
+      toast.success(
+        changed > 0 ? `${changed} photo${changed === 1 ? "" : "s"} tidied${failNote}` : `All photos already tight${failNote}`,
+        { id: toastId },
+      );
+    } finally {
+      setTidying(false);
+    }
+  };
+
   const deleteItem = async () => {
     if (!detail) return;
     setDeleting(true);
     try {
       const path = toStoragePath(detail.image_url);
-      // Delete DB row first (RLS-scoped); best-effort clean up the file after.
       const { error } = await supabase.from("wardrobe_items").delete().eq("id", detail.id);
       if (error) throw error;
       if (path) {
@@ -214,12 +297,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   };
   const season = useMemo(() => currentSeason(), []);
 
-  /** One-time backfill for items saved before the taxonomy revision
-*  (subcategory with length/heel baked in, e.g. "Mini Dress") — cheap,
-   *  text-only recovery. Then loops the AI re-analysis batch for fields
-   *  no old text could ever contain (sleeveLength, fit, toeShape, closure,
-   *  gender, styleTags) — one small batch per call, safe even for
-   *  wardrobes with hundreds of pieces, with a live progress toast. */
   const runLegacyMigration = async () => {
     if (!user || migrating) return;
     setMigrating(true);
@@ -264,7 +341,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     }
   };
 
-  // Sign whenever items change
   useEffect(() => {
     if (!items.length) { setSigned({}); return; }
     let cancelled = false;
@@ -343,6 +419,16 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           </button>
         </div>
       </header>
+
+      <div className="px-6 -mt-1 flex justify-end">
+        <button
+          onClick={() => void tidyAllPhotos()}
+          disabled={tidying || items.length === 0}
+          className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground disabled:opacity-40"
+        >
+          {tidying ? <Loader2 size={11} className="animate-spin" /> : "🔲"} Tidy all photos
+        </button>
+      </div>
 
       {scanMenuOpen && (
         <div
@@ -524,12 +610,18 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     )}
                   </div>
                   {src && !editing && (
-                    <div className="mx-auto mt-3 flex items-center justify-center gap-4">
+                    <div className="mx-auto mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
                       <button
                         onClick={() => setColorWheelOpen(true)}
                         className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
                       >
                         🎨 Color Harmony
+                      </button>
+                      <button
+                        onClick={() => setAdjustingCrop(true)}
+                        className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground active:scale-95"
+                      >
+                        🔲 Adjust crop
                       </button>
                       <button
                         onClick={removeItemBackground}
@@ -539,6 +631,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                         {removingBg ? <Loader2 size={12} className="animate-spin" /> : "✂️"} Remove background
                       </button>
                     </div>
+                  )}
+                  {adjustingCrop && src && (
+                    <ItemCropAdjuster
+                      src={src}
+                      initialBox={null}
+                      onCancel={() => setAdjustingCrop(false)}
+                      onSave={saveManualCrop}
+                    />
                   )}
                   {colorWheelOpen && src && (
                     <ColorWheelPicker imageUrl={src} onClose={() => setColorWheelOpen(false)} />
