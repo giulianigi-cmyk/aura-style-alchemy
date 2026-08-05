@@ -70,6 +70,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     materials: [] as string[],
     price: "" as string,
     currency: "EUR",
+    purchaseDate: "" as string,
   });
 
   const openEdit = () => {
@@ -85,6 +86,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       materials: Array.isArray(detail.material) ? detail.material : [],
       price: detail.price != null ? String(detail.price) : "",
       currency: (detail.currency && CURRENCY_OPTIONS.includes(detail.currency)) ? detail.currency : "EUR",
+      purchaseDate: (detail as unknown as { purchase_date?: string | null }).purchase_date ?? "",
     });
     setEditing(true);
   };
@@ -110,9 +112,10 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         material: edit.materials,
         price: priceNum,
         currency: priceNum != null ? edit.currency : null,
+        purchase_date: edit.purchaseDate || null,
       };
       const { data, error } = await supabase
-        .from("wardrobe_items").update(patch).eq("id", detail.id).select("*").single();
+        .from("wardrobe_items").update(patch as never).eq("id", detail.id).select("*").single();
       if (error) throw error;
       const updated = data as WardrobeItem;
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
@@ -662,6 +665,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                       })()}
                     </p>
                   )}
+                  {(detail as unknown as { purchase_date?: string | null }).purchase_date && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Purchased {new Date(`${(detail as unknown as { purchase_date: string }).purchase_date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  )}
                   {detail.price != null && (
                     <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
                       {detail.worn_count ? (
@@ -858,6 +866,17 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                       >{c}</button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Purchase date</p>
+                  <input
+                    type="date"
+                    value={edit.purchaseDate}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setEdit((s) => ({ ...s, purchaseDate: e.target.value }))}
+                    className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+                  />
                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-24 z-50 bg-card pb-1 rounded-2xl shadow-luxe -mx-1 px-1">
