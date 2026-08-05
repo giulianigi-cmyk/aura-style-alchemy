@@ -52,6 +52,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
+      { name: "google", content: "notranslate" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" },
       { title: "AURA — Your wardrobe, intelligently styled" },
       { name: "description", content: "AURA is the luxury fashion intelligence app. Digitize your wardrobe, generate editorial outfits with AI, plan your style, and discover what suits you." },
