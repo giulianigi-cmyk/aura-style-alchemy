@@ -67,7 +67,7 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
     `rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`;
 
   return (
-    <section className="mx-6 mt-6 rounded-3xl bg-card border border-border/60 p-5 animate-fade-up">
+    <section className="mx-6 mt-5 rounded-3xl bg-card border border-border/60 p-4 animate-fade-up">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Dress preferences</p>
         {editing ? (
@@ -86,25 +86,25 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
       </div>
 
       {!editing ? (
-        <div className="mt-4">
+        <div className="mt-3">
           {loading ? (
             <p className="font-serif text-lg">…</p>
           ) : hasAnyPreference(prefs) ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {activePreferenceLabels(prefs).map((l) => (
-                <span key={l} className="rounded-full bg-secondary/60 px-3 py-1.5 text-xs text-foreground/80">{l}</span>
+                <span key={l} className="rounded-full bg-secondary/60 px-3 py-1 text-xs text-foreground/80">{l}</span>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Optional. Set any dressing rules you always follow — AURA will respect
               them in every outfit and shopping suggestion, no exceptions.
             </p>
           )}
         </div>
       ) : (
-        <div className="mt-4 space-y-5">
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-3 space-y-3">
+          <div className="flex flex-wrap gap-1.5">
             {BOOL_PREFS.map((b) => (
               <button key={b.key} onClick={() => toggle(b.key)} className={chip(Boolean(prefs[b.key]))}>
                 {b.label}
@@ -114,7 +114,7 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
 
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Minimum skirt / dress length</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {SKIRT_OPTIONS.map((o) => (
                 <button
                   key={o.value}
@@ -127,7 +127,7 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
 
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Minimum sleeve length</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {SLEEVE_OPTIONS.map((o) => (
                 <button
                   key={o.value}
@@ -145,14 +145,14 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
               onChange={(e) => setPrefs((p) => ({ ...p, custom_notes: e.target.value }))}
               placeholder="e.g. never short skirts, never heels…"
               rows={2}
-              className="mt-2 w-full bg-secondary/60 rounded-2xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground resize-none"
+              className="mt-1.5 w-full bg-secondary/60 rounded-2xl px-4 py-2 text-sm outline-none placeholder:text-muted-foreground resize-none"
             />
           </div>
 
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className="w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
+            className="w-full h-11 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             <span className="text-[10px] uppercase tracking-[0.3em]">Save preferences</span>
