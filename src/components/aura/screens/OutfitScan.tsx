@@ -140,6 +140,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           size: "",
           styles: [],
           occasions: [],
+          purchaseDate: new Date().toISOString().slice(0, 10),
         });
       }
 
@@ -196,6 +197,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
             return Number.isFinite(n) && n > 0 ? n : null;
           })(),
           currency: it.price.trim() ? it.currency : null,
+          purchase_date: it.purchaseDate || null,
           source: "outfit_scan",
         } as unknown as TablesInsert<"wardrobe_items">;
 
