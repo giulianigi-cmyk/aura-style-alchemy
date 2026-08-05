@@ -374,7 +374,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                 >
                   <p className="text-sm">{s.total_photos} photo{s.total_photos === 1 ? "" : "s"}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.created_at).toLocaleString()}
+                    {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.created_at).toLocaleString("en-US")}
                   </p>
                   {!ready && (c.queued + c.processing + c.done + c.failed > 0) && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">
