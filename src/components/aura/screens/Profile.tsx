@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User } from "lucide-react";
+import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,14 +23,31 @@ const BRANDS = [
   "Bottega Veneta", "Celine", "Hermès", "Prada", "Chloé", "Acne Studios",
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
-const GENDERS = ["Donna", "Uomo", "Preferisco non specificare"];
+const GENDERS = ["Woman", "Man", "Prefer not to say"];
 const INDUSTRIES = [
   "Finance / Legal", "Consulting / Corporate", "Tech / Startup",
   "Fashion / Creative", "Healthcare", "Education", "Hospitality / Retail",
   "Media / Marketing", "Public sector", "Other",
 ];
-const WORK_DRESS_CODES = ["Nessuno", "Casual", "Smart Casual", "Business Casual", "Business Formal", "Divisa"];
-const PERSONAL_FORMALITY = ["Molto casual", "Casual", "Smart Casual", "Elegante", "Molto elegante"];
+const WORK_DRESS_CODES = ["None", "Casual", "Smart Casual", "Business Casual", "Business Formal", "Uniform"];
+const PERSONAL_FORMALITY = ["Very casual", "Casual", "Smart Casual", "Elegant", "Very elegant"];
+
+const DRESS_CODE_DEFINITIONS: { term: string; description: string }[] = [
+  { term: "None", description: "No specific dress code — wear whatever you like." },
+  { term: "Casual", description: "Relaxed everyday clothes: jeans, t-shirts, sneakers." },
+  { term: "Smart Casual", description: "Neat and put-together without being formal — chinos, blouses, loafers." },
+  { term: "Business Casual", description: "Professional but relaxed — no tie needed, but polished (dress pants, collared shirts)." },
+  { term: "Business Formal", description: "Fully professional — suits, blazers, structured tailoring." },
+  { term: "Uniform", description: "A required uniform is provided or specified by the employer." },
+];
+
+const FORMALITY_DEFINITIONS: { term: string; description: string }[] = [
+  { term: "Very casual", description: "Almost always in relaxed, comfortable clothing." },
+  { term: "Casual", description: "Generally relaxed, dressed up only occasionally." },
+  { term: "Smart Casual", description: "Put-together most days without going fully formal." },
+  { term: "Elegant", description: "Prefers polished, refined outfits most of the time." },
+  { term: "Very elegant", description: "Consistently dresses in a formal, elevated style." },
+];
 
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
@@ -45,6 +62,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [industry, setIndustry] = useState<string>("");
   const [workDressCode, setWorkDressCode] = useState<string>("");
   const [personalFormality, setPersonalFormality] = useState<string>("");
+  const [infoPopup, setInfoPopup] = useState<"work" | "formality" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
@@ -253,7 +271,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </div>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Usual work dress code</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Usual work dress code</p>
+              <button onClick={() => setInfoPopup("work")} aria-label="What do these terms mean?" className="text-muted-foreground active:scale-90">
+                <Info size={12} />
+              </button>
+            </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {WORK_DRESS_CODES.map(w => (
                 <button key={w} onClick={() => setWorkDressCode(w)}
@@ -264,7 +287,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </div>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your everyday formality</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your everyday formality</p>
+              <button onClick={() => setInfoPopup("formality")} aria-label="What do these terms mean?" className="text-muted-foreground active:scale-90">
+                <Info size={12} />
+              </button>
+            </div>
             <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">So AURA never suggests a blazer to someone who hates them, even when "technically correct".</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {PERSONAL_FORMALITY.map(f => (
@@ -275,6 +303,36 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               ))}
             </div>
           </div>
+          {infoPopup && (
+            <div
+              className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+              onClick={() => setInfoPopup(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-luxe max-h-[70vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-serif text-lg italic">
+                    {infoPopup === "work" ? "Dress code terms" : "Formality terms"}
+                  </p>
+                  <button
+                    onClick={() => setInfoPopup(null)}
+                    aria-label="Close"
+                    className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+                  ><X size={14} /></button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : FORMALITY_DEFINITIONS).map((d) => (
+                    <div key={d.term}>
+                      <p className="text-sm font-medium">{d.term}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Profession / role</p>
             <input
