@@ -58,33 +58,12 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
   return new File([blob], filename, { type: blob.type || "image/png" });
 }
 
-/**
- * Flatten a (potentially transparent) PNG onto a solid white background.
- *
- * Handles TWO failure modes from the AI bg-removal step:
- *  1. Real alpha transparency — fillWhite + drawImage drops the alpha
- *     channel and produces a clean white background.
- *  2. Baked-in checkerboard pixels — some image models (Gemini flash-image
- *     included, intermittently) return an RGB PNG where the "transparent"
- *     background is rasterised as a grey/white checker pattern. In that
- *     case a simple composite does nothing because the checker pixels are
- *     fully opaque. We detect it by sampling corner pixels (a foreground
- *     subject cannot fill the frame corners) and, when they look like
- *     checker greys/whites, replace every matching pixel with white before
- *     compositing.
- *
- * Search logs for "[AURA flatten]" for diagnostics (dims, alpha stats,
- * corner RGBA, whether the baked-checker path fired).
- */
 function isCheckerPixel(r: number, g: number, b: number): boolean {
   const grey = Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && Math.abs(r - b) < 10;
   if (!grey) return false;
   return r >= 235 || (r >= 175 && r <= 225);
 }
 
-/**
- * Ensure the AI-removed-background PNG has a REAL alpha channel.
- */
 async function ensureTransparentPng(
   dataUrl: string,
   filename: string,
@@ -157,11 +136,6 @@ async function ensureTransparentPng(
   return { file: new File([blob], filename, { type: "image/png" }), isTransparent };
 }
 
-
-
-/** remove.bg only accepts JPG/PNG — CDNs sometimes serve webp/avif anyway
- *  (that's why Mytheresa imports kept their background while Zara worked).
- *  The browser decodes those natively, so we re-encode via canvas. */
 async function normalizeForPipeline(f: File): Promise<File> {
   if (f.type === "image/jpeg" || f.type === "image/png") return f;
   try {
@@ -227,6 +201,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [materials, setMaterials] = useState<string[]>([]);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
 
   const resetFields = () => {
@@ -235,6 +210,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setClosure(""); setGender(""); setStyleTags([]);
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
   };
 
   const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[]; composition?: CompositionEntry[] }) => {
@@ -428,6 +404,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         closure: closure || null,
         gender: gender || null,
         style_tags: styleTags,
+        purchase_date: purchaseDate || null,
       } as unknown as TablesInsert<"wardrobe_items">;
 
       let { data: inserted, error: insErr } = await supabase
@@ -633,6 +610,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
               <p className="mt-1 text-[10px] text-muted-foreground">Powers cost-per-wear in the item card.</p>
+            </div>
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Purchase date</p>
+              <input
+                type="date"
+                value={purchaseDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setPurchaseDate(e.target.value)}
+                className="mt-1 w-full bg-transparent font-serif text-lg outline-none"
+              />
             </div>
             <ChipGroup
               label="Category"
