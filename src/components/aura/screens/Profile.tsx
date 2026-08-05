@@ -598,7 +598,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
   };
 
   return (
-    <section className="mx-6 mt-4 rounded-3xl bg-card border border-border/60 p-4 animate-fade-up">
+    <section className="mx-6 mt-4 rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
         {editing ? (
