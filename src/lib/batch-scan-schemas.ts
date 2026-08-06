@@ -7,6 +7,7 @@ export const CreateBatchScanSchema = z.object({
 
 export const CreateBatchScanFromUrlsSchema = z.object({
   urls: z.array(z.string().trim().min(5)).min(1).max(150),
+  accessToken: z.string().optional(),
 });
 
 export const ScanIdSchema = z.object({ scanId: z.string().uuid() });
