@@ -201,7 +201,8 @@ export function isItemAllowedByDressPreferences(
     if (have !== undefined && have < need) return false;
   }
 
-  if (p.cover_arms && !coversArms(item)) return false;
+  const isArmRelevantCategory = ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category);
+  if (p.cover_arms && isArmRelevantCategory && !coversArms(item)) return false;
 
   if (p.avoid_tight && item.fit === "Slim") return false;
 
