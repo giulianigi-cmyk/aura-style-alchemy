@@ -102,6 +102,20 @@ export const stylistChat = createServerFn({ method: "POST" })
       styleTags: it.styleTags ?? [],
     }));
 
+    // Deterministic, verified-in-code eligibility check — computed here
+    // instead of asking the model to work it out by scanning the catalog
+    // itself. An LLM reading a JSON list is not a reliable substitute for
+    // an actual filter: it can (and did) miss items that are right there.
+    // Uses the SAME coversLegs/coversArms functions as the hard filter
+    // above (isItemAllowedByDressPreferences) — one source of truth, so
+    // this can't drift out of sync with what was actually filtered.
+    const legCoveringIds = dressPrefs?.cover_legs
+      ? allowedItems.filter((it) => coversLegs(it)).map((it) => it.id)
+      : [];
+    const armCoveringIds = dressPrefs?.cover_arms
+      ? allowedItems.filter((it) => coversArms(it)).map((it) => it.id)
+      : [];
+
     const feedbackInstruction = {
       liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Do NOT offer to save it or add it anywhere — that is handled separately. Return an empty item_ids array and empty choices array.",
       disliked: "The user just tapped 'not for me, suggest an alternative' on your PREVIOUS suggestion. Propose a genuinely DIFFERENT outfit using different pieces than the ones you just suggested (check the conversation history for what you already proposed and avoid repeating those exact item_ids).",
