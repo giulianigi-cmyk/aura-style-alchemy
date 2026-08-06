@@ -82,6 +82,25 @@ export const stylistChat = createServerFn({ method: "POST" })
     const dressPrefs = (data.dressPreferences ?? null) as DressPreferences | null;
     const allowedItems = data.items.filter((it) => isItemAllowedByDressPreferences(it, dressPrefs));
 
+        // Derived from the wardrobe itself — no separate size-tracking table
+    // needed. "Usual size per brand" only means anything with 2+ pieces
+    // from that brand; a single item is one data point, not a pattern.
+    const brandSizeCounts = new Map<string, Map<string, number>>();
+    for (const it of data.items) {
+      const brand = it.brand?.trim();
+      const size = it.size?.trim();
+      if (!brand || !size) continue;
+      const sizes = brandSizeCounts.get(brand) ?? new Map<string, number>();
+      sizes.set(size, (sizes.get(size) ?? 0) + 1);
+      brandSizeCounts.set(brand, sizes);
+    }
+    const brandSizeSummary = [...brandSizeCounts.entries()]
+      .filter(([, sizes]) => [...sizes.values()].reduce((a, b) => a + b, 0) >= 2)
+      .map(([brand, sizes]) => {
+        const [topSize] = [...sizes.entries()].sort((a, b) => b[1] - a[1])[0];
+        return `${brand}: usually ${topSize}`;
+      });
+
     const catalog = allowedItems.slice(0, 200).map((it) => ({
       id: it.id,
       category: it.category ?? "",
@@ -124,7 +143,9 @@ export const stylistChat = createServerFn({ method: "POST" })
 
     const system = [
       ...(data.dressRules ? [data.dressRules, ""] : []),
-    "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
+        "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
+      ...(brandSizeSummary.length ? [`SIZE HISTORY (derived from the wardrobe, not asked for): ${brandSizeSummary.join("; ")}. If the person asks about buying a piece from one of these brands, or asks what size to get, mention their usual size for that brand as a helpful reference point — but always frame it as "you've usually worn X in [brand]", never as a certainty, since fit varies by cut and style even within the same brand.`] : []),
+
       "CRITICAL — NEVER FALSELY CLAIM THE WARDROBE LACKS SOMETHING: before saying anything like 'you don't have X' or 'I don't have a suitable piece', you MUST go through the ENTIRE wardrobe catalog below, item by item, and check each one against every requirement in play (category, length, weather-appropriateness, dress code) — not just skim it. The catalog is JSON; read all of it, not just the first few entries. Getting this wrong — telling the person their own wardrobe is missing something that's actually right there — is the single worst mistake you can make in this conversation, worse than a slightly imperfect outfit. If, after that full check, something genuinely isn't there, say so plainly — but only after actually looking.",
       ...(legCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${legCoveringIds.length} piece(s) satisfying full leg coverage — item ids: ${legCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks a leg-covering piece — that would be factually wrong.`] : []),
       ...(armCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${armCoveringIds.length} piece(s) satisfying full arm coverage — item ids: ${armCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks an arm-covering piece — that would be factually wrong.`] : []),
