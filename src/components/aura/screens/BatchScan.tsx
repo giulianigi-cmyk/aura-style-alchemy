@@ -22,8 +22,6 @@ type ScanRow = {
   jobCounts: JobCounts;
 };
 
-// Matches CreateBatchScanFromUrlsSchema's max — one soft ceiling per batch,
-// enforced with a visible warning instead of the old silent slice(0, 20).
 const MAX_BATCH_PHOTOS = 150;
 
 type PhotoStatus = "queued" | "compressing" | "uploading" | "uploaded" | "failed";
@@ -93,9 +91,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
         claimed = res?.claimed ?? 0;
         totalClaimed += claimed;
         rounds++;
-        // 40 rounds x 10/call = up to 400 jobs drained per trigger — comfortably
-        // above the 150-photo batch ceiling, with a hard stop so a stuck job
-        // can't spin this forever.
       } while (claimed > 0 && rounds < 40);
       if (opts.announce) {
         toast(totalClaimed > 0 ? `Processed ${totalClaimed} photo${totalClaimed === 1 ? "" : "s"}` : "Nothing to process right now");
@@ -109,11 +104,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     refresh();
   };
 
-  // Safety net while the screen stays open: if any batch still has queued
-  // or processing jobs, keep nudging the worker every 8s. This does NOT
-  // help once the tab is closed — for that, a pg_cron + pg_net schedule
-  // hitting /api/public/hooks/process-scan-jobs is the durable fix (see
-  // the SQL snippet Claude can provide separately).
   useEffect(() => {
     const hasPending = scans.some((s) => s.status === "queued" || s.status === "processing");
     if (!hasPending) return;
@@ -130,8 +120,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     setUrlRows((prev) => (prev.length === 1 ? [""] : prev.filter((_, idx) => idx !== i)));
 
   const onSubmitUrls = async () => {
-    // Each textarea line and each row both count: paste a whole list into
-    // one row, or add rows one at a time — either way we flatten and dedupe.
     const urls = Array.from(
       new Set(
         urlRows
@@ -144,7 +132,8 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     setBusy(true);
     setLabel(`Fetching ${urls.length} image${urls.length === 1 ? "" : "s"}…`);
     try {
-      const res = await createFromUrls({ data: { urls } });
+      const { data: sess } = await supabase.auth.getSession();
+      const res = await createFromUrls({ data: { urls, accessToken: sess.session?.access_token } });
       if (!res.scanId) {
         toast.error(res.error ?? "Could not fetch any of those URLs.");
         return;
@@ -182,9 +171,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     const setStateAt = (i: number, patch: Partial<PhotoState>) =>
       setPhotoStates((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
 
-    // Each photo is independent: compress, then upload with one retry.
-    // A failure here is recorded and skipped — it never aborts the batch,
-    // and whatever succeeded still gets queued at the end.
     const uploadOne = async (f: File, i: number) => {
       setStateAt(i, { status: "compressing" });
       const compressed = await compressImageForUpload(f);
@@ -209,8 +195,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       setStateAt(i, { status: "failed", error: lastError });
     };
 
-    // Limited concurrency: fast enough on a good connection, still gentle
-    // on slow ones — 150 fully parallel uploads would just time out together.
     const CONCURRENCY = 3;
     let next = 0;
     const worker = async () => {
@@ -306,9 +290,9 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
 
         {mode === "urls" && (
           <div className="rounded-3xl border-2 border-dashed border-border p-6">
-            <p className="font-serif text-lg italic text-center">Paste image URLs</p>
+            <p className="font-serif text-lg italic text-center">Paste product or image links</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
-              One link per row. AURA downloads, analyses and queues each one just like an uploaded photo.
+              One link per row — a product page or a direct image link both work. AURA finds the photo, downloads it, and queues each one just like an uploaded photo.
             </p>
             <div className="mt-5 space-y-2">
               {urlRows.map((row, i) => (
@@ -360,8 +344,6 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                     {scans.map((s) => {
             const c = s.jobCounts;
             const ready = s.status === "done" || s.status === "done_with_errors";
-            // Some items are reviewable as soon as their job finished (done
-            // or failed) — no need to wait for the last straggler.
             const reviewable = ready || c.done + c.failed > 0;
             return (
               <div
