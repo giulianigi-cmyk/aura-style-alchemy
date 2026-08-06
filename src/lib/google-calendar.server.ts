@@ -66,10 +66,11 @@ type GoogleEvent = {
 
 async function fetchUpcomingEvents(accessToken: string): Promise<GoogleEvent[]> {
   const timeMin = new Date(Date.now() - 7 * 86400000).toISOString();
-  const timeMax = new Date(Date.now() + 30 * 86400000).toISOString();
+  const timeMax = new Date(Date.now() + 92 * 86400000).toISOString();
   const params = new URLSearchParams({
-    timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "250",
+    timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "500",
   });
+
   const res = await fetch(`${GOOGLE_CALENDAR_EVENTS_URL}?${params.toString()}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
