@@ -4,6 +4,7 @@
 // scan_detected_items. Never writes wardrobe_items: every detection
 // must be confirmed by the user first.
 import { detectOutfitItems } from "./outfit-detect.server";
+import { removeBackgroundCore } from "./ai-bgremove.functions";
 
 const MAX_ATTEMPTS = 3;
 const BUCKET = "wardrobe";
@@ -18,6 +19,8 @@ function toDataUrl(bytes: ArrayBuffer, contentType: string): string {
   const b64 = btoa(binary);
   return `data:${contentType || "image/jpeg"};base64,${b64}`;
 }
+
+type JobPrefill = { brand?: string | null; priceValue?: number | null; priceCurrency?: string | null; materials?: string[]; sourceUrl?: string } | null;
 
 export type WorkerResult = {
   claimed: number;
@@ -46,11 +49,32 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
       const { data: blob, error: dlErr } = await supabaseAdmin.storage.from(BUCKET).download(job.image_path);
       if (dlErr || !blob) throw new Error(dlErr?.message ?? "download failed");
 
-      const dataUrl = toDataUrl(await blob.arrayBuffer(), blob.type || "image/jpeg");
+      let dataUrl = toDataUrl(await blob.arrayBuffer(), blob.type || "image/jpeg");
+      const prefill = (job as { prefill?: JobPrefill }).prefill ?? null;
+
+      if (prefill) {
+        const bg = await removeBackgroundCore(dataUrl);
+        if (bg.ok) {
+          const newPath = `${job.user_id}/batch/${Date.now()}-bg-${Math.random().toString(36).slice(2)}.png`;
+          const bgBlob = await (await fetch(bg.imageDataUrl)).blob();
+          const { error: upErr } = await supabaseAdmin.storage.from(BUCKET).upload(newPath, bgBlob, {
+            cacheControl: "3600", upsert: false, contentType: "image/png",
+          });
+          if (!upErr) {
+            await supabaseAdmin.from("scan_jobs").update({ image_path: newPath }).eq("id", job.id);
+            job.image_path = newPath;
+            dataUrl = bg.imageDataUrl;
+          } else {
+            console.warn("[AURA batch-scan] bg-removed upload failed, keeping original", upErr.message);
+          }
+        } else {
+          console.warn("[AURA batch-scan] bg removal failed for URL-sourced job", job.id, bg.error);
+        }
+      }
+
       const detection = await detectOutfitItems(dataUrl);
       if (!detection.ok) throw new Error(detection.error);
 
-      // Idempotent per job: clear any suggestions from a previous attempt.
       await supabaseAdmin.from("scan_detected_items").delete().eq("job_id", job.id);
 
       if (detection.items.length) {
@@ -61,14 +85,17 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           category: it.category || null,
           subcategory: it.subcategory || null,
           colors: it.colors,
-          material: it.materials,
+          material: prefill?.materials?.length ? prefill.materials : it.materials,
           season: it.seasons[0] ?? null,
           description: it.description || null,
           confidence: it.confidence,
           bbox: it.bbox,
+          brand: prefill?.brand ?? null,
+          price: prefill?.priceValue ?? null,
+          currency: prefill?.priceCurrency ?? null,
           status: "pending" as const,
         }));
-        const { error: insErr } = await supabaseAdmin.from("scan_detected_items").insert(rows);
+        const { error: insErr } = await supabaseAdmin.from("scan_detected_items").insert(rows as never);
         if (insErr) throw new Error(insErr.message);
         result.detected += rows.length;
       }
