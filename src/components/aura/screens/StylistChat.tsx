@@ -100,6 +100,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
         const list = (data ?? []) as WardrobeItem[];
         setItems(list);
         setSigned(await resolveWardrobeUrls(list));
+        setItemsLoaded(true);
       });
   }, [user]);
 
