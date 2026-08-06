@@ -46,7 +46,7 @@ async function discoverPrincipal(email: string, password: string): Promise<{ pri
 <propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`;
   const { status, text } = await caldavRequest(`${ICLOUD_BASE}/`, "PROPFIND", email, password, body, "0");
     if (status !== 207) return { principal: null, status, snippet: text.slice(0, 900) };
-  const m = text.match(/<[a-zA-Z]*:?current-user-principal>\s*<[a-zA-Z]*:?href>([^<]+)<\/[a-zA-Z]*:?href>/i);
+    const m = text.match(/<[a-zA-Z]*:?current-user-principal[^>]*>\s*<[a-zA-Z]*:?href[^>]*>([^<]+)<\/[a-zA-Z]*:?href>/i);
     return { principal: m ? m[1] : null, status, snippet: text.slice(0, 900) };
 }
 
@@ -57,7 +57,7 @@ async function discoverCalendarHome(principalPath: string, email: string, passwo
 <propfind xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><prop><C:calendar-home-set/></prop></propfind>`;
   const { status, text } = await caldavRequest(url, "PROPFIND", email, password, body, "0");
   if (status !== 207) return null;
-  const m = text.match(/<[a-zA-Z]*:?calendar-home-set>\s*<[a-zA-Z]*:?href>([^<]+)<\/[a-zA-Z]*:?href>/i);
+    const m = text.match(/<[a-zA-Z]*:?calendar-home-set[^>]*>\s*<[a-zA-Z]*:?href[^>]*>([^<]+)<\/[a-zA-Z]*:?href>/i);
   return m ? m[1] : null;
 }
 
@@ -70,10 +70,10 @@ async function listCalendars(homeUrl: string, email: string, password: string): 
   const blocks = text.match(/<[a-zA-Z]*:?response>[\s\S]*?<\/[a-zA-Z]*:?response>/gi) ?? [];
   const hrefs: string[] = [];
   for (const block of blocks) {
-    const isCalendar = /<[a-zA-Z]*:?calendar\s*\/>/i.test(block);
+        const isCalendar = /<[a-zA-Z]*:?calendar[^>]*\/>/i.test(block);
     const isInboxOutbox = /schedule-inbox|schedule-outbox/i.test(block);
     if (isCalendar && !isInboxOutbox) {
-      const hrefMatch = block.match(/<[a-zA-Z]*:?href>([^<]+)<\/[a-zA-Z]*:?href>/i);
+            const hrefMatch = block.match(/<[a-zA-Z]*:?href[^>]*>([^<]+)<\/[a-zA-Z]*:?href>/i);
       if (hrefMatch) hrefs.push(hrefMatch[1]);
     }
   }
