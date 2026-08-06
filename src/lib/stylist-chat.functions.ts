@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
-import { isItemAllowedByDressPreferences, type DressPreferences } from "./dress-preferences";
+import { isItemAllowedByDressPreferences, coversLegs, coversArms, type DressPreferences } from "./dress-preferences";
 
 const ItemSchema = z.object({
   id: z.string(),
