@@ -245,9 +245,22 @@ export const stylistChat = createServerFn({ method: "POST" })
         }
       }
 
+      // TEMPORARY DIAGNOSTIC — remove once the "wardrobe lacks X" bug is
+      // found. Prints the real runtime values directly in the chat reply
+      // (not just server logs) since there's no dev-tools access from an
+      // iPhone-only workflow.
+      const debugPrefix = [
+        `[DEBUG] dressPrefs.cover_legs=${dressPrefs?.cover_legs ?? "undefined"}`,
+        `allItems=${data.items.length}`,
+        `allowedItems=${allowedItems.length}`,
+        `legCoveringIds=${JSON.stringify(legCoveringIds)}`,
+        `armCoveringIds=${JSON.stringify(armCoveringIds)}`,
+        `catalogSize=${catalog.length}`,
+      ].join(" | ") + "\n\n";
+
       return {
         ok: true as const,
-        reply: (finalReply ?? "").slice(0, 1200),
+        reply: debugPrefix + (finalReply ?? "").slice(0, 1200),
         item_ids: finalItemIds,
         choices: (parsed.choices ?? []).slice(0, 4),
         actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
