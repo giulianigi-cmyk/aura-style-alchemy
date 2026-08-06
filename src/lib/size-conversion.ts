@@ -92,7 +92,8 @@ export function sizeEquivalences(
   const row = findSizeRow(input, opts);
   if (!row) return null;
   if (opts?.shoes) {
-    return `IT/EU ${row.eu} ≈ UK ${row.uk} · US ${row.us}`;
+    return `EU ${row.eu} · US ${row.us}`;
   }
-  return `IT ${row.it} ≈ EU ${row.eu} · UK ${row.uk} · US ${row.us} · ${row.intl}`;
+  return `EU ${row.eu} · US ${row.us} · ${row.intl}`;
 }
+
