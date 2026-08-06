@@ -9,6 +9,11 @@ import type { z } from "zod";
 export function extractJsonObject(text: string): unknown {
   let t = text.trim();
   t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  try {
+    return JSON.parse(t);
+  } catch {
+    // fall through to bracket-slice extraction below
+  }
   const start = t.indexOf("{");
   const end = t.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("No JSON object found in AI response");
