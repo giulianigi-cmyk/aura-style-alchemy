@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowUp, Loader2, Sparkles, Mic, Square } from "lucide-react
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import type { BuilderInit, Screen } from "../AuraApp";
+import type { BuilderInit, Screen, StylistChatInit } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
@@ -60,7 +60,7 @@ function errorMessage(e: unknown, fallback: string): string {
   return detail ? `${fallback}: ${detail}` : fallback;
 }
 
-export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void; initialMessage?: string | null }) {
+export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void; initialMessage?: StylistChatInit }) {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { latitude, longitude } = useLocation();
@@ -106,11 +106,20 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
+  // Set once from a calendar event tap — when present, the WHOLE session
+  // reasons about that day's forecast instead of "today's" weather. A
+  // Friday event browsed on a Tuesday needs Friday's weather, not
+  // Tuesday's — see openStylistChat in AuraApp.tsx. A ref (not state) so
+  // the very first sendMessage call below sees it immediately, without
+  // waiting on a re-render.
+  const eventWeatherRef = useRef<{ temperature: number | null; condition: string | null } | null>(null);
+
   const autoSentRef = useRef(false);
   useEffect(() => {
     if (initialMessage && !autoSentRef.current) {
       autoSentRef.current = true;
-      void sendMessage(initialMessage);
+      eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
+      void sendMessage(initialMessage.message);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMessage]);
@@ -122,7 +131,8 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     setMessages(history);
     setBusy(true);
     try {
-      const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
+      const desc = eventWeatherRef.current?.condition ?? (weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null);
+      const temp = eventWeatherRef.current?.temperature ?? weather?.current.temperature ?? null;
       const dressRules = await loadDressRules(user?.id);
       const dressPreferences = await loadDressPreferencesRaw(user?.id);
       const res = await stylistChat({
@@ -134,7 +144,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
           workDressCode: profile?.work_dress_code ?? null,
           personalFormality: profile?.personal_formality ?? null,
           profession: profile?.profession ?? null,
-          temperature: weather?.current.temperature ?? null,
+          temperature: temp,
           condition: desc,
           feedbackContext: feedbackContext ?? null,
           items: items.map((it) => ({
