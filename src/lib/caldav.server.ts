@@ -45,9 +45,9 @@ async function discoverPrincipal(email: string, password: string): Promise<{ pri
   const body = `<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`;
   const { status, text } = await caldavRequest(`${ICLOUD_BASE}/`, "PROPFIND", email, password, body, "0");
-  if (status !== 207) return { principal: null, status, snippet: text.slice(0, 200) };
+    if (status !== 207) return { principal: null, status, snippet: text.slice(0, 900) };
   const m = text.match(/<[a-zA-Z]*:?current-user-principal>\s*<[a-zA-Z]*:?href>([^<]+)<\/[a-zA-Z]*:?href>/i);
-  return { principal: m ? m[1] : null, status, snippet: text.slice(0, 200) };
+    return { principal: m ? m[1] : null, status, snippet: text.slice(0, 900) };
 }
 
 
