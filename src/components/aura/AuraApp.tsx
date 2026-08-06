@@ -43,24 +43,25 @@ export type BuilderInit = {
   outfitId?: string;
 } | null;
 
+export type StylistChatInit = string | null;
+
 function Inner() {
   const { user, loading, recovery } = useAuth();
   const { profile, loading: profileLoading } = useProfile();
   const [screen, setScreen] = useState<Screen>("splash");
   const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
+  const [stylistChatInit, setStylistChatInit] = useState<StylistChatInit>(null);
   const [reviewScanId, setReviewScanId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
 
-  // go() wrapper that resets builderInit unless the caller explicitly opens the
-  // builder with a preloaded outfit via openBuilder().
   const go = (s: Screen) => {
     if (s !== "builder") setBuilderInit(null);
     else if (s === "builder") {
-      // navigating to builder from tab bar / planner → clean canvas
       setBuilderInit(null);
     }
+    if (s !== "stylist-chat") setStylistChatInit(null);
     setScreen(s);
   };
 
@@ -74,12 +75,15 @@ function Inner() {
     setScreen("builder");
   };
 
-  // Recovery flow always wins
+  const openStylistChat = (message: string) => {
+    setStylistChatInit(message);
+    setScreen("stylist-chat");
+  };
+
   useEffect(() => {
     if (recovery) setScreen("reset");
   }, [recovery]);
 
-  // Initial routing after splash
   useEffect(() => {
     if (loading) return;
     if (screen !== "splash") return;
@@ -93,7 +97,6 @@ function Inner() {
     return () => clearTimeout(t);
   }, [loading, profileLoading, screen, onboarded, user, profile, recovery]);
 
-  // Auth state transitions
   useEffect(() => {
     if (loading || screen === "splash" || screen === "reset") return;
     if (!user && !["onboarding", "auth"].includes(screen)) {
@@ -101,7 +104,6 @@ function Inner() {
       return;
     }
     if (user && ["auth"].includes(screen)) {
-      // If the user was sent to sign in from an MCP consent URL, return them now.
       if (typeof window !== "undefined") {
         try {
           const back = window.localStorage.getItem("aura:mcp_consent_return");
@@ -143,11 +145,11 @@ function Inner() {
           {screen === "wardrobe" && <Wardrobe go={go} />}
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
           {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
-          {screen === "stylist-chat" && <StylistChat go={go} openBuilder={openBuilder} />}
+          {screen === "stylist-chat" && <StylistChat go={go} openBuilder={openBuilder} initialMessage={stylistChatInit} />}
           {screen === "outfit-scan" && <OutfitScan go={go} />}
           {screen === "batch-scan" && <BatchScan go={go} openReview={openBatchReview} />}
           {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
-          {screen === "planner" && <Planner go={go} />}
+          {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} />}
