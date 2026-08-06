@@ -66,6 +66,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
   const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
