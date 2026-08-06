@@ -38,7 +38,7 @@ export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
   Outerwear: ["Blazer", "Coat", "Trench Coat", "Puffer Jacket", "Parka", "Rain Jacket", "Windbreaker", "Denim Jacket", "Leather Jacket", "Bomber Jacket", "Shacket", "Cape", "Vest"],
   Shoes: ["Sneakers", "Running Shoes", "Sandals", "Flats", "Loafers", "Pumps", "Boots", "Chelsea Boots", "Combat Boots", "Ankle Boots", "Knee Boots", "Over-the-Knee Boots", "Espadrilles", "Slides", "Mules", "Wedges", "Clogs", "Slippers", "Flip Flops"],
   Bags: ["Tote", "Crossbody", "Shoulder Bag", "Clutch", "Backpack", "Bucket Bag", "Belt Bag", "Satchel", "Hobo Bag", "Top Handle Bag"],
-  Accessories: ["Belt", "Scarf", "Hat", "Cap", "Gloves", "Watch", "Sunglasses", "Hair Accessory", "Tie", "Jewelry"],
+  Accessories: ["Belt", "Scarf", "Hat", "Cap", "Gloves", "Watch", "Sunglasses", "Hair Accessory", "Tie", "Earrings", "Necklace", "Bracelet", "Ring", "Brooch", "Anklet"],
   Underwear: ["Bra", "Sports Bra", "Briefs", "Panties", "Boxers", "Shapewear", "Sleepwear", "Socks", "Tights"],
   Swimwear: ["One-piece Swimsuit", "Bikini Top", "Bikini Bottom", "Cover-up", "Swim Shorts"],
   Activewear: ["Training Top", "Sports Bra", "Performance Jacket", "Running Shorts", "Bike Shorts", "Training Leggings", "Tennis Skirt", "Tracksuit"],
