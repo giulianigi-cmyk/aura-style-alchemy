@@ -187,7 +187,13 @@ export function isItemAllowedByDressPreferences(
   const isSkirtBottom = category === "Bottoms" && item.subcategory === "Skirt";
   const isDressOrSkirt = category === "Dresses" || isSkirtBottom;
 
-  if (p.cover_legs && !coversLegs(item)) return false;
+  // cover_legs is only meaningful for categories that touch the legs at
+  // all — applying coversLegs() as a blanket check wiped shoes, bags,
+  // tops and outerwear out of the catalog entirely whenever cover_legs
+  // was on, since coversLegs() correctly answers "no" for anything that
+  // isn't a Dress/Jumpsuit/Bottoms. Scope it to where it's relevant.
+  const isLegRelevantCategory = ["Dresses", "Jumpsuits", "Bottoms"].includes(category);
+  if (p.cover_legs && isLegRelevantCategory && !coversLegs(item)) return false;
 
   if (isDressOrSkirt && p.min_skirt_length && item.length) {
     const need = SKIRT_MIN_ORDER[p.min_skirt_length];
