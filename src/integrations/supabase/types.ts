@@ -41,6 +41,98 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_connections: {
+        Row: {
+          access_token: string
+          calendar_id: string
+          connected_at: string
+          id: string
+          last_sync_error: string | null
+          last_synced_at: string | null
+          provider: string
+          refresh_token: string | null
+          token_expires_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          calendar_id?: string
+          connected_at?: string
+          id?: string
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          provider: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          calendar_id?: string
+          connected_at?: string
+          id?: string
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          provider?: string
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      calendar_events_cache: {
+        Row: {
+          all_day: boolean
+          connection_id: string
+          description: string | null
+          end_time: string | null
+          external_event_id: string
+          id: string
+          imported_at: string
+          location: string | null
+          raw: Json | null
+          start_time: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          all_day?: boolean
+          connection_id: string
+          description?: string | null
+          end_time?: string | null
+          external_event_id: string
+          id?: string
+          imported_at?: string
+          location?: string | null
+          raw?: Json | null
+          start_time: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          all_day?: boolean
+          connection_id?: string
+          description?: string | null
+          end_time?: string | null
+          external_event_id?: string
+          id?: string
+          imported_at?: string
+          location?: string | null
+          raw?: Json | null
+          start_time?: string
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_cache_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback_weights: {
         Row: {
           created_at: string
@@ -118,6 +210,27 @@ export type Database = {
           read_at?: string | null
           title?: string
           type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      oauth_pending_connections: {
+        Row: {
+          created_at: string
+          provider: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          provider: string
+          state?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          provider?: string
+          state?: string
           user_id?: string
         }
         Relationships: []
