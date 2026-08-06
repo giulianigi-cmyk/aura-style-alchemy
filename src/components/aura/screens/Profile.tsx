@@ -418,7 +418,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           {profile?.bio && (
             <section className="mx-6 mt-6 animate-fade-up">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Bio</p>
-              <p className="text-sm leading-relaxed text-foreground/80">{profile.bio}</p>
+                            <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">{profile.bio}</p>
             </section>
           )}
           {(profile?.style_preferences?.length ?? 0) > 0 && (
@@ -697,12 +697,12 @@ function MySizes({ userId }: { userId: string | undefined }) {
           ><Pencil size={12} /></button>
         )}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
         {SIZE_FIELDS.map((f) => {
           const v = values[f.key];
           const hint = sizeEquivalences(v, f.shoes ? { shoes: true } : undefined);
           return (
-            <div key={f.key} className="border-b border-border/60 pb-2">
+            <div key={f.key} className="min-w-0 border-b border-border/60 pb-2">
               <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{f.label}</p>
               {editing ? (
                 <>
@@ -710,19 +710,20 @@ function MySizes({ userId }: { userId: string | undefined }) {
                     value={v}
                     onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                     placeholder={f.shoes ? "38" : "42 / M"}
-                    className="mt-0.5 w-full bg-transparent font-serif text-base outline-none placeholder:text-muted-foreground/50"
+                    className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-base outline-none placeholder:text-muted-foreground/50"
                   />
                   {hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
                 </>
               ) : (
                 <>
-                  <p className="mt-0.5 font-serif text-base">{loading ? "…" : v || "—"}</p>
+                  <p className="mt-0.5 font-serif text-base truncate">{loading ? "…" : v || "—"}</p>
                   {v && hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
                 </>
               )}
             </div>
           );
         })}
+
       </div>
       {editing && (
         <button
