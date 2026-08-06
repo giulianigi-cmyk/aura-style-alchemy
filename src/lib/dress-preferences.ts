@@ -166,15 +166,31 @@ export function isItemAllowedByDressPreferences(
 ): boolean {
   if (!p) return true;
   const category = item.category ?? "";
-  const isLegGarment = category === "Dresses" || category === "Jumpsuits" || (category === "Bottoms" && item.subcategory === "Skirt");
+  const isSkirtBottom = category === "Bottoms" && item.subcategory === "Skirt";
+  const isDressOrSkirt = category === "Dresses" || isSkirtBottom;
+  const isJumpsuit = category === "Jumpsuits";
 
-  if (isLegGarment) {
-    if (p.cover_legs && item.length !== "Maxi") return false;
-    if (p.min_skirt_length) {
+  if (isJumpsuit && p.cover_legs) {
+    if (item.subcategory === "Playsuit" || item.subcategory === "Romper") return false;
+  }
+
+  if (isDressOrSkirt) {
+    if (p.cover_legs && item.length && item.length !== "Maxi") return false;
+    if (p.min_skirt_length && item.length) {
       const need = SKIRT_MIN_ORDER[p.min_skirt_length];
-      const have = item.length ? ITEM_LENGTH_ORDER[item.length] : undefined;
-      if (have === undefined || have < need) return false;
+      const have = ITEM_LENGTH_ORDER[item.length];
+      if (have !== undefined && have < need) return false;
     }
+  }
+
+  if (p.cover_arms && ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) {
+    if (item.sleeveLength === "Sleeveless") return false;
+  }
+
+  if (p.avoid_tight && item.fit === "Slim") return false;
+
+  return true;
+}
   }
 
   if (p.cover_arms && ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) {
