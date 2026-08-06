@@ -61,7 +61,7 @@ function itemMatchesKeywords(it: WardrobeItem, keywords: string[], materials: st
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 
-export function Planner({ go }: { go: (s: Screen) => void }) {
+export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; openStylistChat: (message: string) => void }) {
   const { user } = useAuth();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -285,6 +285,7 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
           date={selectedDate}
           plan={selectedPlan}
           calendarEvents={eventsByDate[selectedDate] ?? []}
+          openStylistChat={openStylistChat}
           items={items}
           signed={signed}
           weather={dailyByDate[selectedDate] ?? null}
@@ -302,11 +303,12 @@ export function Planner({ go }: { go: (s: Screen) => void }) {
 // ============================================================================
 
 function DayDetail({
-  date, plan, calendarEvents, items, signed, weather, currentTempC, onClose, onSaved,
+  date, plan, calendarEvents, openStylistChat, items, signed, weather, currentTempC, onClose, onSaved,
 }: {
   date: string;
   plan: OutfitPlan | null;
   calendarEvents: ImportedEvent[];
+  openStylistChat: (message: string) => void;
   items: WardrobeItem[];
   signed: Record<string, string>;
   weather: DailyForecast | null;
@@ -454,10 +456,16 @@ function DayDetail({
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-5">
           {calendarEvents.length > 0 && (
-            <div className="rounded-2xl bg-secondary/40 p-4 space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">From your calendar</p>
+            <div className="rounded-2xl bg-secondary/40 p-4 space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1">From your calendar</p>
               {calendarEvents.map((e) => (
-                <div key={e.id} className="text-xs">
+                <button
+                  key={e.id}
+                  onClick={() => openStylistChat(
+                    `I have "${e.title || "an event"}" on ${dateLabel}${e.location ? ` at ${e.location}` : ""} — is there a specific dress code, or what should I wear?`
+                  )}
+                  className="w-full text-left text-xs py-1 active:opacity-60"
+                >
                   <span className="font-medium">{e.title || "Untitled event"}</span>
                   {!e.all_day && (
                     <span className="text-muted-foreground">
@@ -465,7 +473,7 @@ function DayDetail({
                     </span>
                   )}
                   {e.location && <span className="text-muted-foreground"> · {e.location}</span>}
-                </div>
+                </button>
               ))}
             </div>
           )}
