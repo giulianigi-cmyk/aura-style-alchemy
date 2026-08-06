@@ -78,6 +78,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               id: string; job_id: string; category: string | null; subcategory: string | null;
               colors: string[] | null; material: string[] | null; season: string | null;
               description: string | null; bbox: BBox | null;
+              brand: string | null; price: number | null; currency: string | null;
             }>;
             jobs: Array<{ id: string; image_path: string }>;
           }>,
@@ -124,10 +125,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             colors,
             materials: it.material ?? [],
             seasons: it.season ? [it.season] : [],
-            brand: "",
+            brand: it.brand ?? "",
             description: it.description ?? "",
-           price: "",
-            currency: "EUR",
+            price: it.price != null ? String(it.price) : "",
+            currency: it.currency ?? "EUR",
             size: "",
             styles: [],
             occasions: [],
