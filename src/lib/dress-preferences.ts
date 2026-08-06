@@ -191,13 +191,3 @@ export function isItemAllowedByDressPreferences(
 
   return true;
 }
-  }
-
-  if (p.cover_arms && ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) {
-    if (item.sleeveLength === "Sleeveless") return false;
-  }
-
-  if (p.avoid_tight && item.fit === "Slim") return false;
-
-  return true;
-}
