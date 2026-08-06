@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import type { Screen } from "../AuraApp";
+import type { Screen, StylistChatInit } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
@@ -61,7 +61,7 @@ function itemMatchesKeywords(it: WardrobeItem, keywords: string[], materials: st
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 
-export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; openStylistChat: (message: string) => void }) {
+export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; openStylistChat: (init: NonNullable<StylistChatInit>) => void }) {
   const { user } = useAuth();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -308,7 +308,7 @@ function DayDetail({
   date: string;
   plan: OutfitPlan | null;
   calendarEvents: ImportedEvent[];
-  openStylistChat: (message: string) => void;
+  openStylistChat: (init: NonNullable<StylistChatInit>) => void;
   items: WardrobeItem[];
   signed: Record<string, string>;
   weather: DailyForecast | null;
@@ -458,23 +458,34 @@ function DayDetail({
           {calendarEvents.length > 0 && (
             <div className="rounded-2xl bg-secondary/40 p-4 space-y-1">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1">From your calendar</p>
-              {calendarEvents.map((e) => (
-                <button
-                  key={e.id}
-                  onClick={() => openStylistChat(
-                    `I have "${e.title || "an event"}" on ${dateLabel}${e.location ? ` at ${e.location}` : ""} — is there a specific dress code, or what should I wear?`
-                  )}
-                  className="w-full text-left text-xs py-1 active:opacity-60"
-                >
-                  <span className="font-medium">{e.title || "Untitled event"}</span>
-                  {!e.all_day && (
-                    <span className="text-muted-foreground">
-                      {" · "}{new Date(e.start_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                    </span>
-                  )}
-                  {e.location && <span className="text-muted-foreground"> · {e.location}</span>}
-                </button>
-              ))}
+              {calendarEvents.map((e) => {
+                const isItalian = typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("it");
+                const eventDateLabel = new Date(date + "T00:00:00").toLocaleDateString(isItalian ? "it-IT" : "en-US", {
+                  weekday: "long", month: "long", day: "numeric",
+                });
+                const promptMessage = isItalian
+                  ? `Ho "${e.title || "un evento"}" ${eventDateLabel}${e.location ? ` a ${e.location}` : ""} — cosa mi consigli di indossare?`
+                  : `I have "${e.title || "an event"}" on ${eventDateLabel}${e.location ? ` at ${e.location}` : ""} — what should I wear?`;
+                return (
+                  <button
+                    key={e.id}
+                    onClick={() => openStylistChat({
+                      message: promptMessage,
+                      temperature: weather ? (weather.tempMin + weather.tempMax) / 2 : null,
+                      condition: weather ? describeWeather(weather.weatherCode).label : null,
+                    })}
+                    className="w-full text-left text-xs py-1 active:opacity-60"
+                  >
+                    <span className="font-medium">{e.title || "Untitled event"}</span>
+                    {!e.all_day && (
+                      <span className="text-muted-foreground">
+                        {" · "}{new Date(e.start_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    )}
+                    {e.location && <span className="text-muted-foreground"> · {e.location}</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
           {weather && (
