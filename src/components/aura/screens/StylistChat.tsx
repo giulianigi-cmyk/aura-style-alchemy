@@ -118,13 +118,18 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
   const autoSentRef = useRef(false);
   useEffect(() => {
-    if (initialMessage && !autoSentRef.current) {
+    // Wait for the wardrobe fetch to actually complete first — this was
+    // the real bug: without this guard, the auto-sent message could fire
+    // (and reach the AI) before `items` had loaded, sending an EMPTY
+    // catalog. The AI wasn't wrong that "nothing fit" — it genuinely saw
+    // zero items, because the wardrobe hadn't loaded yet.
+    if (initialMessage && itemsLoaded && !autoSentRef.current) {
       autoSentRef.current = true;
       eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
       void sendMessage(initialMessage.message);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMessage]);
+  }, [initialMessage, itemsLoaded]);
 
 
   const sendMessage = async (text: string, feedbackContext?: FeedbackType, overrideItemIds?: string[]) => {
