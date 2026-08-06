@@ -11,7 +11,10 @@ import {
   ScanIdSchema,
 } from "./batch-scan-schemas";
 
-async function insertBatchAndJobs(supabase: any, userId: string, paths: string[]) {
+async function insertBatchAndJobs(
+  supabase: any, userId: string, paths: string[],
+  prefillByPath?: Record<string, { brand?: string | null; priceValue?: number | null; priceCurrency?: string | null; materials?: string[]; sourceUrl?: string }>,
+) {
   const { data: scan, error } = await supabase
     .from("batch_scans")
     .insert({ user_id: userId, status: "queued", total_photos: paths.length })
@@ -24,6 +27,7 @@ async function insertBatchAndJobs(supabase: any, userId: string, paths: string[]
     user_id: userId,
     image_path: p,
     status: "queued" as const,
+    prefill: prefillByPath?.[p] ?? null,
   }));
   const { error: jobErr } = await supabase.from("scan_jobs").insert(jobs);
   if (jobErr) throw new Error(jobErr.message);
@@ -77,21 +81,34 @@ export const createBatchScanFromUrls = createServerFn({ method: "POST" })
 
     const urls = Array.from(new Set(data.urls.filter(Boolean)));
 
-    const outcomes = await mapWithConcurrency(urls, 4, async (rawUrl, i) => {
+    type Prefill = { brand?: string | null; priceValue?: number | null; priceCurrency?: string | null; materials?: string[]; sourceUrl?: string };
+    type Outcome =
+      | { url: string; ok: true; path: string; prefill?: Prefill }
+      | { url: string; ok: false; error: string };
+
+    const outcomes: Outcome[] = await mapWithConcurrency(urls, 4, async (rawUrl, i): Promise<Outcome> => {
       const publicErr = checkPublicUrl(rawUrl);
-      if (publicErr) return { url: rawUrl, ok: false as const, error: publicErr };
+      if (publicErr) return { url: rawUrl, ok: false, error: publicErr };
 
       let dl = await fetchImageAsDataUrl(rawUrl);
+      let prefill: Prefill | undefined;
       if (!dl.ok || !/^data:image\//.test(dl.dataUrl)) {
         const originalError = dl.ok ? "That link isn't a product page with a usable image." : dl.error;
         const resolved = await resolveProductImageUrl(rawUrl, data.accessToken);
         if (!resolved.ok) {
-          return { url: rawUrl, ok: false as const, error: originalError };
+          return { url: rawUrl, ok: false, error: originalError };
         }
         dl = await fetchImageAsDataUrl(resolved.imageUrl, rawUrl);
         if (!dl.ok || !/^data:image\//.test(dl.dataUrl)) {
-          return { url: rawUrl, ok: false as const, error: dl.ok ? "Found the page but couldn't download its image." : dl.error };
+          return { url: rawUrl, ok: false, error: dl.ok ? "Found the page but couldn't download its image." : dl.error };
         }
+        prefill = {
+          brand: resolved.brand || null,
+          priceValue: resolved.priceValue,
+          priceCurrency: resolved.priceCurrency,
+          materials: resolved.materials,
+          sourceUrl: rawUrl,
+        };
       }
 
       try {
@@ -100,21 +117,25 @@ export const createBatchScanFromUrls = createServerFn({ method: "POST" })
         const { error: upErr } = await supabaseAdmin.storage
           .from("wardrobe")
           .upload(path, bytes, { cacheControl: "3600", upsert: false, contentType });
-        if (upErr) return { url: rawUrl, ok: false as const, error: upErr.message };
-        return { url: rawUrl, ok: true as const, path };
+        if (upErr) return { url: rawUrl, ok: false, error: upErr.message };
+        return { url: rawUrl, ok: true, path, prefill };
       } catch (err) {
-        return { url: rawUrl, ok: false as const, error: err instanceof Error ? err.message : "download failed" };
+        return { url: rawUrl, ok: false, error: err instanceof Error ? err.message : "download failed" };
       }
     });
 
-    const paths = outcomes.filter((o) => o.ok).map((o) => (o as { path: string }).path);
-    const failed = outcomes.filter((o) => !o.ok) as { url: string; ok: false; error: string }[];
+    const succeeded = outcomes.filter((o): o is Extract<Outcome, { ok: true }> => o.ok);
+    const paths = succeeded.map((o) => o.path);
+    const failed = outcomes.filter((o): o is Extract<Outcome, { ok: false }> => !o.ok);
 
     if (!paths.length) {
       return { scanId: null, jobs: 0, failed, error: "None of those URLs could be downloaded." };
     }
 
-    const { scanId, jobs } = await insertBatchAndJobs(supabase, userId, paths);
+    const prefillByPath: Record<string, Prefill> = {};
+    for (const o of succeeded) if (o.prefill) prefillByPath[o.path] = o.prefill;
+
+    const { scanId, jobs } = await insertBatchAndJobs(supabase, userId, paths, prefillByPath);
     return { scanId, jobs, failed };
   });
 
