@@ -7,13 +7,9 @@ import { checkPublicUrl, safeFetch } from "./safe-url";
 
 const InputSchema = z.object({
   url: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed."),
-  // Supabase session token — required only for Firecrawl-powered imports,
-  // where we enforce a per-user daily quota.
   accessToken: z.string().optional(),
 });
 
-// Firecrawl is a paid, metered API: cap per-user usage. Direct fetches
-// (no Firecrawl involved) are never counted.
 const FIRECRAWL_DAILY_LIMIT = 10;
 
 const RATE_LIMIT_MSG =
@@ -23,8 +19,6 @@ const SIGNIN_FOR_FALLBACK_MSG =
 const FIRECRAWL_FAILED_MSG =
   "Enhanced import couldn't read this site right now. Try again in a minute or add the item manually.";
 
-/** Tracking params confuse some sites/scrapers and bloat cache keys —
- *  strip the well-known ones before fetching. */
 const TRACKING_PARAM_RE =
   /^(utm_|gclid$|gbraid$|wbraid$|gad_|fbclid$|msclkid$|mc_|dplink$|chn$|cmp$|slink_id$|src$|tarea$|tar$|ag$|ptyp$|feed_num$)/i;
 
@@ -39,7 +33,6 @@ function stripTrackingParams(u: URL): URL {
   return clean;
 }
 
-// Sites that block scraping or serve JS-rendered pages — go straight to Firecrawl.
 const HARD_BLOCK_DOMAINS = new Set([
   "zalando.com", "zalando.it", "zara.com", "hm.com", "asos.com", "farfetch.com",
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
@@ -50,9 +43,6 @@ const HARD_BLOCK_DOMAINS = new Set([
 
 const RETRY_STATUSES = new Set([401, 403, 429, 503]);
 
-// Section identifiers we always strip from HTML before DOM-scanning for images.
-// These regexes match class, id, data-testid, aria-label — any attribute that
-// hints the block is unrelated to the current product.
 const EXCLUDED_SECTION_KEYWORDS = [
   "related", "recommend", "similar", "complete-the-look", "complete_the_look",
   "you-may-also", "you-might-also", "recently-viewed", "recently_viewed",
@@ -64,8 +54,6 @@ const EXCLUDED_SECTION_KEYWORDS = [
 
 const FIRECRAWL_MISSING_MSG =
   "This site requires enhanced import — add your Firecrawl key in settings to enable it.";
-
-// ---------- helpers ---------------------------------------------------------
 
 function rootDomain(u: URL): string {
   const host = u.hostname.replace(/^www\d*\./, "");
@@ -96,16 +84,12 @@ function decodeHtml(s: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-/** <title> tag content, with the site-name suffix stripped
- *  ("Linen midi skirt | COS" → "Linen midi skirt"). */
 function pickTitleTag(html: string): string {
   const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!m) return "";
   return decodeHtml(m[1]).trim().split(/\s*[|–—·]\s*/)[0].trim();
 }
 
-/** Last resort: humanise the URL slug ("/linen-midi-skirt-p12345.html"
- *  → "Linen Midi Skirt"). Skips numeric/product-code tokens. */
 function humanizeSlug(u: URL): string {
   const segs = u.pathname.split("/").filter(Boolean);
   for (let i = segs.length - 1; i >= 0; i--) {
@@ -120,8 +104,6 @@ function humanizeSlug(u: URL): string {
   return "";
 }
 
-/** Remove script/style/noscript/template/svg and any element whose
- *  opening tag contains an excluded keyword in class, id, data-* or aria-label. */
 function stripExcludedSections(html: string): string {
   let out = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -133,15 +115,11 @@ function stripExcludedSections(html: string): string {
     .replace(/<footer[\s\S]*?<\/footer>/gi, "")
     .replace(/<nav[\s\S]*?<\/nav>/gi, "");
 
-  // Aggressive: for each excluded keyword, drop the containing element
-  // (best-effort — matches simple, non-nested cases; a related block that
-  // survives still gets penalised in scoring below).
   for (const kw of EXCLUDED_SECTION_KEYWORDS) {
     const re = new RegExp(
       `<(section|div|aside|ul|ol)[^>]*(?:class|id|data-[a-z-]+|aria-label)=["'][^"']*${kw}[^"']*["'][^>]*>[\\s\\S]*?<\\/\\1>`,
       "gi",
     );
-    // Repeat until stable — some sites have nested wrappers.
     let prev = "";
     while (prev !== out) {
       prev = out;
@@ -150,10 +128,7 @@ function stripExcludedSections(html: string): string {
   }
   return out;
 }
-// ---------- Materials -------------------------------------------------------
 
-/** Fiber name → canonical wardrobe material. Multi-language: product pages
- *  come back in Italian, English, French, German, Spanish. */
 const FIBER_MAP: Array<[RegExp, string]> = [
   [/\b(cotton|cotone|coton|baumwolle|algod[oó]n)\b/i, "Cotton"],
   [/\b(linen|lino|leinen|lin)\b/i, "Linen"],
@@ -187,22 +162,13 @@ const FIBER_MAP: Array<[RegExp, string]> = [
   [/\b(polyurethane|poliuretano|pvc|vinyl)\b/i, "Synthetic"],
 ];
 
-
 function canonicalFiber(word: string): string | null {
   for (const [re, canon] of FIBER_MAP) if (re.test(word)) return canon;
   return null;
 }
 
-/** One fiber of a garment's composition. pct is null when the source
- *  names the material without a percentage (e.g. schema.org material). */
 export type CompositionEntry = { material: string; pct: number | null };
 
-/** Pull the real fabric composition from the product page — far more
- *  reliable than guessing from the photo. Sources, in order:
- *  1. JSON-LD Product.material / description
- *  2. "52% viscosa 48% lino"-style percentage pairs anywhere in the page text
- *  Keeps ALL percentages: 90% linen vs 90% wool decides whether a piece is
- *  summer or winter, so proportions matter downstream. */
 function extractMaterials(html: string | null, productNode: ProductJson | null): {
   materials: string[];
   composition: CompositionEntry[];
@@ -218,13 +184,11 @@ function extractMaterials(html: string | null, productNode: ProductJson | null):
     }
   };
 
-  // 1 — explicit schema.org material (usually no percentage attached)
   const ldMat = productNode?.material;
   for (const m of Array.isArray(ldMat) ? ldMat : ldMat ? [ldMat] : []) {
     push(canonicalFiber(String(m)), null);
   }
 
-  // 2 — percentage pairs in JSON-LD description + raw page text
   const sources = [productNode?.description ?? "", html ? decodeHtml(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, " ")) : ""];
   const pairRe = /(\d{1,3})\s*%\s*([a-zA-Zà-üÀ-Ü]{3,20})/g;
   for (const text of sources) {
@@ -232,9 +196,9 @@ function extractMaterials(html: string | null, productNode: ProductJson | null):
     while ((m = pairRe.exec(text)) !== null) {
       const pct = parseInt(m[1], 10);
       if (pct < 1 || pct > 100) continue;
-      push(canonicalFiber(m[2]), pct); // non-fiber words ("50% off") map to null and are skipped
+      push(canonicalFiber(m[2]), pct);
     }
-    if (found.some((f) => f.pct != null)) break; // structured description wins over whole-page scan
+    if (found.some((f) => f.pct != null)) break;
   }
 
   const sorted = found
@@ -245,7 +209,6 @@ function extractMaterials(html: string | null, productNode: ProductJson | null):
     composition: sorted.map((f) => ({ material: f.canon, pct: f.pct })),
   };
 }
-// ---------- JSON-LD ---------------------------------------------------------
 
 type PriceSpec = { price?: string | number; priceCurrency?: string };
 type OfferLike = {
@@ -275,8 +238,6 @@ function isProductType(t: unknown): boolean {
   return false;
 }
 
-/** Collect every JSON-LD Product node in document order. Includes @graph and
- *  nested arrays. Ignores non-Product entities. */
 function collectProductNodes(html: string): ProductJson[] {
   const nodes: ProductJson[] = [];
   const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -288,7 +249,6 @@ function collectProductNodes(html: string): ProductJson[] {
     const obj = node as Record<string, unknown>;
     if (isProductType(obj["@type"])) nodes.push(obj as ProductJson);
     if (Array.isArray(obj["@graph"])) obj["@graph"].forEach(walk);
-    // Some sites nest a Product inside "mainEntity" / "hasVariant".
     if (obj.mainEntity) walk(obj.mainEntity);
     if (obj.hasVariant) walk(obj.hasVariant);
   };
@@ -299,8 +259,6 @@ function collectProductNodes(html: string): ProductJson[] {
   return nodes;
 }
 
-/** Slug tokens from the URL path — used to match the Product node that
- *  corresponds to the URL when the page ships multiple Product nodes. */
 function urlSlugTokens(u: URL): string[] {
   const parts = u.pathname.toLowerCase().split(/[/_-]+/).filter(Boolean);
   return parts.filter((p) => p.length >= 3 && !/^\d+$/.test(p));
@@ -340,14 +298,12 @@ function jsonLdImages(node: ProductJson): string[] {
   return out;
 }
 
-/** Pick the Product node most likely to represent the URL. */
 function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | null {
   if (!nodes.length) return null;
   if (nodes.length === 1) return nodes[0];
   const matched = nodes.find((n) => nodeMatchesUrl(n, target));
   return matched ?? nodes[0];
 }
-// ---------- DOM image fallback ----------------------------------------------
 
 const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook)/i;
 const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary)/i;
@@ -377,7 +333,6 @@ function collectDomImages(html: string, base: URL): string[] {
     push(attr("data-zoom-image"));
     const srcset = attr("srcset") ?? attr("data-srcset");
     if (srcset) {
-      // Pick the widest candidate in the srcset.
       const parts = srcset.split(",").map((s) => s.trim()).filter(Boolean);
       let bestUrl: string | null = null;
       let bestW = -1;
@@ -400,11 +355,9 @@ function scoreImage(url: string, productTokens: string[]): number {
   if (PRODUCT_KEYWORDS.test(u)) s += 5;
   if (MODEL_KEYWORDS.test(u)) s -= 2;
   if (/\.(png|jpe?g|webp)(\?|$)/i.test(u)) s += 1;
-  // Boost if URL references the product slug.
   for (const tok of productTokens) {
     if (tok.length >= 4 && u.includes(tok)) { s += 4; break; }
   }
-  // Prefer larger declared widths (query params like ?w=1200 or _1200_).
   const wMatch = u.match(/[_?&](?:w|width)[=_]?(\d{3,4})/);
   if (wMatch) {
     const w = parseInt(wMatch[1]);
@@ -419,16 +372,9 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
   const scored = candidates
     .map((u, i) => ({ u, s: scoreImage(u, productTokens), i }))
     .filter((x) => x.s > -20)
-    // On sites with no descriptive filenames (e.g. Zara), everything ties
-    // near 0 and the gallery's FIRST image is usually the on-model hero
-    // shot, not the flat product photo — which tends to appear a little
-    // further into the gallery. So on ties, prefer images that appear
-    // slightly later rather than defaulting to the very first one.
     .sort((a, b) => (b.s - a.s) || (a.i === 0 ? 1 : b.i === 0 ? -1 : a.i - b.i));
   return scored[0]?.u ?? null;
 }
-
-// ---------- Fallback scraper (pluggable) ------------------------------------
 
 type FallbackResult = { html: string | null; errored: boolean };
 type FallbackScraper = (url: string) => Promise<FallbackResult>;
@@ -437,8 +383,6 @@ const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return { html: null, errored: true };
   const ctl = new AbortController();
-  // Heavy JS-rendered sites (Sezane, Mytheresa…) routinely need >20s to
-  // render — give Firecrawl 40s of its own budget plus network overhead.
   const timer = setTimeout(() => ctl.abort(), 50000);
   try {
     const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
@@ -472,15 +416,10 @@ const firecrawlScrape: FallbackScraper = async (url) => {
 
 const fallbackScraper: FallbackScraper = firecrawlScrape;
 
-// ---------- Per-user Firecrawl quota ----------------------------------------
-
 type CreditResult =
   | { ok: true; remaining: number }
   | { ok: false; reason: "auth" | "limit" };
 
-/** Verify the user via their Supabase session token and atomically consume
- *  one Firecrawl credit through the consume_firecrawl_credit RPC.
- *  Fails open (allows) only on infrastructure errors — never on auth/limit. */
 async function consumeFirecrawlCredit(accessToken?: string): Promise<CreditResult> {
   if (!accessToken) return { ok: false, reason: "auth" };
   const url = process.env.SUPABASE_URL;
@@ -502,7 +441,7 @@ async function consumeFirecrawlCredit(accessToken?: string): Promise<CreditResul
     if (r.status === 401 || r.status === 403) return { ok: false, reason: "auth" };
     if (!r.ok) {
       console.warn("[AURA import-url] credit RPC failed", r.status);
-      return { ok: true, remaining: -1 }; // fail open on infra errors
+      return { ok: true, remaining: -1 };
     }
     const rows = (await r.json()) as Array<{ allowed: boolean; remaining: number }>;
     const row = Array.isArray(rows) ? rows[0] : undefined;
@@ -517,13 +456,9 @@ async function consumeFirecrawlCredit(accessToken?: string): Promise<CreditResul
 }
 const fallbackScraperAvailable = () => {
   const key = process.env.FIRECRAWL_API_KEY;
-  // Temporary diagnostic — tells us whether the key is truly missing from
-  // this runtime, or present but somehow rejected downstream. Safe to log:
-  // only the length is printed, never the key itself. Remove once confirmed.
   console.log("[AURA import-url] FIRECRAWL_API_KEY present:", Boolean(key), "length:", key?.length ?? 0);
   return Boolean(key);
 };
-// ---------- Direct fetch ----------------------------------------------------
 
 async function directFetch(target: URL): Promise<{ html: string | null; blocked: boolean }> {
   const ctl = new AbortController();
@@ -551,8 +486,6 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
   }
 }
 
-// ---------- Extraction orchestrator -----------------------------------------
-
 type ExtractionMethod = "json-ld" | "og-image" | "dom" | "none";
 export type ImportConfidence = "high" | "medium" | "low";
 type Extracted = {
@@ -561,8 +494,6 @@ type Extracted = {
   confidence: ImportConfidence;
   productNode: ProductJson | null;
   ogTitle: string;
-  /** Ranked alternative image URLs (incl. the chosen one) so the client
-   *  can offer a "pick another photo" strip. */
   candidates: string[];
 };
 
@@ -572,8 +503,6 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const tokens = urlSlugTokens(target);
   const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
 
-  // Step 1 — JSON-LD Product entity. This is the highest-fidelity signal
-  // because it explicitly binds an image to a specific Product.
   const productNodes = collectProductNodes(html);
   const productNode = selectProductNode(productNodes, target);
 
@@ -583,8 +512,6 @@ function extractFromHtml(html: string, target: URL): Extracted {
         .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()))
     : [];
 
-  // Alternative-image pool: JSON-LD gallery first, then DOM shots from the
-  // cleaned page. The client shows these as "pick another photo".
   const domImgs = collectDomImages(stripExcludedSections(html), target)
     .filter((u) => !JUNK_KEYWORDS.test(u.toLowerCase()));
   const rankDom = (arr: string[]) =>
@@ -594,18 +521,10 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const candidates = Array.from(new Set([...ldImgs, ...rankDom(domImgs)])).slice(0, MAX_CANDIDATES);
 
   if (ldImgs.length) {
-    // Don't blindly take the FIRST gallery image: on fashion sites it's
-    // almost always the on-model hero shot, while the flat packshot sits
-    // further in. Score them (packshot keywords up, model keywords down,
-    // ties prefer non-first) and fall back to imgs[0] only if scoring
-    // rejects everything.
     const best = pickBestImage(ldImgs, tokens) ?? ldImgs[0];
     return { imageUrl: best, method: "json-ld", confidence: "high", productNode, ogTitle, candidates };
   }
 
-  // Step 2 — OG image, but only if it looks like a product image (not a
-  // generic site OG). We validate by checking it isn't obviously junk and
-  // that a Product entity exists on the page (or the URL slug matches).
   const og = pickMeta(html, "og:image") || pickMeta(html, "og:image:secure_url") || pickMeta(html, "twitter:image");
   if (og) {
     try {
@@ -620,27 +539,104 @@ function extractFromHtml(html: string, target: URL): Extracted {
     } catch { /* ignore */ }
   }
 
-  // Step 3 — DOM scan, after stripping related/recommendation/nav sections.
   const best = pickBestImage(domImgs, tokens);
   if (best) return { imageUrl: best, method: "dom", confidence: "low", productNode, ogTitle, candidates };
 
   return { imageUrl: "", method: "none", confidence: "low", productNode, ogTitle, candidates: [] };
 }
-// ---------- Main handler -----------------------------------------------------
 
-// ---------- Main handler -----------------------------------------------------
+/** Structured hints (brand/title/price/materials) from a fetched product
+ *  page — factored out of the single-item handler below so batch URL
+ *  import can get the exact same metadata, not just the image. */
+function extractProductMeta(html: string | null, target: URL, extracted: Extracted) {
+  const ld = extracted.productNode;
+  const brandFromLd =
+    typeof ld?.brand === "string"
+      ? ld.brand
+      : ld?.brand && typeof ld.brand === "object"
+      ? ld.brand.name ?? ""
+      : "";
+  const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
+  const title = (
+    ld?.name ||
+    extracted.ogTitle ||
+    pickTitleTag(html ?? "") ||
+    humanizeSlug(target) ||
+    ""
+  ).trim();
+
+  const parsePriceNum = (v: unknown): number | null => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v !== "string") return null;
+    const cleaned = v.replace(/[^\d.,]/g, "");
+    if (!cleaned) return null;
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    const norm = lastComma >= 0 && lastDot >= 0
+      ? (lastComma > lastDot
+          ? cleaned.replace(/\./g, "").replace(",", ".")
+          : cleaned.replace(/,/g, ""))
+      : cleaned.replace(",", ".");
+    const n = parseFloat(norm);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  let price: string | null = null;
+  let priceValue: number | null = null;
+  let priceCurrency: string | null = null;
+  const offerList: OfferLike[] = Array.isArray(ld?.offers) ? ld?.offers ?? [] : ld?.offers ? [ld.offers] : [];
+  for (const offer of offerList) {
+    const spec = Array.isArray(offer.priceSpecification) ? offer.priceSpecification[0] : offer.priceSpecification;
+    const candidate = parsePriceNum(offer.price) ?? parsePriceNum(offer.lowPrice) ?? parsePriceNum(spec?.price);
+    if (candidate != null) {
+      priceValue = candidate;
+      priceCurrency = String(offer.priceCurrency || spec?.priceCurrency || "").toUpperCase() || null;
+      break;
+    }
+  }
+  if (priceValue == null && html) {
+    const metaPrice =
+      pickMeta(html, "product:price:amount") ||
+      pickMeta(html, "og:price:amount") ||
+      (html.match(/itemprop=["']price["'][^>]*content=["']([\d.,]+)["']/i)?.[1] ?? "");
+    const metaCur =
+      pickMeta(html, "product:price:currency") ||
+      pickMeta(html, "og:price:currency") ||
+      (html.match(/itemprop=["']priceCurrency["'][^>]*content=["']([A-Za-z]{3})["']/i)?.[1] ?? "");
+    const n = parsePriceNum(metaPrice);
+    if (n != null) {
+      priceValue = n;
+      priceCurrency = metaCur ? metaCur.toUpperCase() : null;
+    }
+  }
+  if (priceValue == null && html) {
+    const text = decodeHtml(stripExcludedSections(html).replace(/<[^>]+>/g, " "));
+    const m =
+      text.match(/(?:€|\bEUR\b)\s{0,2}(\d{1,4}(?:[.,]\d{2})?)/) ||
+      text.match(/(\d{1,4}(?:[.,]\d{2}))\s{0,2}(?:€|\bEUR\b)/);
+    const n = parsePriceNum(m?.[1] ?? "");
+    if (n != null && n >= 1 && n <= 20000) {
+      priceValue = n;
+      priceCurrency = "EUR";
+    }
+  }
+  if (priceValue != null) {
+    price = priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue);
+  }
+
+  return { brand, title, price, priceValue, priceCurrency, ...extractMaterials(html, extracted.productNode) };
+}
 
 export type ResolvedProductImage =
-  | { ok: true; imageUrl: string }
+  | ({ ok: true; imageUrl: string } & ReturnType<typeof extractProductMeta>)
   | { ok: false; error: string; rateLimited?: boolean };
 
 /**
  * Given a product PAGE url (not a direct image link), finds its best
- * product image url. This is the shared core the single-item "Import
- * from URL" flow below already does inline — factored out here so batch
- * URL import (createBatchScanFromUrls in batch-scan.functions.ts) can
- * reuse the exact same extraction pipeline instead of only working when
- * someone happens to paste a raw image-file link.
+ * product image url AND the same brand/price/material metadata the
+ * single-item "Import from URL" flow below extracts — factored out here
+ * so batch URL import (createBatchScanFromUrls in batch-scan.functions.ts)
+ * gets full parity with single-item import instead of only the photo.
  */
 export async function resolveProductImageUrl(rawUrl: string, accessToken?: string): Promise<ResolvedProductImage> {
   let target: URL;
@@ -690,7 +686,8 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   }
 
   if (!extracted.imageUrl) return { ok: false, error: "No product image found on that page." };
-  return { ok: true, imageUrl: extracted.imageUrl };
+  const imageUrl = new URL(extracted.imageUrl, target).toString();
+  return { ok: true, imageUrl, ...extractProductMeta(html, target, extracted) };
 }
 
 export const importProductFromUrl = createServerFn({ method: "POST" })
@@ -731,8 +728,6 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
     if (html) extracted = extractFromHtml(html, target);
 
-    // If direct fetch yielded nothing usable and we haven't tried the
-    // fallback yet, try it now — never stop after failing OG.
     if (!extracted.imageUrl && !usedFallback) {
       if (!hasFallback) {
         return {
@@ -781,7 +776,6 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }),
     );
 
-    // Download via the shared hardened fetcher (8 MB cap, hotlink retry).
     const dl = await fetchImageAsDataUrl(imageUrl, target.origin);
     if (!dl.ok) {
       console.warn("[AURA import-url] image download failed:", dl.error);
@@ -789,102 +783,22 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
     const imageDataUrl = dl.dataUrl;
 
-    // Structured hints (brand/title/price) — from Product node when available.
-    const ld = extracted.productNode;
-    const brandFromLd =
-      typeof ld?.brand === "string"
-        ? ld.brand
-        : ld?.brand && typeof ld.brand === "object"
-        ? ld.brand.name ?? ""
-        : "";
-    const brand = (brandFromLd || getBrandFromUrl(target.toString()) || "").trim();
-    // Title cascade: JSON-LD name → og:title → <title> tag → humanised slug.
-    const title = (
-      ld?.name ||
-      extracted.ogTitle ||
-      pickTitleTag(html ?? "") ||
-      humanizeSlug(target) ||
-      ""
-    ).trim();
-
-    // Price: handles plain Offers, AggregateOffer (lowPrice), nested
-    // priceSpecification, sale prices, and EU decimal commas ("1.299,00").
-    const parsePriceNum = (v: unknown): number | null => {
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      if (typeof v !== "string") return null;
-      const cleaned = v.replace(/[^\d.,]/g, "");
-      if (!cleaned) return null;
-      const lastComma = cleaned.lastIndexOf(",");
-      const lastDot = cleaned.lastIndexOf(".");
-      const norm = lastComma >= 0 && lastDot >= 0
-        ? (lastComma > lastDot
-            ? cleaned.replace(/\./g, "").replace(",", ".")   // EU: 1.299,00
-            : cleaned.replace(/,/g, ""))                     // US: 1,299.00
-        : cleaned.replace(",", ".");
-      const n = parseFloat(norm);
-      return Number.isFinite(n) ? n : null;
-    };
-
-    let price: string | null = null;
-    let priceValue: number | null = null;
-    let priceCurrency: string | null = null;
-    const offerList: OfferLike[] = Array.isArray(ld?.offers) ? ld?.offers ?? [] : ld?.offers ? [ld.offers] : [];
-    for (const offer of offerList) {
-      const spec = Array.isArray(offer.priceSpecification) ? offer.priceSpecification[0] : offer.priceSpecification;
-      const candidate = parsePriceNum(offer.price) ?? parsePriceNum(offer.lowPrice) ?? parsePriceNum(spec?.price);
-      if (candidate != null) {
-        priceValue = candidate;
-        priceCurrency = String(offer.priceCurrency || spec?.priceCurrency || "").toUpperCase() || null;
-        break;
-      }
-    }
-    // Meta-tag fallback when JSON-LD carries no usable offer price.
-    if (priceValue == null && html) {
-      const metaPrice =
-        pickMeta(html, "product:price:amount") ||
-        pickMeta(html, "og:price:amount") ||
-        (html.match(/itemprop=["']price["'][^>]*content=["']([\d.,]+)["']/i)?.[1] ?? "");
-      const metaCur =
-        pickMeta(html, "product:price:currency") ||
-        pickMeta(html, "og:price:currency") ||
-        (html.match(/itemprop=["']priceCurrency["'][^>]*content=["']([A-Za-z]{3})["']/i)?.[1] ?? "");
-      const n = parsePriceNum(metaPrice);
-      if (n != null) {
-        priceValue = n;
-        priceCurrency = metaCur ? metaCur.toUpperCase() : null;
-      }
-    }
-    // Last-resort: visible price in the cleaned page text ("29,95 €" / "€ 29.95").
-    // Only runs when structured data gave nothing (e.g. Zara); the text has
-    // already been stripped of header/footer/nav where promo banners live.
-    if (priceValue == null && html) {
-      const text = decodeHtml(stripExcludedSections(html).replace(/<[^>]+>/g, " "));
-      const m =
-        text.match(/(?:€|\bEUR\b)\s{0,2}(\d{1,4}(?:[.,]\d{2})?)/) ||
-        text.match(/(\d{1,4}(?:[.,]\d{2}))\s{0,2}(?:€|\bEUR\b)/);
-      const n = parsePriceNum(m?.[1] ?? "");
-      if (n != null && n >= 1 && n <= 20000) {
-        priceValue = n;
-        priceCurrency = "EUR";
-      }
-    }
-    if (priceValue != null) {
-      price = priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue);
-    }
+    const meta = extractProductMeta(html, target, extracted);
 
     return {
       ok: true as const,
       imageDataUrl,
-      brand,
-      title,
-      price,
-      priceValue,
-      priceCurrency,
+      brand: meta.brand,
+      title: meta.title,
+      price: meta.price,
+      priceValue: meta.priceValue,
+      priceCurrency: meta.priceCurrency,
       sourceUrl: target.toString(),
       extractionMethod: extracted.method,
       confidence: extracted.confidence,
       imageCandidates: extracted.candidates,
-      ...extractMaterials(html, extracted.productNode),
+      materials: meta.materials,
+      composition: meta.composition,
       usedFallback,
     };
   });
