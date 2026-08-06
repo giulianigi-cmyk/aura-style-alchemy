@@ -167,20 +167,22 @@ export function isItemAllowedByDressPreferences(
   if (!p) return true;
   const category = item.category ?? "";
   const isSkirtBottom = category === "Bottoms" && item.subcategory === "Skirt";
+  const isShortBottom = category === "Bottoms" && (item.subcategory === "Shorts" || item.subcategory === "Bermuda Shorts");
   const isDressOrSkirt = category === "Dresses" || isSkirtBottom;
   const isJumpsuit = category === "Jumpsuits";
 
-  if (isJumpsuit && p.cover_legs) {
-    if (item.subcategory === "Playsuit" || item.subcategory === "Romper") return false;
+  if (p.cover_legs) {
+    if (isShortBottom) return false;
+
+    if (isJumpsuit && (item.subcategory === "Playsuit" || item.subcategory === "Romper")) return false;
+
+    if (isDressOrSkirt && item.length && item.length !== "Maxi") return false;
   }
 
-  if (isDressOrSkirt) {
-    if (p.cover_legs && item.length && item.length !== "Maxi") return false;
-    if (p.min_skirt_length && item.length) {
-      const need = SKIRT_MIN_ORDER[p.min_skirt_length];
-      const have = ITEM_LENGTH_ORDER[item.length];
-      if (have !== undefined && have < need) return false;
-    }
+  if (isDressOrSkirt && p.min_skirt_length && item.length) {
+    const need = SKIRT_MIN_ORDER[p.min_skirt_length];
+    const have = ITEM_LENGTH_ORDER[item.length];
+    if (have !== undefined && have < need) return false;
   }
 
   if (p.cover_arms && ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) {
