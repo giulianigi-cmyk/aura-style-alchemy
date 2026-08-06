@@ -14,7 +14,14 @@ export type DedupeResult = {
  *  reasonable first pass before a future visual-similarity upgrade.
  *
  *  Thresholds: >=0.9 certain duplicate (don't add, link to existing),
- *  0.6-0.9 maybe (ask the user to confirm), <0.6 treated as a new item. */
+ *  0.6-0.9 maybe (ask the user to confirm), <0.6 treated as a new item.
+ *
+ *  Category + color + subcategory alone — the only signal a phone-photo
+ *  scan can realistically produce — must land in "maybe" territory, not
+ *  "certain": two black bodycon dresses can be genuinely different
+ *  garments (material, cut, embellishment), and "certain" silently
+ *  excludes an item from being saved by default. Only a brand match on
+ *  top of the rest is specific enough to cross into "certain". */
 export function scoreMatch(
   detected: { category: string; subcategory?: string; colors: string[]; brand?: string | null },
   existing: WardrobeItem,
@@ -25,14 +32,14 @@ export function scoreMatch(
 
   const existingColors = existing.colors?.length ? existing.colors : (existing.color ? [existing.color] : []);
   const colorOverlap = detected.colors.some((c) => existingColors.includes(c));
-  if (colorOverlap) score += 0.38;
+  if (colorOverlap) score += 0.25;
 
   const existingSub = existing.subcategory ?? "";
-  if (detected.subcategory && existingSub && detected.subcategory === existingSub) score += 0.38;
+  if (detected.subcategory && existingSub && detected.subcategory === existingSub) score += 0.25;
 
   const db = detected.brand?.trim().toLowerCase();
   const eb = existing.brand?.trim().toLowerCase();
-  if (db && eb && db === eb) score += 0.1;
+  if (db && eb && db === eb) score += 0.25;
 
   return Math.min(1, score);
 }
