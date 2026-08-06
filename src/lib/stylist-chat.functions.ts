@@ -66,10 +66,12 @@ function unwrapIfDoubleEncoded(parsed: z.infer<typeof OutputSchema>): z.infer<ty
   if (!trimmed.startsWith("{") || !trimmed.includes('"reply"')) return parsed;
   try {
     return parseAiJson(trimmed, OutputSchema);
-  } catch {
-    return parsed;
+  } catch (err) {
+    console.error("[AURA stylist-chat] double-encoding detected but inner unwrap failed — showing fallback instead of leaking raw JSON. Raw reply field:", parsed.reply, err);
+    return { ...parsed, reply: "Sorry, something went wrong on my end — could you try asking that again?" };
   }
 }
+
 
 export const stylistChat = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
