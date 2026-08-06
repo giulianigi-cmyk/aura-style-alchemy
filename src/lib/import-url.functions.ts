@@ -630,6 +630,69 @@ function extractFromHtml(html: string, target: URL): Extracted {
 
 // ---------- Main handler -----------------------------------------------------
 
+export type ResolvedProductImage =
+  | { ok: true; imageUrl: string }
+  | { ok: false; error: string; rateLimited?: boolean };
+
+/**
+ * Given a product PAGE url (not a direct image link), finds its best
+ * product image url. This is the shared core the single-item "Import
+ * from URL" flow below already does inline — factored out here so batch
+ * URL import (createBatchScanFromUrls in batch-scan.functions.ts) can
+ * reuse the exact same extraction pipeline instead of only working when
+ * someone happens to paste a raw image-file link.
+ */
+export async function resolveProductImageUrl(rawUrl: string, accessToken?: string): Promise<ResolvedProductImage> {
+  let target: URL;
+  try {
+    target = stripTrackingParams(new URL(rawUrl));
+  } catch {
+    return { ok: false, error: "Not a valid URL." };
+  }
+  const domain = rootDomain(target);
+  const hasFallback = fallbackScraperAvailable();
+  const forceFallback = HARD_BLOCK_DOMAINS.has(domain);
+
+  let html: string | null = null;
+  let blocked = false;
+  let usedFallback = false;
+
+  if (forceFallback) {
+    if (!hasFallback) return { ok: false, error: FIRECRAWL_MISSING_MSG };
+    const credit = await consumeFirecrawlCredit(accessToken);
+    if (!credit.ok) {
+      return { ok: false, error: credit.reason === "limit" ? RATE_LIMIT_MSG : SIGNIN_FOR_FALLBACK_MSG, rateLimited: credit.reason === "limit" };
+    }
+    const fb = await fallbackScraper(target.toString());
+    if (fb.errored && !fb.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
+    html = fb.html;
+    usedFallback = true;
+  } else {
+    const direct = await directFetch(target);
+    html = direct.html;
+    blocked = direct.blocked;
+  }
+
+  let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
+  if (html) extracted = extractFromHtml(html, target);
+
+  if (!extracted.imageUrl && !usedFallback) {
+    if (!hasFallback) {
+      return { ok: false, error: blocked ? FIRECRAWL_MISSING_MSG : "No product image found on that page." };
+    }
+    const credit = await consumeFirecrawlCredit(accessToken);
+    if (!credit.ok) {
+      return { ok: false, error: credit.reason === "limit" ? RATE_LIMIT_MSG : SIGNIN_FOR_FALLBACK_MSG, rateLimited: credit.reason === "limit" };
+    }
+    const fc = await fallbackScraper(target.toString());
+    if (fc.errored && !fc.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
+    if (fc.html) extracted = extractFromHtml(fc.html, target);
+  }
+
+  if (!extracted.imageUrl) return { ok: false, error: "No product image found on that page." };
+  return { ok: true, imageUrl: extracted.imageUrl };
+}
+
 export const importProductFromUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
