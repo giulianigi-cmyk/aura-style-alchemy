@@ -60,7 +60,7 @@ function errorMessage(e: unknown, fallback: string): string {
   return detail ? `${fallback}: ${detail}` : fallback;
 }
 
-export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
+export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void; initialMessage?: string | null }) {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { latitude, longitude } = useLocation();
@@ -102,9 +102,19 @@ export function StylistChat({ go, openBuilder }: { go: (s: Screen) => void; open
       });
   }, [user]);
 
-  useEffect(() => {
+    useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
+
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (initialMessage && !autoSentRef.current) {
+      autoSentRef.current = true;
+      void sendMessage(initialMessage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage]);
+
 
   const sendMessage = async (text: string, feedbackContext?: FeedbackType, overrideItemIds?: string[]) => {
     if (!text || busy) return;
