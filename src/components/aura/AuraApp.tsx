@@ -43,7 +43,11 @@ export type BuilderInit = {
   outfitId?: string;
 } | null;
 
-export type StylistChatInit = string | null;
+export type StylistChatInit = {
+  message: string;
+  temperature: number | null;
+  condition: string | null;
+} | null;
 
 function Inner() {
   const { user, loading, recovery } = useAuth();
@@ -75,8 +79,8 @@ function Inner() {
     setScreen("builder");
   };
 
-  const openStylistChat = (message: string) => {
-    setStylistChatInit(message);
+  const openStylistChat = (init: NonNullable<StylistChatInit>) => {
+    setStylistChatInit(init);
     setScreen("stylist-chat");
   };
 
