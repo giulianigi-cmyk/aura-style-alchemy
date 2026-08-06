@@ -43,11 +43,6 @@ export const SLEEVE_OPTIONS: { value: SleeveLength; label: string }[] = [
   { value: "long", label: "Long" },
 ];
 
-/** Explicit, operational instructions for the AI — distinct from the short
- *  UI labels above. A vague label like "Cover legs" gets interpreted
- *  loosely by the model (e.g. it once suggested a midi skirt, reasoning
- *  that some coverage is "enough"); these spell out exactly what counts
- *  as compliant so there's no room for that kind of misreading. */
 const BOOL_PROMPT_TEXT: Record<string, string> = {
   cover_head: "Cover head or hair in every look — only suggest headwear (scarf, hat) that achieves this, or explicitly note that no current wardrobe item covers the head.",
   cover_shoulders: "Shoulders must be fully covered — exclude strapless, off-shoulder, halter, or bare-shoulder pieces of any kind.",
@@ -68,7 +63,6 @@ export function hasAnyPreference(p: DressPreferences | null | undefined): boolea
   );
 }
 
-/** Human-readable list of the active rules (for the profile view). */
 export function activePreferenceLabels(p: DressPreferences): string[] {
   const out: string[] = [];
   for (const b of BOOL_PREFS) if (p[b.key]) out.push(b.label);
@@ -84,11 +78,6 @@ export function activePreferenceLabels(p: DressPreferences): string[] {
   return out;
 }
 
-/** Binding constraint block to inject into EVERY AI styling prompt.
- *  Returns null when the user has no preferences set. Uses explicit,
- *  operational wording (BOOL_PROMPT_TEXT) rather than the short UI labels
- *  — a vague rule like "Cover legs" leaves room for the model to decide
- *  a midi skirt is "close enough"; this doesn't. */
 export function dressPreferencesToPrompt(p: DressPreferences | null | undefined): string | null {
   if (!hasAnyPreference(p)) return null;
   const rules: string[] = [];
@@ -110,8 +99,6 @@ export function dressPreferencesToPrompt(p: DressPreferences | null | undefined)
   ].join("\n");
 }
 
-/** Loads the signed-in user's dress preferences and returns the binding
- *  prompt block (or null). One-liner for every AI call site. */
 export async function loadDressRules(userId: string | undefined): Promise<string | null> {
   if (!userId) return null;
   const { supabase } = await import("@/integrations/supabase/client");
@@ -124,11 +111,6 @@ export async function loadDressRules(userId: string | undefined): Promise<string
   return dressPreferencesToPrompt(p);
 }
 
-/** Same lookup as loadDressRules, but returns the raw object instead of
- *  the prompt text — used to filter the wardrobe catalog deterministically
- *  (see isItemAllowedByDressPreferences) so a violating piece is never
- *  even offered to the model, rather than relying only on it following
- *  an instruction. */
 export async function loadDressPreferencesRaw(userId: string | undefined): Promise<DressPreferences | null> {
   if (!userId) return null;
   const { supabase } = await import("@/integrations/supabase/client");
@@ -141,25 +123,61 @@ export async function loadDressPreferencesRaw(userId: string | undefined): Promi
 }
 
 const SKIRT_MIN_ORDER: Record<SkirtLength, number> = { mini: 0, knee: 1, midi: 2, long: 3 };
-/** Item 'length' only has 3 steps (Mini/Midi/Maxi) while the preference has
- *  4 (mini/knee/midi/long) — no exact "knee" equivalent exists yet on
- *  items. Mapped conservatively: an item must be Midi to satisfy "knee"
- *  or "midi", and Maxi to satisfy "long". */
 const ITEM_LENGTH_ORDER: Record<string, number> = { Mini: 0, Midi: 2, Maxi: 3 };
 
 /**
- * Deterministic filter: does this wardrobe item comply with the user's
- * dress preferences? Used to strip disqualifying items OUT of the catalog
- * before it ever reaches the model — a hard exclusion, not just a prompt
- * instruction the model could misjudge (e.g. treating a midi skirt as
- * "close enough" to satisfy "cover legs").
+ * Whitelist, not blacklist: does this garment cover the legs? Explicit
+ * per known subcategory rather than "not shorts, so it must be fine" —
+ * as the Bottoms taxonomy grows (culottes, capri, etc.), an unrecognized
+ * subcategory falls through to the conservative default (needs an
+ * explicit Maxi/Long length tag) instead of silently passing.
  *
- * Only covers the preferences that map to an actual item attribute
- * (cover_legs, min_skirt_length, cover_arms, avoid_tight). cover_head,
- * cover_shoulders, avoid_sheer and avoid_low_neckline have no matching
- * wardrobe attribute yet, so they remain prompt-only instructions —
- * documented here so that gap stays visible rather than assumed fixed.
+ * Single source of truth: used both by the hard wardrobe filter below
+ * AND by the "verified fact" the AI is told directly (see
+ * stylist-chat.functions.ts) — duplicating this logic in two places
+ * would risk them drifting out of sync.
  */
+export function coversLegs(item: { category?: string | null; subcategory?: string | null; length?: string | null }): boolean {
+  const category = item.category ?? "";
+  const subcategory = item.subcategory ?? "";
+
+  if (category === "Dresses") {
+    return !item.length || item.length === "Maxi";
+  }
+
+  if (category === "Jumpsuits") {
+    if (subcategory === "Playsuit" || subcategory === "Romper") return false;
+    return true;
+  }
+
+  if (category === "Bottoms") {
+    switch (subcategory) {
+      case "Jeans":
+      case "Trousers":
+      case "Cargo Pants":
+      case "Joggers":
+      case "Leggings":
+        return true;
+      case "Shorts":
+      case "Bermuda Shorts":
+        return false;
+      case "Skirt":
+        return !item.length || item.length === "Maxi";
+      default:
+        return item.length === "Maxi" || item.length === "Long";
+    }
+  }
+
+  return false;
+}
+
+/** Same principle as coversLegs, for arm coverage. */
+export function coversArms(item: { category?: string | null; sleeveLength?: string | null }): boolean {
+  const category = item.category ?? "";
+  if (!["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) return false;
+  return item.sleeveLength !== "Sleeveless";
+}
+
 export function isItemAllowedByDressPreferences(
   item: { category?: string | null; subcategory?: string | null; length?: string | null; sleeveLength?: string | null; fit?: string | null },
   p: DressPreferences | null | undefined,
@@ -167,17 +185,9 @@ export function isItemAllowedByDressPreferences(
   if (!p) return true;
   const category = item.category ?? "";
   const isSkirtBottom = category === "Bottoms" && item.subcategory === "Skirt";
-  const isShortBottom = category === "Bottoms" && (item.subcategory === "Shorts" || item.subcategory === "Bermuda Shorts");
   const isDressOrSkirt = category === "Dresses" || isSkirtBottom;
-  const isJumpsuit = category === "Jumpsuits";
 
-  if (p.cover_legs) {
-    if (isShortBottom) return false;
-
-    if (isJumpsuit && (item.subcategory === "Playsuit" || item.subcategory === "Romper")) return false;
-
-    if (isDressOrSkirt && item.length && item.length !== "Maxi") return false;
-  }
+  if (p.cover_legs && !coversLegs(item)) return false;
 
   if (isDressOrSkirt && p.min_skirt_length && item.length) {
     const need = SKIRT_MIN_ORDER[p.min_skirt_length];
@@ -185,9 +195,7 @@ export function isItemAllowedByDressPreferences(
     if (have !== undefined && have < need) return false;
   }
 
-  if (p.cover_arms && ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) {
-    if (item.sleeveLength === "Sleeveless") return false;
-  }
+  if (p.cover_arms && !coversArms(item)) return false;
 
   if (p.avoid_tight && item.fit === "Slim") return false;
 
