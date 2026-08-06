@@ -178,9 +178,16 @@ export const stylistChat = createServerFn({ method: "POST" })
             ],
           });
           parsed = parseAiJson(r2.text, OutputSchema);
-        } catch {
-          parsed = { reply: text.trim() || "Sorry, I didn't quite catch that — could you rephrase?", item_ids: [] };
+                } catch (finalErr) {
+          const looksLikeUnparsedJson = /^\s*\{[\s\S]*"reply"[\s\S]*\}\s*$/.test(text.trim());
+          if (looksLikeUnparsedJson) {
+            console.error("[AURA stylist-chat] both parse attempts failed on JSON-shaped text — showing fallback instead of leaking raw JSON. Raw text:", text, finalErr);
+            parsed = { reply: "Sorry, something went wrong on my end — could you try asking that again?", item_ids: [] };
+          } else {
+            parsed = { reply: text.trim() || "Sorry, I didn't quite catch that — could you rephrase?", item_ids: [] };
+          }
         }
+
       }
 
       const validIds = new Set(catalog.map((c) => c.id));
