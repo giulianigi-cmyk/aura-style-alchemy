@@ -2,6 +2,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { checkPublicUrl } from "./safe-url";
 import { fetchImageAsDataUrl } from "./fetch-image";
+import { resolveProductImageUrl } from "./import-url.functions";
 import {
   ConfirmDetectedItemsSchema,
   CreateBatchScanSchema,
@@ -10,10 +11,6 @@ import {
   ScanIdSchema,
 } from "./batch-scan-schemas";
 
-/** Shared by both intake paths (file upload, URL import): register a
- *  batch_scans row plus one scan_jobs row per already-stored image path.
- *  Runs under the caller's own RLS-scoped client — never service role. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function insertBatchAndJobs(supabase: any, userId: string, paths: string[]) {
   const { data: scan, error } = await supabase
     .from("batch_scans")
@@ -34,7 +31,6 @@ async function insertBatchAndJobs(supabase: any, userId: string, paths: string[]
   return { scanId: scan.id as string, jobs: jobs.length };
 }
 
-/** Create a batch after the client has uploaded the originals to storage. */
 export const createBatchScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateBatchScanSchema.parse(input))
@@ -42,9 +38,6 @@ export const createBatchScan = createServerFn({ method: "POST" })
     return insertBatchAndJobs(context.supabase, context.userId, data.paths);
   });
 
-/** data:URL -> raw bytes, mirroring the encode side in batch-scan.server.ts.
- *  No Buffer here: this runs on the same Worker-style runtime as the rest
- *  of the scan pipeline. */
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
   const match = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl);
   if (!match) throw new Error("Invalid image data URL");
@@ -62,8 +55,6 @@ function extFromContentType(ct: string): string {
   return "jpg";
 }
 
-/** Small concurrency-limited map: 150 URLs fetched 4-at-a-time so we don't
- *  hold ~150 x up to 8MB of image data in memory at once. */
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
@@ -77,11 +68,6 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results;
 }
 
-/** Create a batch from pasted image URLs: fetch + upload server-side,
- *  then feed into the same batch_scans/scan_jobs pipeline as file uploads —
- *  the worker (detection, dedupe, categorisation) doesn't know or care
- *  which intake path produced the stored image. A URL that fails to
- *  download is reported back and skipped; it never fails the whole batch. */
 export const createBatchScanFromUrls = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateBatchScanFromUrlsSchema.parse(input))
@@ -89,15 +75,24 @@ export const createBatchScanFromUrls = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // De-dupe pasted lines up front (users often paste the same link twice).
     const urls = Array.from(new Set(data.urls.filter(Boolean)));
 
     const outcomes = await mapWithConcurrency(urls, 4, async (rawUrl, i) => {
       const publicErr = checkPublicUrl(rawUrl);
       if (publicErr) return { url: rawUrl, ok: false as const, error: publicErr };
 
-      const dl = await fetchImageAsDataUrl(rawUrl);
-      if (!dl.ok) return { url: rawUrl, ok: false as const, error: dl.error };
+      let dl = await fetchImageAsDataUrl(rawUrl);
+      if (!dl.ok || !/^data:image\//.test(dl.dataUrl)) {
+        const originalError = dl.ok ? "That link isn't a product page with a usable image." : dl.error;
+        const resolved = await resolveProductImageUrl(rawUrl, data.accessToken);
+        if (!resolved.ok) {
+          return { url: rawUrl, ok: false as const, error: originalError };
+        }
+        dl = await fetchImageAsDataUrl(resolved.imageUrl, rawUrl);
+        if (!dl.ok || !/^data:image\//.test(dl.dataUrl)) {
+          return { url: rawUrl, ok: false as const, error: dl.ok ? "Found the page but couldn't download its image." : dl.error };
+        }
+      }
 
       try {
         const { bytes, contentType } = dataUrlToBytes(dl.dataUrl);
@@ -149,9 +144,6 @@ export const listBatchScans = createServerFn({ method: "GET" })
     const countsByScan: Record<string, Counts> = {};
 
     if (ids.length) {
-      // One extra query for ALL jobs across the visible batches, instead of
-      // one count query per batch — keeps this at 2 round-trips regardless
-      // of how many batches are shown.
       const { data: jobs, error: jobErr } = await context.supabase
         .from("scan_jobs")
         .select("scan_id, status")
@@ -207,10 +199,6 @@ export const rejectDetectedItem = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => DetectedIdSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Verify the caller actually owns this detected item before touching it —
-    // scan_detected_items has no client-side update policy, so this check
-    // (plus the .eq("user_id", ...) below) is what stands between "your own
-    // item" and "any item".
     const { data: row, error: findErr } = await supabaseAdmin
       .from("scan_detected_items").select("id").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
     if (findErr) throw new Error(findErr.message);
@@ -222,7 +210,6 @@ export const rejectDetectedItem = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/** Human-confirmed detections become real wardrobe items. */
 export const confirmDetectedItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ConfirmDetectedItemsSchema.parse(input))
@@ -231,9 +218,6 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const results: { id: string; ok: boolean; error?: string }[] = [];
 
-    // Verify every submitted id actually belongs to this user up front —
-    // scan_detected_items has no client-side update policy, so this is the
-    // only check standing between "your own detections" and "any row".
     const ids = data.items.map((it) => it.id);
     const { data: owned, error: ownErr } = await supabaseAdmin
       .from("scan_detected_items").select("id").in("id", ids).eq("user_id", userId);
@@ -279,9 +263,6 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
     return { results, confirmed: results.filter((r) => r.ok).length };
   });
 
-/** Authenticated in-app trigger for the scan worker.
- *  The public /api/public/hooks/process-scan-jobs route stays reserved for
- *  trusted callers holding SCAN_WORKER_SECRET (cron/ops). */
 export const triggerScanWorker = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
