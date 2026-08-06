@@ -41,14 +41,15 @@ function decodeXmlEntities(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
-async function discoverPrincipal(email: string, password: string): Promise<string | null> {
+async function discoverPrincipal(email: string, password: string): Promise<{ principal: string | null; status: number; snippet: string }> {
   const body = `<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`;
   const { status, text } = await caldavRequest(`${ICLOUD_BASE}/`, "PROPFIND", email, password, body, "0");
-  if (status !== 207) return null;
+  if (status !== 207) return { principal: null, status, snippet: text.slice(0, 200) };
   const m = text.match(/<[a-zA-Z]*:?current-user-principal>\s*<[a-zA-Z]*:?href>([^<]+)<\/[a-zA-Z]*:?href>/i);
-  return m ? m[1] : null;
+  return { principal: m ? m[1] : null, status, snippet: text.slice(0, 200) };
 }
+
 
 async function discoverCalendarHome(principalPath: string, email: string, password: string): Promise<string | null> {
   const url = new URL(principalPath, ICLOUD_BASE).toString();
@@ -165,12 +166,15 @@ function parseVEvents(ics: string): ParsedEvent[] {
 }
 
 export async function verifyAppleCredentials(email: string, appPassword: string): Promise<{ ok: true; homeUrl: string } | { ok: false; error: string }> {
-  const principal = await discoverPrincipal(email, appPassword);
-  if (!principal) return { ok: false, error: "Could not verify those credentials — check the Apple ID email and app-specific password." };
+  const { principal, status, snippet } = await discoverPrincipal(email, appPassword);
+  if (!principal) {
+    return { ok: false, error: `[DEBUG] principal discovery failed — HTTP ${status} — response: ${snippet}` };
+  }
   const homeUrl = await discoverCalendarHome(principal, email, appPassword);
   if (!homeUrl) return { ok: false, error: "Connected, but couldn't find your calendars." };
   return { ok: true, homeUrl };
 }
+
 
 export async function fetchAppleEvents(homeUrl: string, email: string, appPassword: string): Promise<ParsedEvent[]> {
   const timeMin = new Date(Date.now() - 7 * 86400000);
