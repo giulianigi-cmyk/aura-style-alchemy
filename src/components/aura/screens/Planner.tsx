@@ -10,7 +10,7 @@ import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
-import { logWardrobeEvent } from "@/lib/wardrobe-events";
+import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
