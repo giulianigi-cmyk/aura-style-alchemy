@@ -4,7 +4,7 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2 } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2, Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
@@ -47,6 +47,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
   const [seasonOnly, setSeasonOnly] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const [detail, setDetail] = useState<WardrobeItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [colorWheelOpen, setColorWheelOpen] = useState(false);
@@ -298,6 +299,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       setDeleting(false);
     }
   };
+
+  const toggleArchiveItem = async (item: WardrobeItem, archived: boolean) => {
+    const { error } = await (supabase.from("wardrobe_items" as never) as any).update({ archived }).eq("id", item.id);
+    if (error) { toast.error(error.message); return; }
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, archived } as WardrobeItem : it)));
+    setDetail((d) => (d && d.id === item.id ? ({ ...d, archived } as WardrobeItem) : d));
+    toast.success(archived ? "Archived — hidden from styling suggestions until you restore it" : "Restored to your active closet");
+  };
+
   const season = useMemo(() => currentSeason(), []);
 
   const runLegacyMigration = async () => {
@@ -377,12 +387,20 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     [items, season],
   );
 
-  const filtered = useMemo(() => items.filter(i =>
-    (cat === "All" || i.category === cat) &&
-    (!seasonOnly || seasonMatches.has(i.id)) &&
-    (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
-      .some(v => v?.toLowerCase().includes(q.toLowerCase())))
-  ), [items, cat, q, seasonOnly, seasonMatches]);
+  const archivedCount = useMemo(
+    () => items.filter((i) => (i as unknown as { archived?: boolean }).archived).length,
+    [items],
+  );
+
+  const filtered = useMemo(() => items.filter(i => {
+    const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
+    if (showArchived) return isArchived;
+    return !isArchived &&
+      (cat === "All" || i.category === cat) &&
+      (!seasonOnly || seasonMatches.has(i.id)) &&
+      (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
+        .some(v => v?.toLowerCase().includes(q.toLowerCase())));
+  }), [items, cat, q, seasonOnly, seasonMatches, showArchived]);
 
   const w = weather?.current;
   const wLabel = w ? describeWeather(w.weatherCode, w.isDay) : null;
@@ -516,15 +534,24 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           >{c}</button>
         ))}
       </div>
+
+      {(archivedCount > 0 || showArchived) && (
+        <button
+          onClick={() => setShowArchived((v) => !v)}
+          className="mx-6 mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+        >
+          {showArchived ? <><X size={11} /> Back to closet</> : <><Archive size={11} /> Archived ({archivedCount})</>}
+        </button>
+      )}
       {loading ? (
         <div className="flex items-center justify-center mt-20 text-muted-foreground"><Loader2 className="animate-spin" /></div>
       ) : filtered.length === 0 ? (
         <div className="px-6 mt-16 text-center animate-fade-up">
           <p className="font-serif text-2xl italic">
-            {items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
+            {showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            {items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
+            {showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
           </p>
           {items.length === 0 ? (
             <button
@@ -727,6 +754,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   className="mt-5 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Pencil size={12} /> Edit details
+                </button>
+                <button
+                  onClick={() => void toggleArchiveItem(detail, !(detail as unknown as { archived?: boolean }).archived)}
+                  className="mt-3 w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
+                >
+                  {(detail as unknown as { archived?: boolean }).archived
+                    ? <><ArchiveRestore size={12} /> Restore to closet</>
+                    : <><Archive size={12} /> Archive — out of rotation</>}
                 </button>
                                             <button
                   onClick={() => setConfirmDelete(true)}
