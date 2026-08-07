@@ -5,7 +5,7 @@ import type { Screen } from "../AuraApp";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
-import { CalendarConnectionSection, AppleCalendarConnectionSection } from "../CalendarConnectionSection";
+import { CalendarConnectionSection, AppleCalendarConnectionSection, OutlookCalendarConnectionSection } from "../CalendarConnectionSection";
 import { MyBrands } from "../MyBrands";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
@@ -464,6 +464,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                     <WeatherPanel />
                     <CalendarConnectionSection />
           <AppleCalendarConnectionSection />
+          <OutlookCalendarConnectionSection />
 
 
           {/* Menu */}
