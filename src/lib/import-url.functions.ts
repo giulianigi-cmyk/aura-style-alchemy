@@ -628,7 +628,7 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
 }
 
 export type ResolvedProductImage =
-  | ({ ok: true; imageUrl: string } & ReturnType<typeof extractProductMeta>)
+  | ({ ok: true; imageUrl: string; candidates: string[] } & ReturnType<typeof extractProductMeta>)
   | { ok: false; error: string; rateLimited?: boolean };
 
 /**
