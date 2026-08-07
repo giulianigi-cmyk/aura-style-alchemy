@@ -125,11 +125,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   useEffect(() => { void load(); }, [load]);
 
   const aiPick = async () => {
-    if (items.length < 3) {
-      toast.error(`You have ${items.length} piece${items.length === 1 ? "" : "s"} in your wardrobe — add at least 3 to generate an AI outfit.`);
+    const activeItems = items.filter((it) => !(it as unknown as { archived?: boolean }).archived);
+    if (activeItems.length < 3) {
+      toast.error(`You have ${activeItems.length} piece${activeItems.length === 1 ? "" : "s"} in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.`);
       return;
     }
-    const categories = Array.from(new Set(items.map((it) => it.category).filter(Boolean)));
+    const categories = Array.from(new Set(activeItems.map((it) => it.category).filter(Boolean)));
     if (categories.length < 2) {
       toast.error(
         categories.length === 0
