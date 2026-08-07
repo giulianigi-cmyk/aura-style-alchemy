@@ -7,10 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   createBatchScan,
-  createBatchScanFromUrls,
+  resolveBatchUrlCandidates,
+  createBatchScanFromSelections,
   deleteBatchScan,
   listBatchScans,
   triggerScanWorker,
+  type UrlCandidateResult,
 } from "@/lib/batch-scan.functions";
 import { compressImageForUpload } from "@/lib/image-compress";
 type JobCounts = { queued: number; processing: number; done: number; failed: number };
@@ -37,7 +39,8 @@ const STATUS_LABEL: Record<string, string> = {
 export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openReview: (scanId: string) => void }) {
   const { user } = useAuth();
     const create = useServerFn(createBatchScan);
-  const createFromUrls = useServerFn(createBatchScanFromUrls);
+  const resolveCandidates = useServerFn(resolveBatchUrlCandidates);
+  const queueSelections = useServerFn(createBatchScanFromSelections);
   const list = useServerFn(listBatchScans);
   const remove = useServerFn(deleteBatchScan);
   const processJobs = useServerFn(triggerScanWorker);
@@ -49,6 +52,8 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const [mode, setMode] = useState<"photos" | "urls">("photos");
   const [urlRows, setUrlRows] = useState<string[]>([""]);
   const [photoStates, setPhotoStates] = useState<PhotoState[]>([]);
+  const [urlCandidates, setUrlCandidates] = useState<UrlCandidateResult[] | null>(null);
+  const [chosenIndex, setChosenIndex] = useState<Record<string, number>>({});
 
     const refresh = async () => {
     try {
@@ -119,7 +124,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const removeUrlRow = (i: number) =>
     setUrlRows((prev) => (prev.length === 1 ? [""] : prev.filter((_, idx) => idx !== i)));
 
-  const onSubmitUrls = async () => {
+  const onFindPhotos = async () => {
     const urls = Array.from(
       new Set(
         urlRows
@@ -130,25 +135,59 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     );
     if (!urls.length) return;
     setBusy(true);
-    setLabel(`Fetching ${urls.length} image${urls.length === 1 ? "" : "s"}…`);
+    setLabel(`Looking for photos on ${urls.length} link${urls.length === 1 ? "" : "s"}…`);
     try {
       const { data: sess } = await supabase.auth.getSession();
-      const res = await createFromUrls({ data: { urls, accessToken: sess.session?.access_token } });
+      const res = await resolveCandidates({ data: { urls, accessToken: sess.session?.access_token } });
+      setUrlCandidates(res.results);
+      const defaults: Record<string, number> = {};
+      res.results.forEach((r) => { if (r.ok) defaults[r.url] = 0; });
+      setChosenIndex(defaults);
+      const failedCount = res.results.filter((r) => !r.ok).length;
+      if (failedCount) toast.warning(`${failedCount} link${failedCount === 1 ? "" : "s"} couldn't be read`);
+    } catch (e) {
+      console.error("[AURA batch-scan] candidate lookup failed", e);
+      toast.error("Couldn't look up those links.");
+    } finally {
+      setBusy(false);
+      setLabel("");
+    }
+  };
+
+  const onQueueSelections = async () => {
+    if (!urlCandidates) return;
+    const selections = urlCandidates
+      .filter((r): r is Extract<UrlCandidateResult, { ok: true }> => r.ok)
+      .map((r) => ({
+        sourceUrl: r.url,
+        chosenImageUrl: r.candidates[chosenIndex[r.url] ?? 0] ?? r.candidates[0],
+        brand: r.brand,
+        priceValue: r.priceValue,
+        priceCurrency: r.priceCurrency,
+        materials: r.materials,
+      }));
+    if (!selections.length) return;
+    setBusy(true);
+    setLabel(`Queueing ${selections.length} photo${selections.length === 1 ? "" : "s"}…`);
+    try {
+      const res = await queueSelections({ data: { selections } });
       if (!res.scanId) {
-        toast.error(res.error ?? "Could not fetch any of those URLs.");
+        toast.error(res.error ?? "Could not queue those photos.");
         return;
       }
       const failedCount = res.failed?.length ?? 0;
       toast.success(
         failedCount
-          ? `${res.jobs} queued · ${failedCount} URL${failedCount === 1 ? "" : "s"} failed`
-          : `${res.jobs} image${res.jobs === 1 ? "" : "s"} queued`,
+          ? `${res.jobs} queued · ${failedCount} photo${failedCount === 1 ? "" : "s"} failed`
+          : `${res.jobs} photo${res.jobs === 1 ? "" : "s"} queued`,
       );
       setUrlRows([""]);
+      setUrlCandidates(null);
+      setChosenIndex({});
       await runWorker();
     } catch (e) {
-      console.error("[AURA batch-scan] URL import failed", e);
-      toast.error("Could not queue those URLs.");
+      console.error("[AURA batch-scan] queueing selections failed", e);
+      toast.error("Could not queue those photos.");
     } finally {
       setBusy(false);
       setLabel("");
@@ -288,11 +327,11 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
           </>
         )}
 
-        {mode === "urls" && (
+        {mode === "urls" && !urlCandidates && (
           <div className="rounded-3xl border-2 border-dashed border-border p-6">
             <p className="font-serif text-lg italic text-center">Paste product or image links</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
-              One link per row — a product page or a direct image link both work. AURA finds the photo, downloads it, and queues each one just like an uploaded photo.
+              One link per row — a product page or a direct image link both work. AURA finds the candidate photos so you can pick the right one for each.
             </p>
             <div className="mt-5 space-y-2">
               {urlRows.map((row, i) => (
@@ -318,9 +357,55 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
             ><Plus size={12} /> Add URL</button>
             <button
               disabled={busy}
-              onClick={onSubmitUrls}
+              onClick={onFindPhotos}
               className="mt-5 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
-            >{busy ? label || "Working…" : "Queue these URLs"}</button>
+            >{busy ? label || "Working…" : "Find photos"}</button>
+          </div>
+        )}
+
+        {mode === "urls" && urlCandidates && (
+          <div className="rounded-3xl border-2 border-dashed border-border p-5">
+            <div className="flex items-center justify-between">
+              <p className="font-serif text-lg italic">Choose a photo for each</p>
+              <button
+                onClick={() => { setUrlCandidates(null); setChosenIndex({}); }}
+                className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+              >Start over</button>
+            </div>
+            <div className="mt-4 space-y-4">
+              {urlCandidates.map((r) => (
+                <div key={r.url} className="rounded-2xl border border-border/60 p-3">
+                  <p className="text-[11px] text-muted-foreground truncate mb-2">{r.url}</p>
+                  {!r.ok ? (
+                    <p className="text-xs text-destructive">{r.error}</p>
+                  ) : (
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                      {r.candidates.map((c, idx) => {
+                        const selected = (chosenIndex[r.url] ?? 0) === idx;
+                        return (
+                          <button
+                            key={c}
+                            onClick={() => setChosenIndex((prev) => ({ ...prev, [r.url]: idx }))}
+                            className={`shrink-0 h-20 w-20 rounded-xl overflow-hidden border-2 ${selected ? "border-foreground" : "border-transparent"}`}
+                            style={{ background: "#FFFFFF" }}
+                          >
+                            <img src={c} alt="" className="h-full w-full object-contain p-1" loading="lazy" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {r.ok && r.brand && (
+                    <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">{r.brand}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              disabled={busy || !urlCandidates.some((r) => r.ok)}
+              onClick={onQueueSelections}
+              className="mt-5 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
+            >{busy ? label || "Working…" : `Queue ${urlCandidates.filter((r) => r.ok).length} photo${urlCandidates.filter((r) => r.ok).length === 1 ? "" : "s"}`}</button>
           </div>
         )}
       </div>
