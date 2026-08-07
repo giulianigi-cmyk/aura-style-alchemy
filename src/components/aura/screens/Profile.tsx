@@ -730,13 +730,15 @@ function MySizes({ userId }: { userId: string | undefined }) {
                   onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                   placeholder={inferred[f.key] || (f.shoes ? "38" : "42 / M")}
                   className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-sm outline-none placeholder:text-muted-foreground/50"
-                />
+               />
               ) : (
-                <p className="mt-0.5 text-sm truncate">
-                  <span className="font-serif">{loading ? "…" : shown || "—"}</span>
-                  {shown && hint && <span className="text-[10px] text-muted-foreground"> · {hint}</span>}
-                  {usingInferred && <span className="text-[9px] text-muted-foreground italic"> (from wardrobe)</span>}
-                </p>
+                <>
+                  <p className="mt-0.5 text-sm truncate">
+                    <span className="font-serif">{loading ? "…" : shown || "—"}</span>
+                    {shown && hint && <span className="text-[10px] text-muted-foreground"> · {hint}</span>}
+                  </p>
+                  {usingInferred && <p className="text-[9px] text-muted-foreground italic truncate">from wardrobe</p>}
+                </>
               )}
             </div>
           );
