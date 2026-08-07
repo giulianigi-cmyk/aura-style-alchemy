@@ -82,7 +82,7 @@ export const stylistChat = createServerFn({ method: "POST" })
     const dressPrefs = (data.dressPreferences ?? null) as DressPreferences | null;
     const allowedItems = data.items.filter((it) => isItemAllowedByDressPreferences(it, dressPrefs));
 
-        // Derived from the wardrobe itself — no separate size-tracking table
+    // Derived from the wardrobe itself — no separate size-tracking table
     // needed. "Usual size per brand" only means anything with 2+ pieces
     // from that brand; a single item is one data point, not a pattern.
     const brandSizeCounts = new Map<string, Map<string, number>>();
@@ -135,6 +135,22 @@ export const stylistChat = createServerFn({ method: "POST" })
       ? allowedItems.filter((it) => coversArms(it)).map((it) => it.id)
       : [];
 
+    // Always present, not tied to any specific preference — this is the
+    // general-case fix for the same failure mode: without a structured
+    // constraint to check (like cover_legs), the model has nothing hard
+    // to anchor on and can fall back to "you have none" even for a plain
+    // "give me an alternative dress" request. A category inventory count
+    // is cheap to compute and applies to every conversation.
+    const categoryCounts = new Map<string, number>();
+    for (const it of allowedItems) {
+      const c = it.category ?? "Uncategorized";
+      categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
+    }
+    const inventorySummary = [...categoryCounts.entries()]
+      .filter(([, n]) => n > 0)
+      .map(([cat, n]) => `${cat}: ${n}`)
+      .join(", ");
+
     const feedbackInstruction = {
       liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Do NOT offer to save it or add it anywhere — that is handled separately. Return an empty item_ids array and empty choices array.",
       disliked: "The user just tapped 'not for me, suggest an alternative' on your PREVIOUS suggestion. Propose a genuinely DIFFERENT outfit using different pieces than the ones you just suggested (check the conversation history for what you already proposed and avoid repeating those exact item_ids).",
@@ -143,13 +159,12 @@ export const stylistChat = createServerFn({ method: "POST" })
 
     const system = [
       ...(data.dressRules ? [data.dressRules, ""] : []),
-        "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
+      "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
       ...(brandSizeSummary.length ? [`SIZE HISTORY (derived from the wardrobe, not asked for): ${brandSizeSummary.join("; ")}. If the person asks about buying a piece from one of these brands, or asks what size to get, mention their usual size for that brand as a helpful reference point — but always frame it as "you've usually worn X in [brand]", never as a certainty, since fit varies by cut and style even within the same brand.`] : []),
-
       "CRITICAL — NEVER FALSELY CLAIM THE WARDROBE LACKS SOMETHING: before saying anything like 'you don't have X' or 'I don't have a suitable piece', you MUST go through the ENTIRE wardrobe catalog below, item by item, and check each one against every requirement in play (category, length, weather-appropriateness, dress code) — not just skim it. The catalog is JSON; read all of it, not just the first few entries. Getting this wrong — telling the person their own wardrobe is missing something that's actually right there — is the single worst mistake you can make in this conversation, worse than a slightly imperfect outfit. If, after that full check, something genuinely isn't there, say so plainly — but only after actually looking.",
+      ...(inventorySummary ? [`VERIFIED WARDROBE INVENTORY (category counts, already checked in code): ${inventorySummary}. This is always accurate, for every request, not just ones about coverage — if a category shows a nonzero count here, the wardrobe genuinely has that many pieces of that type, and you must never claim otherwise. Go find the specific piece(s) among the catalog entries with that category before concluding there's nothing suitable.`] : []),
       ...(legCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${legCoveringIds.length} piece(s) satisfying full leg coverage — item ids: ${legCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks a leg-covering piece — that would be factually wrong.`] : []),
       ...(armCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${armCoveringIds.length} piece(s) satisfying full arm coverage — item ids: ${armCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks an arm-covering piece — that would be factually wrong.`] : []),
-      "CRITICAL — NEVER FALSELY CLAIM THE WARDROBE LACKS SOMETHING: before saying anything like 'you don't have X' or 'I don't have a suitable piece', you MUST go through the ENTIRE wardrobe catalog below, item by item, and check each one against every requirement in play (category, length, weather-appropriateness, dress code) — not just skim it. The catalog is JSON; read all of it, not just the first few entries. Getting this wrong — telling the person their own wardrobe is missing something that's actually right there — is the single worst mistake you can make in this conversation, worse than a slightly imperfect outfit. If, after that full check, something genuinely isn't there, say so plainly — but only after actually looking.",
       "Answer styling questions conversationally, in the same language as the user's MOST RECENT message — not necessarily the language the conversation opened in. If the person switches language partway through (e.g. the first message was in English but they now write in Italian), switch with them immediately and stay in the new language until they switch again.",
       "When you recommend an outfit or specific pieces, use ONLY items from the wardrobe catalog below and put their ids in item_ids (max 6). If no items apply, return an empty item_ids array.",
     "Never invent items the user does not own. If the wardrobe lacks something for the occasion, say so plainly and directly (e.g. 'I don't have a full-length piece in your wardrobe for this') and only THEN, clearly separated, suggest what kind of piece would fill the gap — never phrase a non-owned item as though it were an actual recommendation from their closet (no 'I'd suggest a silk maxi dress...' with invented color/fabric detail as if it were real). If item_ids is empty, your reply must make it obvious no real outfit was proposed.",
@@ -266,7 +281,7 @@ export const stylistChat = createServerFn({ method: "POST" })
         }
       }
 
-     return {
+      return {
         ok: true as const,
         reply: (finalReply ?? "").slice(0, 1200),
         item_ids: finalItemIds,
