@@ -149,7 +149,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           occasion,
-          items: items.map((it) => ({
+          items: activeItems.map((it) => ({
             id: it.id,
             category: it.category,
             subcategory: it.subcategory,
