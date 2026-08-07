@@ -352,8 +352,8 @@ function scoreImage(url: string, productTokens: string[]): number {
   let s = 0;
   if (JUNK_KEYWORDS.test(u)) s -= 30;
   if (RELATED_URL_KEYWORDS.test(u)) s -= 15;
-  if (PRODUCT_KEYWORDS.test(u)) s += 5;
-  if (MODEL_KEYWORDS.test(u)) s -= 2;
+  if (PRODUCT_KEYWORDS.test(u)) s += 8;
+  if (MODEL_KEYWORDS.test(u)) s -= 12;
   if (/\.(png|jpe?g|webp)(\?|$)/i.test(u)) s += 1;
   for (const tok of productTokens) {
     if (tok.length >= 4 && u.includes(tok)) { s += 4; break; }
