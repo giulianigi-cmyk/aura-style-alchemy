@@ -94,9 +94,9 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("wardrobe_items")
-      .select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(async ({ data }) => {
+    (supabase.from("wardrobe_items" as never) as any)
+      .select("*").eq("user_id", user.id).eq("archived", false).order("created_at", { ascending: false })
+      .then(async ({ data }: { data: WardrobeItem[] | null }) => {
         const list = (data ?? []) as WardrobeItem[];
         setItems(list);
         setSigned(await resolveWardrobeUrls(list));
