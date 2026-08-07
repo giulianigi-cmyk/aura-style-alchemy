@@ -404,19 +404,12 @@ function DayDetail({
   const confirmWorn = async () => {
     if (!plan || !user) return;
     setSaving(true);
-    const { error } = await supabase.from("outfit_plans").update({ status: "worn" } as never).eq("id", plan.id);
-    if (error) { setSaving(false); toast.error(error.message); return; }
-    const { error: eventErr } = await logWardrobeEvent({
-      userId: user.id,
-      eventType: "worn",
-      date: plan.date,
-      itemIds: plan.item_ids,
-      outfitPlanId: plan.id,
-      occasion: plan.occasion,
-      notes: plan.notes,
-    });
-    if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+    const { error } = await confirmOutfitPlanWorn(
+      { id: plan.id, date: plan.date, item_ids: plan.item_ids, occasion: plan.occasion, notes: plan.notes },
+      user.id,
+    );
     setSaving(false);
+    if (error) { toast.error(error); return; }
     toast.success("Marked as worn");
     onSaved();
   };
