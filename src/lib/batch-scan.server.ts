@@ -4,6 +4,7 @@
 // scan_detected_items. Never writes wardrobe_items: every detection
 // must be confirmed by the user first.
 import { detectOutfitItems } from "./outfit-detect.server";
+import { analyzeWardrobeImageCore } from "./ai-analyze.functions";
 import { removeBackgroundCore } from "./ai-bgremove.functions";
 
 const MAX_ATTEMPTS = 3;
@@ -72,27 +73,62 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
         }
       }
 
-      const detection = await detectOutfitItems(dataUrl);
-      if (!detection.ok) throw new Error(detection.error);
+      let detectedRows: {
+        category: string | null; subcategory: string | null; colors: string[]; material: string[];
+        season: string | null; style: string | null; occasion: string | null; description: string | null;
+        confidence: number; bbox: unknown; brand: string | null; price: number | null; currency: string | null;
+      }[];
 
-      await supabaseAdmin.from("scan_detected_items").delete().eq("job_id", job.id);
-
-      if (detection.items.length) {
-        const rows = detection.items.map((it) => ({
-          job_id: job.id,
-          scan_id: job.scan_id,
-          user_id: job.user_id,
+      if (prefill) {
+        // Single product photo from a URL — same engine as manual
+        // "Import from URL" single-item add, not the multi-item outfit
+        // detector (which is tuned to find several worn garments and can
+        // mistake a decorative detail — a buckle, an embellishment — for
+        // a second item on an isolated product photo).
+        const analysis = await analyzeWardrobeImageCore(dataUrl);
+        detectedRows = [{
+          category: analysis.category || null,
+          subcategory: analysis.subcategory || null,
+          colors: analysis.colors,
+          material: prefill.materials?.length ? prefill.materials : analysis.materials,
+          season: analysis.seasons[0] ?? null,
+          style: analysis.styles.join(", ") || null,
+          occasion: analysis.occasions.join(", ") || null,
+          description: null,
+          confidence: 0.9,
+          bbox: null,
+          brand: analysis.brand || prefill.brand || null,
+          price: prefill.priceValue ?? null,
+          currency: prefill.priceCurrency ?? null,
+        }];
+      } else {
+        const detection = await detectOutfitItems(dataUrl);
+        if (!detection.ok) throw new Error(detection.error);
+        detectedRows = detection.items.map((it) => ({
           category: it.category || null,
           subcategory: it.subcategory || null,
           colors: it.colors,
-          material: prefill?.materials?.length ? prefill.materials : it.materials,
+          material: it.materials,
           season: it.seasons[0] ?? null,
+          style: null,
+          occasion: null,
           description: it.description || null,
           confidence: it.confidence,
           bbox: it.bbox,
-          brand: prefill?.brand ?? null,
-          price: prefill?.priceValue ?? null,
-          currency: prefill?.priceCurrency ?? null,
+          brand: null,
+          price: null,
+          currency: null,
+        }));
+      }
+
+      await supabaseAdmin.from("scan_detected_items").delete().eq("job_id", job.id);
+
+      if (detectedRows.length) {
+        const rows = detectedRows.map((it) => ({
+          job_id: job.id,
+          scan_id: job.scan_id,
+          user_id: job.user_id,
+          ...it,
           status: "pending" as const,
         }));
         const { error: insErr } = await supabaseAdmin.from("scan_detected_items").insert(rows as never);
