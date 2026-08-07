@@ -10,6 +10,24 @@ export const CreateBatchScanFromUrlsSchema = z.object({
   accessToken: z.string().optional(),
 });
 
+export const ResolveBatchUrlCandidatesSchema = z.object({
+  urls: z.array(z.string().trim().min(5)).min(1).max(150),
+  accessToken: z.string().optional(),
+});
+
+export const UrlSelectionSchema = z.object({
+  sourceUrl: z.string().min(5),
+  chosenImageUrl: z.string().min(5),
+  brand: z.string().nullable().optional(),
+  priceValue: z.number().nullable().optional(),
+  priceCurrency: z.string().nullable().optional(),
+  materials: z.array(z.string()).default([]),
+});
+
+export const CreateBatchScanFromSelectionsSchema = z.object({
+  selections: z.array(UrlSelectionSchema).min(1).max(150),
+});
+
 export const ScanIdSchema = z.object({ scanId: z.string().uuid() });
 
 export const DetectedIdSchema = z.object({ id: z.string().uuid() });
