@@ -737,7 +737,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
                     <span className="font-serif">{loading ? "…" : shown || "—"}</span>
                     {shown && hint && <span className="text-[10px] text-muted-foreground"> · {hint}</span>}
                   </p>
-                  {usingInferred && <p className="text-[9px] text-muted-foreground italic truncate">from wardrobe</p>}
+                  {usingInferred && <p className="text-[9px] text-muted-foreground italic truncate">(From your wardrobe)</p>}
                 </>
               )}
             </div>
