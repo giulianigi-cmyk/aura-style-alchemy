@@ -74,11 +74,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       try {
         const [res, wardrobeRes] = await Promise.all([
           load({ data: { scanId } }) as unknown as Promise<{
-            items: Array<{
+           items: Array<{
               id: string; job_id: string; category: string | null; subcategory: string | null;
               colors: string[] | null; material: string[] | null; season: string | null;
               description: string | null; bbox: BBox | null;
               brand: string | null; price: number | null; currency: string | null;
+              style: string | null; occasion: string | null;
             }>;
             jobs: Array<{ id: string; image_path: string }>;
           }>,
