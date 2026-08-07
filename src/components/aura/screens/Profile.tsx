@@ -624,6 +624,7 @@ function MySizes({ userId }: { userId: string | undefined }) {
   const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
   const [values, setValues] = useState<Record<SizeKey, string>>(empty);
   const [snapshot, setSnapshot] = useState<Record<SizeKey, string>>(empty);
+  const [inferred, setInferred] = useState<Record<SizeKey, string>>(empty);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -633,24 +634,41 @@ function MySizes({ userId }: { userId: string | undefined }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("sizes")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!cancelled) {
-        if (error) console.error("[AURA sizes] load", error);
-        const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
-        const loaded = {
-          tops: s.tops ?? "",
-          bottoms: s.bottoms ?? "",
-          dresses: s.dresses ?? "",
-          shoes: s.shoes ?? "",
-        };
-        setValues(loaded);
-        setSnapshot(loaded);
-        setLoading(false);
+      const [{ data, error }, { data: items }] = await Promise.all([
+        supabase.from("profiles").select("sizes").eq("id", userId).maybeSingle(),
+        supabase.from("wardrobe_items").select("category, size").eq("user_id", userId),
+      ]);
+      if (cancelled) return;
+      if (error) console.error("[AURA sizes] load", error);
+      const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
+      const loaded = {
+        tops: s.tops ?? "",
+        bottoms: s.bottoms ?? "",
+        dresses: s.dresses ?? "",
+        shoes: s.shoes ?? "",
+      };
+      setValues(loaded);
+      setSnapshot(loaded);
+
+      const counts: Record<SizeKey, Map<string, number>> = { tops: new Map(), bottoms: new Map(), dresses: new Map(), shoes: new Map() };
+      for (const it of (items ?? []) as { category: string | null; size: string | null }[]) {
+        const size = it.size?.trim();
+        if (!size) continue;
+        const field = SIZE_FIELDS.find((f) => f.wardrobeCategory === it.category);
+        if (!field) continue;
+        const m = counts[field.key];
+        m.set(size, (m.get(size) ?? 0) + 1);
       }
+      const nextInferred = { ...empty };
+      (Object.keys(counts) as SizeKey[]).forEach((k) => {
+        const m = counts[k];
+        const total = [...m.values()].reduce((a, b) => a + b, 0);
+        if (total < 2) return;
+        const [topSize] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
+        nextInferred[k] = topSize;
+      });
+      setInferred(nextInferred);
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [userId]);
@@ -697,33 +715,32 @@ function MySizes({ userId }: { userId: string | undefined }) {
           ><Pencil size={12} /></button>
         )}
       </div>
-                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+      <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2">
         {SIZE_FIELDS.map((f) => {
           const v = values[f.key];
-          const hint = sizeEquivalences(v, f.shoes ? { shoes: true } : undefined);
+          const usingInferred = !v && !!inferred[f.key];
+          const shown = v || inferred[f.key];
+          const hint = sizeEquivalences(shown, f.shoes ? { shoes: true } : undefined);
           return (
-            <div key={f.key} className="min-w-0 border-b border-border/60 pb-2">
+            <div key={f.key} className="min-w-0 border-b border-border/60 pb-1.5">
               <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{f.label}</p>
               {editing ? (
-                <>
-                  <input
-                    value={v}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                    placeholder={f.shoes ? "38" : "42 / M"}
-                    className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-base outline-none placeholder:text-muted-foreground/50"
-                  />
-                  {hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
-                </>
+                <input
+                  value={v}
+                  onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={inferred[f.key] || (f.shoes ? "38" : "42 / M")}
+                  className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-sm outline-none placeholder:text-muted-foreground/50"
+                />
               ) : (
-                <>
-                  <p className="mt-0.5 font-serif text-base truncate">{loading ? "…" : v || "—"}</p>
-                  {v && hint && <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</p>}
-                </>
+                <p className="mt-0.5 text-sm truncate">
+                  <span className="font-serif">{loading ? "…" : shown || "—"}</span>
+                  {shown && hint && <span className="text-[10px] text-muted-foreground"> · {hint}</span>}
+                  {usingInferred && <span className="text-[9px] text-muted-foreground italic"> (from wardrobe)</span>}
+                </p>
               )}
             </div>
           );
         })}
-
       </div>
       {editing && (
         <button
