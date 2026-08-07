@@ -508,11 +508,11 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 }
 
 type SizeKey = "tops" | "bottoms" | "dresses" | "shoes";
-const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean }[] = [
-  { key: "tops", label: "Tops" },
-  { key: "bottoms", label: "Bottoms" },
-  { key: "dresses", label: "Dresses" },
-  { key: "shoes", label: "Shoes", shoes: true },
+const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean; wardrobeCategory: string }[] = [
+  { key: "tops", label: "Tops", wardrobeCategory: "Tops" },
+  { key: "bottoms", label: "Bottoms", wardrobeCategory: "Bottoms" },
+  { key: "dresses", label: "Dresses", wardrobeCategory: "Dresses" },
+  { key: "shoes", label: "Shoes", shoes: true, wardrobeCategory: "Shoes" },
 ];
 function MyUsername({ userId }: { userId: string | undefined }) {
   const [username, setUsername] = useState<string | null>(null);
