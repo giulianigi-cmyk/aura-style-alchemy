@@ -102,7 +102,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     if (!user) return;
     void (async () => {
       setLoading(true);
-      const { data } = await supabase.from("wardrobe_items").select("*").eq("user_id", user.id);
+      const { data } = await (supabase.from("wardrobe_items" as never) as any).select("*").eq("user_id", user.id).eq("archived", false);
       const list = (data ?? []) as WardrobeItem[];
       setItems(list);
       const signedMap = await resolveWardrobeUrls(list);
