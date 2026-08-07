@@ -110,3 +110,30 @@ export async function logWardrobeEvent(input: LogWardrobeEventInput): Promise<{ 
 
   return { error: null, eventId };
 }
+
+/** Confirms a planned outfit was actually worn — flips outfit_plans.status
+ *  and logs the "worn" event, in one place. Used by both the Calendar's
+ *  "Mark as worn" button and the Stylist tab's "Did you wear this?"
+ *  prompt, so the write path never drifts between the two. */
+export async function confirmOutfitPlanWorn(
+  plan: { id: string; date: string; item_ids: string[]; occasion: string | null; notes: string | null },
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await (supabase.from("outfit_plans" as never) as any)
+    .update({ status: "worn" })
+    .eq("id", plan.id);
+  if (error) return { error: error.message };
+
+  const { error: eventErr } = await logWardrobeEvent({
+    userId,
+    eventType: "worn",
+    date: plan.date,
+    itemIds: plan.item_ids,
+    outfitPlanId: plan.id,
+    occasion: plan.occasion,
+    notes: plan.notes,
+  });
+  if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+
+  return { error: null };
+}
