@@ -687,7 +687,11 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
 
   if (!extracted.imageUrl) return { ok: false, error: "No product image found on that page." };
   const imageUrl = new URL(extracted.imageUrl, target).toString();
-  return { ok: true, imageUrl, ...extractProductMeta(html, target, extracted) };
+  const candidates = Array.from(new Set([
+    imageUrl,
+    ...extracted.candidates.map((c) => { try { return new URL(c, target).toString(); } catch { return null; } }).filter((c): c is string => c !== null),
+  ])).slice(0, 6);
+  return { ok: true, imageUrl, candidates, ...extractProductMeta(html, target, extracted) };
 }
 
 export const importProductFromUrl = createServerFn({ method: "POST" })
