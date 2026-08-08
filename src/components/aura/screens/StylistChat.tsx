@@ -179,10 +179,14 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
             toeShape: it.toe_shape,
             closure: it.closure,
             gender: it.gender,
-            styleTags: it.style_tags,
+                        styleTags: it.style_tags,
+            formality: (it as unknown as { formality?: number | null }).formality ?? null,
+            dayEvening: (it as unknown as { day_evening?: string | null }).day_evening ?? null,
+            locationId: (it as unknown as { location_id?: string | null }).location_id ?? null,
           })),
         },
       });
+
       if (!res.ok) {
         setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
         return;
