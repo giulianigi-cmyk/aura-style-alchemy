@@ -44,6 +44,7 @@ export type Database = {
       calendar_connections: {
         Row: {
           access_token: string
+          account_email: string | null
           calendar_id: string
           connected_at: string
           id: string
@@ -56,6 +57,7 @@ export type Database = {
         }
         Insert: {
           access_token: string
+          account_email?: string | null
           calendar_id?: string
           connected_at?: string
           id?: string
@@ -68,6 +70,7 @@ export type Database = {
         }
         Update: {
           access_token?: string
+          account_email?: string | null
           calendar_id?: string
           connected_at?: string
           id?: string
@@ -459,6 +462,7 @@ export type Database = {
       }
       outfits: {
         Row: {
+          archived: boolean
           canvas_image_url: string | null
           cover_url: string | null
           created_at: string
@@ -471,6 +475,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived?: boolean
           canvas_image_url?: string | null
           cover_url?: string | null
           created_at?: string
@@ -483,6 +488,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          archived?: boolean
           canvas_image_url?: string | null
           cover_url?: string | null
           created_at?: string
@@ -519,6 +525,7 @@ export type Database = {
           season: string | null
           setup_complete: boolean
           sizes: Json | null
+          style_boldness: string | null
           style_preferences: string[] | null
           undertone: string | null
           updated_at: string
@@ -548,6 +555,7 @@ export type Database = {
           season?: string | null
           setup_complete?: boolean
           sizes?: Json | null
+          style_boldness?: string | null
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
@@ -577,6 +585,7 @@ export type Database = {
           season?: string | null
           setup_complete?: boolean
           sizes?: Json | null
+          style_boldness?: string | null
           style_preferences?: string[] | null
           undertone?: string | null
           updated_at?: string
@@ -589,11 +598,13 @@ export type Database = {
       scan_detected_items: {
         Row: {
           bbox: Json | null
+          brand: string | null
           category: string | null
           closure: string | null
           colors: string[]
           confidence: number | null
           created_at: string
+          currency: string | null
           description: string | null
           fit: string | null
           gender: string | null
@@ -602,10 +613,13 @@ export type Database = {
           job_id: string
           length: string | null
           material: string[]
+          occasion: string | null
+          price: number | null
           scan_id: string
           season: string | null
           sleeve_length: string | null
           status: string
+          style: string | null
           style_tags: string[]
           subcategory: string | null
           toe_shape: string | null
@@ -614,11 +628,13 @@ export type Database = {
         }
         Insert: {
           bbox?: Json | null
+          brand?: string | null
           category?: string | null
           closure?: string | null
           colors?: string[]
           confidence?: number | null
           created_at?: string
+          currency?: string | null
           description?: string | null
           fit?: string | null
           gender?: string | null
@@ -627,10 +643,13 @@ export type Database = {
           job_id: string
           length?: string | null
           material?: string[]
+          occasion?: string | null
+          price?: number | null
           scan_id: string
           season?: string | null
           sleeve_length?: string | null
           status?: string
+          style?: string | null
           style_tags?: string[]
           subcategory?: string | null
           toe_shape?: string | null
@@ -639,11 +658,13 @@ export type Database = {
         }
         Update: {
           bbox?: Json | null
+          brand?: string | null
           category?: string | null
           closure?: string | null
           colors?: string[]
           confidence?: number | null
           created_at?: string
+          currency?: string | null
           description?: string | null
           fit?: string | null
           gender?: string | null
@@ -652,10 +673,13 @@ export type Database = {
           job_id?: string
           length?: string | null
           material?: string[]
+          occasion?: string | null
+          price?: number | null
           scan_id?: string
           season?: string | null
           sleeve_length?: string | null
           status?: string
+          style?: string | null
           style_tags?: string[]
           subcategory?: string | null
           toe_shape?: string | null
@@ -687,6 +711,7 @@ export type Database = {
           error_message: string | null
           id: string
           image_path: string
+          prefill: Json | null
           scan_id: string
           status: string
           updated_at: string
@@ -699,6 +724,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           image_path: string
+          prefill?: Json | null
           scan_id: string
           status?: string
           updated_at?: string
@@ -711,6 +737,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           image_path?: string
+          prefill?: Json | null
           scan_id?: string
           status?: string
           updated_at?: string
@@ -891,6 +918,7 @@ export type Database = {
       }
       wardrobe_items: {
         Row: {
+          archived: boolean
           attrs_backfilled_at: string | null
           brand: string | null
           category: string | null
@@ -899,7 +927,9 @@ export type Database = {
           colors: string[]
           created_at: string
           currency: string | null
+          day_evening: string | null
           fit: string | null
+          formality: number | null
           gender: string | null
           heel_height: string | null
           id: string
@@ -922,6 +952,7 @@ export type Database = {
           worn_count: number
         }
         Insert: {
+          archived?: boolean
           attrs_backfilled_at?: string | null
           brand?: string | null
           category?: string | null
@@ -930,7 +961,9 @@ export type Database = {
           colors?: string[]
           created_at?: string
           currency?: string | null
+          day_evening?: string | null
           fit?: string | null
+          formality?: number | null
           gender?: string | null
           heel_height?: string | null
           id?: string
@@ -953,6 +986,7 @@ export type Database = {
           worn_count?: number
         }
         Update: {
+          archived?: boolean
           attrs_backfilled_at?: string | null
           brand?: string | null
           category?: string | null
@@ -961,7 +995,9 @@ export type Database = {
           colors?: string[]
           created_at?: string
           currency?: string | null
+          day_evening?: string | null
           fit?: string | null
+          formality?: number | null
           gender?: string | null
           heel_height?: string | null
           id?: string
@@ -1081,6 +1117,7 @@ export type Database = {
           error_message: string | null
           id: string
           image_path: string
+          prefill: Json | null
           scan_id: string
           status: string
           updated_at: string

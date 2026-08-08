@@ -17,6 +17,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as ApiPublicHooksGoogleCalendarCallbackRouteImport } from './routes/api/public/hooks/google-calendar-callback'
+import { Route as ApiPublicHooksOutlookCalendarCallbackRouteImport } from './routes/api/public/hooks/outlook-calendar-callback'
 import { Route as ApiPublicHooksProcessScanJobsRouteImport } from './routes/api/public/hooks/process-scan-jobs'
 
 const IndexRoute = IndexRouteImport.update({
@@ -63,6 +64,12 @@ const ApiPublicHooksGoogleCalendarCallbackRoute =
     path: '/api/public/hooks/google-calendar-callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksOutlookCalendarCallbackRoute =
+  ApiPublicHooksOutlookCalendarCallbackRouteImport.update({
+    id: '/api/public/hooks/outlook-calendar-callback',
+    path: '/api/public/hooks/outlook-calendar-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProcessScanJobsRoute =
   ApiPublicHooksProcessScanJobsRouteImport.update({
     id: '/api/public/hooks/process-scan-jobs',
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
+  '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
 }
 export interface FileRoutesByTo {
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
+  '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
 }
 export interface FileRoutesById {
@@ -102,6 +111,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
+  '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
 }
 export interface FileRouteTypes {
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/google-calendar-callback'
+    | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/google-calendar-callback'
+    | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
   id:
     | '__root__'
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/google-calendar-callback'
+    | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
   fileRoutesById: FileRoutesById
 }
@@ -149,6 +162,7 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksGoogleCalendarCallbackRoute: typeof ApiPublicHooksGoogleCalendarCallbackRoute
+  ApiPublicHooksOutlookCalendarCallbackRoute: typeof ApiPublicHooksOutlookCalendarCallbackRoute
   ApiPublicHooksProcessScanJobsRoute: typeof ApiPublicHooksProcessScanJobsRoute
 }
 
@@ -210,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGoogleCalendarCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/outlook-calendar-callback': {
+      id: '/api/public/hooks/outlook-calendar-callback'
+      path: '/api/public/hooks/outlook-calendar-callback'
+      fullPath: '/api/public/hooks/outlook-calendar-callback'
+      preLoaderRoute: typeof ApiPublicHooksOutlookCalendarCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/process-scan-jobs': {
       id: '/api/public/hooks/process-scan-jobs'
       path: '/api/public/hooks/process-scan-jobs'
@@ -231,6 +252,8 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksGoogleCalendarCallbackRoute:
     ApiPublicHooksGoogleCalendarCallbackRoute,
+  ApiPublicHooksOutlookCalendarCallbackRoute:
+    ApiPublicHooksOutlookCalendarCallbackRoute,
   ApiPublicHooksProcessScanJobsRoute: ApiPublicHooksProcessScanJobsRoute,
 }
 export const routeTree = rootRouteImport
