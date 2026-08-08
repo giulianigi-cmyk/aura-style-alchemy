@@ -92,17 +92,24 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       [i]: { ...s[i], actionsDone: [...(s[i]?.actionsDone ?? []), type] },
     }));
 
+    const [itemsError, setItemsError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) return;
     (supabase.from("wardrobe_items" as never) as any)
       .select("*").eq("user_id", user.id).eq("archived", false).order("created_at", { ascending: false })
-      .then(async ({ data }: { data: WardrobeItem[] | null }) => {
+      .then(async ({ data, error }: { data: WardrobeItem[] | null; error: { message: string } | null }) => {
+        if (error) {
+          console.error("[AURA stylist-chat] wardrobe_items load failed", error);
+          setItemsError(error.message);
+        }
         const list = (data ?? []) as WardrobeItem[];
         setItems(list);
         setSigned(await resolveWardrobeUrls(list));
         setItemsLoaded(true);
       });
   }, [user]);
+
 
     useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -368,7 +375,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     <div className="h-full flex flex-col">
       {/* TEMPORARY DIAGNOSTIC — remove once the calendar-event auto-send bug is found. */}
       <div className="px-4 py-2 bg-yellow-100 text-[10px] text-black break-all shrink-0">
-        [DEBUG] initialMessage={initialMessage ? "SET" : "null"} | itemsLoaded={String(itemsLoaded)} | autoSent={String(autoSentRef.current)} | messagesCount={messages.length}
+                [DEBUG] user={String(!!user)} | initialMessage={initialMessage ? "SET" : "null"} | itemsLoaded={String(itemsLoaded)} | itemsCount={items.length} | itemsError={itemsError ?? "none"} | autoSent={String(autoSentRef.current)} | messagesCount={messages.length}
         {initialMessage && <div>msg: {initialMessage.message}</div>}
       </div>
       <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
