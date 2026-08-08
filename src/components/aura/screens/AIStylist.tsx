@@ -1,4 +1,4 @@
-import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore } from "lucide-react";
+import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
@@ -13,6 +13,7 @@ import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
 
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
@@ -59,6 +60,10 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const [deleting, setDeleting] = useState(false);
   const [outfitTab, setOutfitTab] = useState<OutfitTab>("upcoming");
   const [confirmingPlanId, setConfirmingPlanId] = useState<string | null>(null);
+  const [editedItems, setEditedItems] = useState<Record<string, string[]>>({});
+  const [pickerForPlan, setPickerForPlan] = useState<string | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerCat, setPickerCat] = useState("All");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -149,7 +154,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           occasion,
-                    items: activeItems.map((it) => ({
+          items: activeItems.map((it) => ({
             id: it.id,
             category: it.category,
             subcategory: it.subcategory,
@@ -263,12 +268,34 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     toast.success("Outfit deleted");
   };
 
+  const getWornIds = (plan: OutfitPlan) => editedItems[plan.id] ?? plan.item_ids;
+
+  const removeFromPlan = (planId: string, itemId: string) => {
+    setEditedItems((prev) => {
+      const current = prev[planId] ?? plans.find((p) => p.id === planId)?.item_ids ?? [];
+      return { ...prev, [planId]: current.filter((id) => id !== itemId) };
+    });
+  };
+
+  const addToPlan = (planId: string, itemId: string) => {
+    setEditedItems((prev) => {
+      const current = prev[planId] ?? plans.find((p) => p.id === planId)?.item_ids ?? [];
+      if (current.includes(itemId)) return prev;
+      return { ...prev, [planId]: [...current, itemId] };
+    });
+    setPickerForPlan(null);
+    setPickerQuery("");
+    setPickerCat("All");
+  };
+
   const confirmWorn = async (plan: OutfitPlan) => {
     if (!user) return;
     setConfirmingPlanId(plan.id);
-    const { error } = await confirmOutfitPlanWorn(plan, user.id);
+    const actual = editedItems[plan.id];
+    const { error } = await confirmOutfitPlanWorn(plan, user.id, actual);
     setConfirmingPlanId(null);
     if (error) { toast.error(error); return; }
+    setEditedItems((prev) => { const next = { ...prev }; delete next[plan.id]; return next; });
     toast.success("Marked as worn");
     void load();
   };
@@ -298,6 +325,34 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     </div>
   );
 
+  /** Same idea as ItemThumbs, but for confirming what was ACTUALLY worn:
+   *  each piece can be removed (swapped the bag, etc.), and a tile at the
+   *  end opens a searchable picker to add whatever replaced it. */
+  const EditableItemThumbs = ({ planId, ids, size = "h-16 w-16" }: { planId: string; ids: string[]; size?: string }) => (
+    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      {ids.map((id) => {
+        const it = items.find((x) => x.id === id);
+        const path = it ? toStoragePath(it.image_url) : null;
+        const src = path ? itemSigned[path] : null;
+        return (
+          <div key={id} className={`${size} shrink-0 relative rounded-xl overflow-hidden border border-border/60`} style={{ background: "#FFFFFF" }}>
+            {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+            <button
+              onClick={() => removeFromPlan(planId, id)}
+              aria-label="Remove this piece"
+              className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/90 border border-border flex items-center justify-center"
+            ><X size={10} /></button>
+          </div>
+        );
+      })}
+      <button
+        onClick={() => setPickerForPlan(planId)}
+        aria-label="Add a piece"
+        className={`${size} shrink-0 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground`}
+      ><Plus size={16} /></button>
+    </div>
+  );
+
   const dateLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
@@ -318,11 +373,22 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           {todayCalEvents.length > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">{todayCalEvents.map((e) => e.title || "Event").join(" · ")}</p>
           )}
-          <div className="mt-3"><ItemThumbs ids={todayPlan.item_ids} /></div>
+          <div className="mt-3">
+            {todayPlan.status === "worn"
+              ? <ItemThumbs ids={todayPlan.item_ids} />
+              : <EditableItemThumbs planId={todayPlan.id} ids={getWornIds(todayPlan)} />}
+          </div>
           {todayPlan.weather_temp != null && (
             <p className="mt-2 text-[11px] text-muted-foreground">
               {Math.round(todayPlan.weather_temp)}°{todayPlan.weather_condition ? ` · ${todayPlan.weather_condition}` : ""}
             </p>
+          )}
+          {todayPlan.status !== "worn" && (
+            <button
+              onClick={() => void confirmWorn(todayPlan)}
+              disabled={confirmingPlanId === todayPlan.id || getWornIds(todayPlan).length === 0}
+              className="mt-3 w-full h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
+            ><Check size={12} /> This is what I'm wearing</button>
           )}
         </section>
       )}
@@ -333,13 +399,13 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           {pendingConfirmation.map((p) => (
             <div key={p.id} className="rounded-2xl border border-border/60 bg-card p-3 animate-fade-up">
               <p className="text-xs text-muted-foreground mb-2">{dateLabel(p.date)}{p.occasion ? ` · ${p.occasion}` : ""}</p>
-              <ItemThumbs ids={p.item_ids} size="h-14 w-14" />
+              <EditableItemThumbs planId={p.id} ids={getWornIds(p)} size="h-14 w-14" />
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => void confirmWorn(p)}
-                  disabled={confirmingPlanId === p.id}
+                  disabled={confirmingPlanId === p.id || getWornIds(p).length === 0}
                   className="flex-1 h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
-                ><Check size={12} /> Yes, I wore it</button>
+                ><Check size={12} /> Yes, this is what I wore</button>
                 <button
                   onClick={() => void dismissPlan(p)}
                   disabled={confirmingPlanId === p.id}
@@ -554,6 +620,66 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           </div>
         </div>
       )}
+
+      {pickerForPlan && (() => {
+        const currentIds = new Set(editedItems[pickerForPlan] ?? plans.find((p) => p.id === pickerForPlan)?.item_ids ?? []);
+        const activeOnly = items.filter((it) => !(it as unknown as { archived?: boolean }).archived);
+        const q = pickerQuery.trim().toLowerCase();
+        const matches = activeOnly.filter((it) => {
+          if (currentIds.has(it.id)) return false;
+          if (pickerCat !== "All" && it.category !== pickerCat) return false;
+          if (!q) return true;
+          return [it.brand, it.category, it.subcategory, it.color, ...(it.colors ?? [])]
+            .some((v) => v?.toLowerCase().includes(q));
+        });
+        return (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setPickerForPlan(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
+              <div className="flex items-center justify-between shrink-0">
+                <p className="font-serif italic text-lg">What did you wear instead?</p>
+                <button onClick={() => setPickerForPlan(null)} aria-label="Close" className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+              </div>
+              <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5 shrink-0">
+                <Search size={15} className="text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={pickerQuery}
+                  onChange={(e) => setPickerQuery(e.target.value)}
+                  placeholder="Search by color, brand, fabric…"
+                  className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+                />
+              </div>
+              <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
+                {["All", ...ITEM_CATEGORIES].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setPickerCat(c)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] ${pickerCat === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+                  >{c}</button>
+                ))}
+              </div>
+              <div className="mt-3 overflow-y-auto grid grid-cols-3 gap-2 pb-4">
+                {matches.length === 0 ? (
+                  <p className="col-span-3 text-sm text-muted-foreground py-6 text-center">No pieces match.</p>
+                ) : matches.map((it) => {
+                  const path = toStoragePath(it.image_url);
+                  const src = path ? itemSigned[path] : null;
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => addToPlan(pickerForPlan, it.id)}
+                      className="aspect-square rounded-xl overflow-hidden border border-border/60"
+                      style={{ background: "#FFFFFF" }}
+                    >
+                      {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
