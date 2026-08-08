@@ -118,9 +118,15 @@ export async function logWardrobeEvent(input: LogWardrobeEventInput): Promise<{ 
 export async function confirmOutfitPlanWorn(
   plan: { id: string; date: string; item_ids: string[]; occasion: string | null; notes: string | null },
   userId: string,
+  actualItemIds?: string[],
 ): Promise<{ error: string | null }> {
+  const finalItemIds = actualItemIds && actualItemIds.length ? actualItemIds : plan.item_ids;
+  const patch: Record<string, unknown> = { status: "worn" };
+  if (actualItemIds && actualItemIds.length && JSON.stringify(actualItemIds) !== JSON.stringify(plan.item_ids)) {
+    patch.item_ids = actualItemIds;
+  }
   const { error } = await (supabase.from("outfit_plans" as never) as any)
-    .update({ status: "worn" })
+    .update(patch)
     .eq("id", plan.id);
   if (error) return { error: error.message };
 
@@ -128,7 +134,7 @@ export async function confirmOutfitPlanWorn(
     userId,
     eventType: "worn",
     date: plan.date,
-    itemIds: plan.item_ids,
+    itemIds: finalItemIds,
     outfitPlanId: plan.id,
     occasion: plan.occasion,
     notes: plan.notes,
@@ -136,4 +142,5 @@ export async function confirmOutfitPlanWorn(
   if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
 
   return { error: null };
+
 }
