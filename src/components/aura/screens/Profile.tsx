@@ -391,8 +391,6 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </div>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Favorite brands</p>
-                      <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Bio</p>
             <textarea
               value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={240}
