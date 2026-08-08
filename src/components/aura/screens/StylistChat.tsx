@@ -28,7 +28,9 @@ type ChatMsg = {
   choices?: string[];
   actions?: { type: ActionType; label: string }[];
   uiOnly?: boolean;
+  eventDate?: string | null;
 };
+
 
 type MsgUiState = {
   feedback?: FeedbackType;
@@ -196,11 +198,13 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
         {
           role: "assistant",
           content: res.reply,
-          itemIds: overrideItemIds ?? res.item_ids,
+                    itemIds: overrideItemIds ?? res.item_ids,
           choices: res.choices,
           actions: res.actions,
+          eventDate: (res as { eventDate?: string | null }).eventDate ?? eventDateRef.current,
         },
       ]);
+
       if (speakNextReplyRef.current) {
         speakNextReplyRef.current = false;
         void speak(res.reply);
@@ -445,20 +449,40 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
                   </div>
                 )}
 
-                {ui.calendarStep === "choose" && (
+                                {ui.calendarStep === "choose" && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
-                      className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
-                    >
-                      Today
-                    </button>
-                    <button
-                      onClick={() => patchUi(i, { calendarStep: "pick_date" })}
-                      className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
-                    >
-                      Another day
-                    </button>
+                    {m.eventDate && m.eventDate !== todayIso() ? (
+                      <>
+                        <button
+                          onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], m.eventDate!)}
+                          className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                        >
+                          Add for {new Date(`${m.eventDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </button>
+                        <button
+                          onClick={() => patchUi(i, { calendarStep: "pick_date", pickedDate: m.eventDate ?? undefined })}
+                          className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                        >
+                          Choose a different day
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
+                          className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                        >
+                          Today
+                        </button>
+                        <button
+                          onClick={() => patchUi(i, { calendarStep: "pick_date" })}
+                          className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                        >
+                          Another day
+                        </button>
+                      </>
+                    )}
+
                   </div>
                 )}
 
