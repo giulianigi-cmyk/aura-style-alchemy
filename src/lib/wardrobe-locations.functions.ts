@@ -22,6 +22,7 @@ export const listLocations = createServerFn({ method: "GET" })
 const CreateLocationSchema = z.object({
   name: z.string().trim().min(1).max(60),
   isPrimary: z.boolean().optional(),
+  endDate: z.string().nullable().optional(),
 });
 
 export const createLocation = createServerFn({ method: "POST" })
@@ -38,7 +39,7 @@ export const createLocation = createServerFn({ method: "POST" })
     }
 
     const { data: row, error } = await (context.supabase.from("wardrobe_locations" as never) as any)
-      .insert({ user_id: context.userId, name: data.name, is_primary: Boolean(data.isPrimary) })
+      .insert({ user_id: context.userId, name: data.name, is_primary: Boolean(data.isPrimary), end_date: data.endDate || null })
       .select("*").single();
     if (error) throw new Error(error.message);
 
@@ -57,14 +58,17 @@ export const createLocation = createServerFn({ method: "POST" })
 const RenameLocationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(60),
+  endDate: z.string().nullable().optional(),
 });
 
 export const renameLocation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RenameLocationSchema.parse(input))
   .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = { name: data.name, updated_at: new Date().toISOString() };
+    if (data.endDate !== undefined) patch.end_date = data.endDate || null;
     const { error } = await (context.supabase.from("wardrobe_locations" as never) as any)
-      .update({ name: data.name, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", data.id).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true as const };
@@ -113,5 +117,38 @@ export const moveItemsToLocation = createServerFn({ method: "POST" })
     const { error } = await (context.supabase.from("wardrobe_items" as never) as any)
       .update({ location_id: data.locationId }).in("id", data.itemIds).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+const ResolveExpirySchema = z.object({ id: z.string().uuid() });
+
+/**
+ * A location's "until" date arriving never moves anything on its own —
+ * this only runs when the person explicitly confirms in the UI. Moves
+ * every item currently at the expired location back to the primary one,
+ * switches active location back too if it had been the expired one, and
+ * clears end_date (not deleted — ready to reuse next season, e.g. the
+ * same rented summer house next year).
+ */
+export const resolveLocationExpiry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ResolveExpirySchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: primary } = await (context.supabase.from("wardrobe_locations" as never) as any)
+      .select("id").eq("user_id", context.userId).eq("is_primary", true).maybeSingle();
+    const primaryId = (primary as { id: string } | null)?.id ?? null;
+
+    const { error: moveErr } = await (context.supabase.from("wardrobe_items" as never) as any)
+      .update({ location_id: primaryId }).eq("location_id", data.id).eq("user_id", context.userId);
+    if (moveErr) throw new Error(moveErr.message);
+
+    await (context.supabase.from("profiles" as never) as any)
+      .update({ active_location_id: primaryId })
+      .eq("id", context.userId).eq("active_location_id", data.id);
+
+    const { error: clearErr } = await (context.supabase.from("wardrobe_locations" as never) as any)
+      .update({ end_date: null }).eq("id", data.id).eq("user_id", context.userId);
+    if (clearErr) throw new Error(clearErr.message);
+
     return { ok: true as const };
   });
