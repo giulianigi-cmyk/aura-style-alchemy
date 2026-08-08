@@ -75,13 +75,25 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
     const categoryRows = [...byCategory.entries()]
       .map(([category, v]) => ({ category, ...v }))
       .sort((a, b) => b.value - a.value || b.count - a.count);
-    const topCategory = categoryRows.find((c) => c.value > 0) ?? null;
+        const topCategory = categoryRows.find((c) => c.value > 0) ?? null;
+
+    const now = Date.now();
+    const withPurchaseDate = inPrimary.filter((it) => (it as unknown as { purchase_date?: string | null }).purchase_date);
+    const estimatedValue = withPurchaseDate.reduce((sum, it) => {
+      const pd = new Date(`${(it as unknown as { purchase_date: string }).purchase_date}T00:00:00`);
+      const ageYears = (now - pd.getTime()) / (365.25 * 24 * 3600 * 1000);
+      return sum + (it.price ?? 0) * retentionFactor(ageYears);
+    }, 0);
+    const estimatedValueCount = withPurchaseDate.length;
+    const estimatedValueExcluded = inPrimary.length - withPurchaseDate.length;
 
     return {
       totalValue, primaryCurrency, excludedCount, pricedCount: priced.length,
       neverWornCount, neverWornPct, avgCpw, bestValue, categoryRows, topCategory,
+      estimatedValue, estimatedValueCount, estimatedValueExcluded,
     };
   }, [items]);
+
 
   const thumb = (it: WardrobeItem) => {
     const path = toStoragePath(it.image_url);
@@ -229,13 +241,23 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
         </section>
       )}
 
-      <section className="mx-6 mt-6 mb-2 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Estimated resale value</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Coming soon — needs a real model (brand, age, condition, wear) before we show a number.
-          We're not going to guess in the meantime.
-        </p>
+           <section className="mx-6 mt-6 mb-2 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Estimated current value</p>
+        {stats.estimatedValueCount > 0 ? (
+          <>
+            <p className="font-serif text-2xl mt-1">{fmt(stats.estimatedValue, stats.primaryCurrency)}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+              Estimated — based on {stats.estimatedValueCount} piece{stats.estimatedValueCount === 1 ? "" : "s"} with a purchase date, assuming value tapers gradually to about {Math.round(RETENTION_FLOOR * 100)}% of the original price by year {RETENTION_CLIFF_YEARS}. Not a market appraisal — it doesn't know brand, condition or trends.
+              {stats.estimatedValueExcluded > 0 ? ` ${stats.estimatedValueExcluded} more priced piece${stats.estimatedValueExcluded === 1 ? "" : "s"} ${stats.estimatedValueExcluded === 1 ? "doesn't" : "don't"} have a purchase date, so ${stats.estimatedValueExcluded === 1 ? "isn't" : "aren't"} included.` : ""}
+            </p>
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add a purchase date to your pieces to see this.
+          </p>
+        )}
       </section>
     </div>
   );
 }
+
