@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Sparkles, Save, Trash2, ChevronUp, ChevronDown, Plus, X,
   Loader2, Share2, Download, Copy, Mail, Instagram, Facebook, Music2, MessageCircle,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/aura-share";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
+import { logWardrobeEvent } from "@/lib/wardrobe-events";
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -90,7 +92,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     | null
     | { blob: Blob; dataUrl: string; signedUrl: string | null }
   >(null);
-  const [shareOpen, setShareOpen] = useState(false);
+    const [shareOpen, setShareOpen] = useState(false);
+  const [savedOutfitId, setSavedOutfitId] = useState<string | null>(init?.outfitId ?? null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [addingToCalendar, setAddingToCalendar] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<string>("");
 
@@ -591,12 +597,13 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                   }}
                   onPointerDown={onPointerDown("move", p.key)}
                 >
-                  <img
+                                    <img
                     src={p.imgUrl}
                     alt=""
                     draggable={false}
                     className="w-full h-auto pointer-events-none"
                     crossOrigin="anonymous"
+                    data-item-key={p.key}
                     style={{ display: "block" }}
                   />
                   {isSel && (
