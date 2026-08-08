@@ -372,16 +372,32 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     const rect = canvasRef.current.getBoundingClientRect();
     const pixelRatio = targetW / rect.width;
 
-    const imgs = Array.from(canvasRef.current.querySelectorAll("img"));
+        const imgs = Array.from(canvasRef.current.querySelectorAll<HTMLImageElement>("img[data-item-key]"));
     const originalSrcs = imgs.map((img) => img.src);
 
     try {
-      // Inline every canvas image as a data URL BEFORE capture so toPng()
-      // never needs to fetch a signed/cross-origin URL itself.
+      // The signed URLs on screen were generated when the canvas first
+      // loaded — after a long editing/chatting session they can have
+      // expired by the time the person finally hits Share, which used to
+      // fail silently and produce an image missing whichever pieces had
+      // gone stale (e.g. only the shoes showing). Get a FRESH signed URL
+      // per item right before export instead of trusting what's on screen.
+      let anyFailed = false;
       await Promise.all(
         imgs.map(async (img) => {
+          const key = img.dataset.itemKey;
+          const placedItem = placed.find((p) => p.key === key);
+          const wardrobeItem = placedItem ? items.find((i) => i.id === placedItem.itemId) : null;
+          const path = wardrobeItem ? toStoragePath(wardrobeItem.image_url) : null;
+
+          let freshUrl: string | null = null;
+          if (path) {
+            const { data } = await supabase.storage.from("wardrobe").createSignedUrl(path, 300);
+            freshUrl = data?.signedUrl ?? null;
+          }
+
           try {
-            const dataUrl = await toDataUrl(img.src);
+            const dataUrl = await toDataUrl(freshUrl ?? img.src);
             img.src = dataUrl;
             await new Promise<void>((resolve) => {
               if (img.complete) return resolve();
@@ -389,10 +405,16 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               img.addEventListener("error", () => resolve(), { once: true });
             });
           } catch (e) {
-            console.error("[AURA export] failed to inline image, it will be missing from the export", img.src, e);
+            console.error("[AURA export] failed to inline image", img.src, e);
+            anyFailed = true;
           }
         }),
       );
+
+      if (anyFailed) {
+        toast.error("Couldn't load one of the pieces for the shared image — try again in a moment.");
+        return null;
+      }
 
       const dataUrl = await toPng(canvasRef.current, {
         pixelRatio,
@@ -413,7 +435,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       // normally (drag/resize/rotate) after export.
       imgs.forEach((img, i) => { img.src = originalSrcs[i]; });
     }
-  }, [ratio]);
+  }, [ratio, placed, items]);
+
 
   const save = useCallback(async () => {
     if (!user) return;
