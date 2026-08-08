@@ -1,4 +1,4 @@
-export const AURA_APP_URL = "https://aura-style-alchemy.app";
+export const AURA_APP_URL = "https://aura-wardrobe-intelligence.lovable.app";
 export const AURA_SHARE_CAPTION = `Created with Aura — download the app: ${AURA_APP_URL}`;
 
 /** Try native share sheet (mobile). Returns true if it launched. */
