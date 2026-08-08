@@ -123,7 +123,7 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
           </div>
 
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Minimum skirt / dress length</p>
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Skirt & dress length (if you wear them)</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {SKIRT_OPTIONS.map((o) => {
                 const locked = Boolean(prefs.cover_legs) && o.value !== "long";
