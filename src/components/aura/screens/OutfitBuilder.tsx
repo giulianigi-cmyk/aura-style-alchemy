@@ -480,7 +480,43 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     } finally {
       setSaving(false);
     }
-  }, [user, placed, exportCanvas, name, occasion, notes, season, weather, init]);
+    }, [user, placed, exportCanvas, name, occasion, notes, season, weather, init]);
+
+  const addToCalendar = async () => {
+    if (!user || !placed.length) return;
+    setAddingToCalendar(true);
+    try {
+      await supabase.from("outfit_plans").delete().eq("user_id", user.id).eq("date", calendarDate);
+      const { data, error } = await supabase.from("outfit_plans").insert({
+        user_id: user.id,
+        date: calendarDate,
+        item_ids: placed.map((p) => p.itemId),
+        occasion: occasion || null,
+        notes: notes.trim() || name.trim() || null,
+        status: "planned",
+      } as never).select("id").single();
+      if (error) throw error;
+      const { error: eventErr } = await logWardrobeEvent({
+        userId: user.id,
+        eventType: "planned",
+        date: calendarDate,
+        itemIds: placed.map((p) => p.itemId),
+        outfitPlanId: (data as { id: string }).id,
+        outfitId: savedOutfitId,
+        occasion: occasion || null,
+        notes: notes.trim() || name.trim() || null,
+      });
+      if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+      toast.success("Added to calendar");
+      setCalendarOpen(false);
+    } catch (e) {
+      console.error("[AURA] add to calendar", e);
+      toast.error(e instanceof Error ? e.message : "Couldn't add to calendar");
+    } finally {
+      setAddingToCalendar(false);
+    }
+  };
+
 
 
   const doNativeShare = async () => {
@@ -734,7 +770,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
           Save outfit
         </button>
-        {shareState && (
+               {shareState && (
           <button
             onClick={() => setShareOpen(true)}
             className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
@@ -742,7 +778,38 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             <Share2 size={12} /> Share this look
           </button>
         )}
+        {savedOutfitId && (
+          <button
+            onClick={() => setCalendarOpen(true)}
+            className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
+          >
+            <CalendarIcon size={12} /> Add to calendar
+          </button>
+        )}
       </div>
+
+      {calendarOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCalendarOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
+            <p className="font-serif italic text-lg">Add to calendar</p>
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(e) => setCalendarDate(e.target.value)}
+              className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+            />
+            <button
+              onClick={() => void addToCalendar()}
+              disabled={addingToCalendar}
+              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-60 inline-flex items-center justify-center gap-2"
+            >
+              {addingToCalendar && <Loader2 size={12} className="animate-spin" />}
+              Save to calendar
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Item picker */}
       {pickerOpen && (
