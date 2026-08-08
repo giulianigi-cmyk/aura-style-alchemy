@@ -202,7 +202,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     }
   }, [profile, city, status, detect, autoTried]);
 
-  const greetingName = profile?.full_name?.split(" ")[0] || "there";
+    const greetingName = profile?.full_name?.trim() || "there";
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
