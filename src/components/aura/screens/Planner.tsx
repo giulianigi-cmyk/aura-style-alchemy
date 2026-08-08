@@ -462,11 +462,13 @@ function DayDetail({
                 return (
                   <button
                     key={e.id}
-                    onClick={() => openStylistChat({
+                                        onClick={() => openStylistChat({
                       message: promptMessage,
                       temperature: weather ? (weather.tempMin + weather.tempMax) / 2 : null,
                       condition: weather ? describeWeather(weather.weatherCode).label : null,
+                      date,
                     })}
+
                     className="w-full text-left text-xs py-1 active:opacity-60"
                   >
                     <span className="font-medium">{e.title || "Untitled event"}</span>
