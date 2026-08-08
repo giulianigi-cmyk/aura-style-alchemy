@@ -7,6 +7,7 @@ import { useProfile, calcAge } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
 import { CalendarConnectionSection, AppleCalendarConnectionSection, OutlookCalendarConnectionSection } from "../CalendarConnectionSection";
 import { MyBrands } from "../MyBrands";
+import { WardrobeLocationsSection } from "../WardrobeLocationsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
@@ -431,7 +432,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               </div>
             </section>
           )}
-          <MyBrands />
+                    <MyBrands />
+          <WardrobeLocationsSection />
           <MySizes userId={user?.id} />
           <DressPreferencesSection userId={user?.id} />
 
