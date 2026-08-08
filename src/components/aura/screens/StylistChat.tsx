@@ -364,8 +364,13 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     patchUi(index, { calendarStep: undefined });
   };
 
-  return (
+    return (
     <div className="h-full flex flex-col">
+      {/* TEMPORARY DIAGNOSTIC — remove once the calendar-event auto-send bug is found. */}
+      <div className="px-4 py-2 bg-yellow-100 text-[10px] text-black break-all shrink-0">
+        [DEBUG] initialMessage={initialMessage ? "SET" : "null"} | itemsLoaded={String(itemsLoaded)} | autoSent={String(autoSentRef.current)} | messagesCount={messages.length}
+        {initialMessage && <div>msg: {initialMessage.message}</div>}
+      </div>
       <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
         <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={16} />
@@ -378,6 +383,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 pb-3 space-y-3">
         {messages.length === 0 && (
+
           <div className="mt-10 text-center animate-fade-up">
             <Sparkles size={20} className="mx-auto text-muted-foreground" />
             <p className="mt-3 font-serif text-xl italic">What are you dressing for?</p>
