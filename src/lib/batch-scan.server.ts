@@ -53,9 +53,21 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
       let dataUrl = toDataUrl(await blob.arrayBuffer(), blob.type || "image/jpeg");
       const prefill = (job as { prefill?: JobPrefill }).prefill ?? null;
 
-      if (prefill) {
-        const bg = await removeBackgroundCore(dataUrl);
+            if (prefill) {
+        // A single transient failure here (network blip, a momentary
+        // remove.bg hiccup) used to silently skip background removal for
+        // that one photo — rare enough to go unnoticed at 3-4 photos, but
+        // at 100 photos the odds of hitting it at least once approach
+        // certainty. Retry before giving up.
+        let bg = await removeBackgroundCore(dataUrl);
+        let bgAttempt = 1;
+        while (!bg.ok && bgAttempt < 3) {
+          await new Promise((r) => setTimeout(r, 800 * bgAttempt));
+          bg = await removeBackgroundCore(dataUrl);
+          bgAttempt++;
+        }
         if (bg.ok) {
+
           const newPath = `${job.user_id}/batch/${Date.now()}-bg-${Math.random().toString(36).slice(2)}.png`;
           const bgBlob = await (await fetch(bg.imageDataUrl)).blob();
           const { error: upErr } = await supabaseAdmin.storage.from(BUCKET).upload(newPath, bgBlob, {
