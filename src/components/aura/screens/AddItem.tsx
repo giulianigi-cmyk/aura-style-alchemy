@@ -1,6 +1,6 @@
 import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon } from "lucide-react";
 import type { DragEvent } from "react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
+import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
@@ -162,11 +163,20 @@ type Stage = "idle" | "bgremove" | "analyze";
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
+  const fetchLocations = useServerFn(listLocations);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   
   const importUrl = useServerFn(importProductFromUrl);
   const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchLocations()
+      .then((res) => setActiveLocationId(res.activeLocationId))
+      .catch((e) => console.error("[AURA add-item] active location lookup failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<"capture" | "url" | "details">("capture");
   const [file, setFile] = useState<File | null>(null);
@@ -409,9 +419,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         closure: closure || null,
                 gender: gender || null,
         style_tags: styleTags,
-        formality: formality,
+                formality: formality,
         day_evening: dayEvening || null,
         purchase_date: purchaseDate || null,
+        location_id: activeLocationId,
       } as unknown as TablesInsert<"wardrobe_items">;
 
       let { data: inserted, error: insErr } = await supabase
