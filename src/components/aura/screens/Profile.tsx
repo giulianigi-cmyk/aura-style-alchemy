@@ -83,8 +83,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
-  const [styles, setStyles] = useState<string[]>([]);
-  const [brands, setBrands] = useState<string[]>([]);
+    const [styles, setStyles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -101,8 +100,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
-    setStyles(profile.style_preferences ?? []);
-    setBrands(profile.favorite_brands ?? []);
+        setStyles(profile.style_preferences ?? []);
   }, [profile]);
 
   const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
@@ -120,8 +118,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       style_boldness: styleBoldness || null,
       profession: profession.trim() || null,
       bio: bio.trim() || null,
-      style_preferences: styles,
-      favorite_brands: brands,
+            style_preferences: styles,
       setup_complete: true,
     } as never);
     setSaving(false);
@@ -239,7 +236,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
         <div className="mt-4 flex gap-8">
           {[
-            { n: profile?.favorite_brands?.length ?? 0, l: "Brands" },
+                        { n: profile?.owned_brands?.length ?? 0, l: "Brands" },
             { n: profile?.style_preferences?.length ?? 0, l: "Styles" },
             { n: calcAge(profile?.birth_date) ?? "—", l: "Age" },
           ].map(s => (
@@ -395,19 +392,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Favorite brands</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {BRANDS.map(b => {
-                const on = brands.includes(b);
-                return (
-                  <button key={b} onClick={() => toggle(brands, setBrands, b)}
-                    className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                    {b}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div>
+                      <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Bio</p>
             <textarea
               value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={240}
