@@ -47,7 +47,9 @@ export type StylistChatInit = {
   message: string;
   temperature: number | null;
   condition: string | null;
+  date?: string | null;
 } | null;
+
 
 function Inner() {
   const { user, loading, recovery } = useAuth();
