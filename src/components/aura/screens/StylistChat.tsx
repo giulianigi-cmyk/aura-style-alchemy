@@ -373,11 +373,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
     return (
     <div className="h-full flex flex-col">
-      {/* TEMPORARY DIAGNOSTIC — remove once the calendar-event auto-send bug is found. */}
-      <div className="px-4 py-2 bg-yellow-100 text-[10px] text-black break-all shrink-0">
-                [DEBUG] user={String(!!user)} | initialMessage={initialMessage ? "SET" : "null"} | itemsLoaded={String(itemsLoaded)} | itemsCount={items.length} | itemsError={itemsError ?? "none"} | autoSent={String(autoSentRef.current)} | messagesCount={messages.length}
-        {initialMessage && <div>msg: {initialMessage.message}</div>}
-      </div>
+      
       <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
         <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={16} />
