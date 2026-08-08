@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
+import { isItemAtLocation } from "./wardrobe-location";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -12,6 +13,7 @@ const ItemSchema = z.object({
   style: z.array(z.string()).nullable().optional(),
   season: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
+  locationId: z.string().nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -30,19 +32,31 @@ const OutputSchema = z.object({
 export const suggestOutfitAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
     const gateway = createLovableAiGatewayProvider(key);
     const model = gateway("google/gemini-2.5-flash");
 
+    const { data: profileRow } = await (context.supabase.from("profiles" as never) as any)
+      .select("active_location_id").eq("id", context.userId).maybeSingle();
+    const activeLocationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
+    let activeLocation: { id: string; is_primary: boolean } | null = null;
+    if (activeLocationId) {
+      const { data: locRow } = await (context.supabase.from("wardrobe_locations" as never) as any)
+        .select("id, is_primary").eq("id", activeLocationId).eq("user_id", context.userId).maybeSingle();
+      if (locRow) activeLocation = locRow as { id: string; is_primary: boolean };
+    }
+    const eligibleItems = data.items.filter((it) =>
+      isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
+
     const wx = data.temperature != null
       ? `Weather: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
       : "Weather: unknown.";
     const occ = data.occasion ? `Occasion: ${data.occasion}.` : "Occasion: everyday.";
 
-    const catalog = data.items.slice(0, 200).map((it) => ({
+    const catalog = eligibleItems.slice(0, 200).map((it) => ({
       id: it.id,
       category: it.category ?? "",
       subcategory: it.subcategory ?? "",
