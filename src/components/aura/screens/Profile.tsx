@@ -32,6 +32,7 @@ const INDUSTRIES = [
 ];
 const WORK_DRESS_CODES = ["None", "Casual", "Smart Casual", "Business Casual", "Business Formal", "Uniform"];
 const PERSONAL_FORMALITY = ["Very casual", "Casual", "Smart Casual", "Elegant", "Very elegant"];
+const STYLE_BOLDNESS = ["Classic", "Balanced", "Creative", "Bold"];
 
 const DRESS_CODE_DEFINITIONS: { term: string; description: string }[] = [
   { term: "None", description: "No specific dress code — wear whatever you like." },
@@ -77,7 +78,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [gender, setGender] = useState<string>("");
   const [industry, setIndustry] = useState<string>("");
   const [workDressCode, setWorkDressCode] = useState<string>("");
-  const [personalFormality, setPersonalFormality] = useState<string>("");
+    const [personalFormality, setPersonalFormality] = useState<string>("");
+  const [styleBoldness, setStyleBoldness] = useState<string>("");
   const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
@@ -95,7 +97,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setGender(profile.gender ?? "");
     setIndustry(profile.industry ?? "");
     setWorkDressCode(profile.work_dress_code ?? "");
-    setPersonalFormality(profile.personal_formality ?? "");
+        setPersonalFormality(profile.personal_formality ?? "");
+    setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
     setStyles(profile.style_preferences ?? []);
@@ -105,7 +108,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
     setList(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
 
-  const save = async () => {
+    const save = async () => {
     setSaving(true); setErr(null);
     const { error } = await update({
       full_name: fullName.trim() || null,
@@ -114,12 +117,13 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       industry: industry || null,
       work_dress_code: workDressCode || null,
       personal_formality: personalFormality || null,
+      style_boldness: styleBoldness || null,
       profession: profession.trim() || null,
       bio: bio.trim() || null,
       style_preferences: styles,
       favorite_brands: brands,
       setup_complete: true,
-    });
+    } as never);
     setSaving(false);
     if (error) { setErr(error); toast.error("Couldn't save profile"); return; }
     toast.success("Profile updated");
@@ -311,7 +315,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </div>
             <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">So AURA never suggests a blazer to someone who hates them, even when "technically correct".</p>
             <div className="mt-1 flex flex-wrap gap-2">
-              {PERSONAL_FORMALITY.map(f => (
+                           {PERSONAL_FORMALITY.map(f => (
                 <button key={f} onClick={() => setPersonalFormality(f)}
                   className={`rounded-full px-3 py-1.5 text-xs border transition ${personalFormality === f ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
                   {f}
@@ -319,6 +323,19 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               ))}
             </div>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">How much do you like to experiment?</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">For occasions that aren't strictly formal (weekend, work depending on your job, casual dinners) — AURA will lean toward this instead of asking each time. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {STYLE_BOLDNESS.map(b => (
+                <button key={b} onClick={() => setStyleBoldness(styleBoldness === b ? "" : b)}
+                  className={`rounded-full px-3 py-1.5 text-xs border transition ${styleBoldness === b ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                  {b}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {infoPopup && (
             <div
               className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
