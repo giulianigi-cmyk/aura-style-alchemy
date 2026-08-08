@@ -193,7 +193,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [toeShape, setToeShape] = useState("");
   const [closure, setClosure] = useState("");
   const [gender, setGender] = useState("");
-  const [styleTags, setStyleTags] = useState<string[]>([]);
+    const [styleTags, setStyleTags] = useState<string[]>([]);
+  const [formality, setFormality] = useState<number | null>(null);
+  const [dayEvening, setDayEvening] = useState("");
   const [colors, setColors] = useState<string[]>([]);
   const [seasons, setSeasons] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
@@ -207,7 +209,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const resetFields = () => {
     setBrand(""); setSize(""); setCategory("Tops"); setSubcategory(""); setColors([]);
     setLength(""); setSleeveLength(""); setFit(""); setHeelHeight(""); setToeShape("");
-    setClosure(""); setGender(""); setStyleTags([]);
+        setClosure(""); setGender(""); setStyleTags([]);
+    setFormality(null); setDayEvening("");
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
     setPurchaseDate(new Date().toISOString().slice(0, 10));
@@ -240,7 +243,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.toeShape) setToeShape(result.toeShape);
         if (result.closure) setClosure(result.closure);
         if (result.gender) setGender(result.gender);
-        if (result.styleTags?.length) setStyleTags(result.styleTags);
+                if (result.styleTags?.length) setStyleTags(result.styleTags);
+        if (result.formality != null) setFormality(result.formality);
+        if (result.dayEvening) setDayEvening(result.dayEvening);
         if (result.colors?.length) setColors(result.colors);
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
@@ -402,8 +407,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         heel_height: heelHeight || null,
         toe_shape: toeShape || null,
         closure: closure || null,
-        gender: gender || null,
+                gender: gender || null,
         style_tags: styleTags,
+        formality: formality,
+        day_evening: dayEvening || null,
         purchase_date: purchaseDate || null,
       } as unknown as TablesInsert<"wardrobe_items">;
 
