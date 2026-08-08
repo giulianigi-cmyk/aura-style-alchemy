@@ -37,15 +37,20 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // attrs_backfilled_at, not the four is-null checks: a bag never gets
-    // heel_height, a pair of jeans never gets sleeve_length — requiring
-    // ALL FOUR to be null meant most items could never leave this list,
-    // and got silently re-processed (and re-counted) every round forever.
+    // Gate on formality specifically, not attrs_backfilled_at — that flag
+    // was already set for everyone during the PREVIOUS taxonomy backfill
+    // (length/sleeveLength/fit/etc.), so gating on it again here would
+    // mean this new round silently finds zero candidates for anyone
+    // who's already run the wand once. formality is the field THIS round
+    // actually needs to fill, so it's the correct completion marker now.
+    // Items with no image at all are excluded — they can never get a
+    // formality value and would otherwise loop forever as candidates.
     const { data: candidates, error: qErr } = await context.supabase
       .from("wardrobe_items")
       .select("id, image_url, category")
       .eq("user_id", context.userId)
-      .is("attrs_backfilled_at", null)
+      .is("formality", null)
+      .not("image_url", "is", null)
       .limit(BATCH_SIZE);
     if (qErr) throw new Error(qErr.message);
 
@@ -87,6 +92,12 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
         if (result.closure) patch.closure = result.closure;
         if (result.gender) patch.gender = result.gender;
         if (result.styleTags?.length) patch.style_tags = result.styleTags;
+        // formality/dayEvening should apply to virtually every garment —
+        // written directly, not gated behind a truthiness check like the
+        // optional attributes above (a formality of e.g. 0 would be
+        // falsy and silently dropped otherwise).
+        patch.formality = result.formality;
+        if (result.dayEvening) patch.day_evening = result.dayEvening;
 
         const { error: updErr } = await context.supabase
           .from("wardrobe_items")
@@ -103,7 +114,7 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
       .from("wardrobe_items")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .is("attrs_backfilled_at", null);
+      .is("formality", null);
 
     return { processed: items.length, updated, remaining: remaining ?? 0 };
   });
