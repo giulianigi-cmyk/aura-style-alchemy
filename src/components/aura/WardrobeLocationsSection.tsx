@@ -221,4 +221,70 @@ export function WardrobeLocationsSection() {
                       className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
                     ><Pencil size={11} /></button>
                     {!loc.is_primary && (
-                      
+                      <button
+                        onClick={() => setConfirmDeleteId(loc.id)}
+                        aria-label={`Remove ${loc.name}`}
+                        className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
+                      ><X size={11} /></button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {locations.length > 0 && (
+            <p className="text-[10px] text-muted-foreground px-1">
+              {activeId ? "AURA suggests only pieces at your active location." : "No active location set — AURA sees your whole wardrobe."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {adding ? (
+        <div className="mt-2 space-y-2">
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Beach house"
+            className="w-full bg-secondary/60 rounded-full px-4 py-2 text-sm outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground shrink-0">Until (optional)</span>
+            <input
+              type="date"
+              value={newEndDate}
+              onChange={(e) => setNewEndDate(e.target.value)}
+              className="flex-1 bg-secondary/60 rounded-full px-3 py-1.5 text-xs outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setAdding(false); setNewName(""); setNewEndDate(""); }} className="h-9 px-4 rounded-full bg-secondary/60 text-[10px] uppercase tracking-[0.2em]">Cancel</button>
+            <button onClick={() => void addLocation()} className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em]">Add</button>
+          </div>
+        </div>
+      ) : locations.length > 0 ? (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+        ><Plus size={12} /> Add another location</button>
+      ) : null}
+
+      {confirmDeleteId && (
+        <div
+          className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+          onClick={() => setConfirmDeleteId(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe">
+            <p className="font-serif text-lg text-center">Remove this location?</p>
+            <p className="text-xs text-muted-foreground text-center mt-1">Its pieces stay in your closet, just no longer assigned anywhere.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button onClick={() => setConfirmDeleteId(null)} className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
+              <button onClick={() => void doDelete(confirmDeleteId)} className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em]">Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
