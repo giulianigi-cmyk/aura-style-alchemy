@@ -339,11 +339,15 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const results: { id: string; ok: boolean; error?: string }[] = [];
 
-    const ids = data.items.map((it) => it.id);
+        const ids = data.items.map((it) => it.id);
     const { data: owned, error: ownErr } = await supabaseAdmin
       .from("scan_detected_items").select("id").in("id", ids).eq("user_id", userId);
     if (ownErr) throw new Error(ownErr.message);
     const ownedIds = new Set((owned ?? []).map((r) => r.id));
+
+    const { data: profileRow } = await (supabase.from("profiles" as never) as any)
+      .select("active_location_id").eq("id", userId).maybeSingle();
+    const activeLocationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
 
     for (const it of data.items) {
       if (!ownedIds.has(it.id)) {
@@ -368,7 +372,9 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
           size: it.size || null,
           purchase_date: it.purchase_date || null,
           source: "batch_scan",
+          location_id: activeLocationId,
         } as never);
+
         if (insErr) throw new Error(insErr.message);
 
         const { error: updErr } = await supabaseAdmin
