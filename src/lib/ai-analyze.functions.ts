@@ -43,6 +43,8 @@ const OutputSchema = z.object({
   closure: z.string(),
   gender: z.string(),
   styleTags: z.array(z.string()),
+  formality: z.number(),
+  dayEvening: z.string(),
 });
 
 export type WardrobeAnalysis = ReturnType<typeof buildFallback>;
@@ -52,6 +54,7 @@ function buildFallback() {
     category: "", subcategory: "", colors: [] as string[], styles: [] as string[], occasions: [] as string[],
     seasons: [] as string[], brand: "", materials: [] as string[], length: "", sleeveLength: "",
     fit: "", heelHeight: "", toeShape: "", closure: "", gender: "", styleTags: [] as string[],
+    formality: null as number | null, dayEvening: "",
   };
 }
 
@@ -92,8 +95,11 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     `- styleTags (array, 1-4 items): pick from ${STYLE_TAG_OPTIONS.join(", ")}. These are free-form aesthetic labels for future style matching — be generous but accurate.`,
     "If a field cannot be determined confidently, or does not apply to this category, return an empty array or empty string for it.",
     "",
+    "- formality: an integer 1-5, purely about how dressed-up this specific piece reads, independent of season/color: 1 = very casual/sport (activewear, flip-flops, gym leggings); 2 = casual (jeans, everyday t-shirts, lifestyle sneakers, casual sweaters); 3 = smart casual (casual blazers, loafers, non-formal tailored trousers, structured casual bags); 4 = elegant (tailored blazers, slingbacks, refined sandals, elegant bags); 5 = formal/very elegant (evening dresses, cocktail dresses, clutches, evening shoes, tuxedo-type formalwear). Always give your best estimate — never leave this out.",
+    "- dayEvening: EXACTLY one of day, evening, both — whether this piece reads as appropriate for daytime, nighttime, or either. Most everyday pieces are \"both\"; reserve \"evening\" for pieces that read as distinctly after-dark (sequins, evening satin, tuxedo-type pieces) and \"day\" only for pieces that would look out of place at night (e.g. very sporty daywear).",
+    "",
     "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-    '{"category": "", "subcategory": "", "colors": [], "styles": [], "occasions": [], "seasons": [], "brand": "", "materials": [], "length": "", "sleeveLength": "", "fit": "", "heelHeight": "", "toeShape": "", "closure": "", "gender": "", "styleTags": []}',
+    '{"category": "", "subcategory": "", "colors": [], "styles": [], "occasions": [], "seasons": [], "brand": "", "materials": [], "length": "", "sleeveLength": "", "fit": "", "heelHeight": "", "toeShape": "", "closure": "", "gender": "", "styleTags": [], "formality": 3, "dayEvening": "both"}',
   ].join(" ");
 
   try {
@@ -169,6 +175,8 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
       closure: ATTRIBUTE_APPLICABILITY.closure.includes(category) ? single(output.closure, CLOSURE_OPTIONS) : "",
       gender: single(output.gender, GENDER_OPTIONS),
       styleTags: allowed(output.styleTags, STYLE_TAG_OPTIONS).slice(0, 4),
+      formality: Number.isFinite(output.formality) ? Math.min(5, Math.max(1, Math.round(output.formality))) : null,
+      dayEvening: (["day", "evening", "both"] as const).includes(output.dayEvening as never) ? output.dayEvening : "",
     };
   } catch (err) {
     console.error("[AURA analyze] failed", err);
