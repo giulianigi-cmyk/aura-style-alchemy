@@ -462,10 +462,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         season: seasonTag,
         notes: notes.trim() || null,
       };
-      const { error } = init?.outfitId
-        ? await supabase.from("outfits").update(payload).eq("id", init.outfitId).eq("user_id", user.id)
-        : await supabase.from("outfits").insert({ user_id: user.id, ...payload });
+            const { data: savedRow, error } = init?.outfitId
+        ? await supabase.from("outfits").update(payload).eq("id", init.outfitId).eq("user_id", user.id).select("id").single()
+        : await supabase.from("outfits").insert({ user_id: user.id, ...payload }).select("id").single();
       if (error) throw error;
+      setSavedOutfitId((savedRow as { id: string } | null)?.id ?? init?.outfitId ?? null);
 
       const signedUrl = (await supabase.storage.from("outfits")
         .createSignedUrl(path, 60 * 60 * 24 * 7)).data?.signedUrl ?? null;
