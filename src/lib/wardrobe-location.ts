@@ -16,6 +16,7 @@ export type WardrobeLocation = {
   user_id: string;
   name: string;
   is_primary: boolean;
+  end_date: string | null;
   created_at: string;
   updated_at: string;
 };
