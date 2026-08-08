@@ -149,7 +149,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           temperature: weather?.current.temperature ?? null,
           condition: desc,
           occasion,
-          items: activeItems.map((it) => ({
+                    items: activeItems.map((it) => ({
             id: it.id,
             category: it.category,
             subcategory: it.subcategory,
@@ -157,9 +157,11 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
             season: it.season,
             brand: it.brand,
+            locationId: (it as unknown as { location_id?: string | null }).location_id ?? null,
           })),
         },
       });
+
       if (!res.ok) {
         toast.error(res.error || "AI suggestion failed — please try again.");
         return;
