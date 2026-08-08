@@ -10,6 +10,22 @@ import { Loader2 } from "lucide-react";
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
 const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${n.toFixed(0)}`;
 
+// Deliberately simple and stated plainly, not tuned to feel precise:
+// linear decline from 100% at purchase to a 25% floor by year 5, flat
+// after that. This is a general rule of thumb, not a market appraisal —
+// it doesn't know brand, condition, or trends, and never claims to.
+// Wear count is NOT a factor here on purpose: how often something has
+// been worn barely moves resale value (condition and brand do); it's
+// already the input for cost-per-wear above, which answers a different
+// question ("was this worth it for me") from this one ("what's it
+// roughly worth now").
+const RETENTION_FLOOR = 0.25;
+const RETENTION_CLIFF_YEARS = 5;
+function retentionFactor(ageYears: number): number {
+  const t = Math.min(Math.max(ageYears, 0), RETENTION_CLIFF_YEARS) / RETENTION_CLIFF_YEARS;
+  return 1 - (1 - RETENTION_FLOOR) * t;
+}
+
 export function Insights({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
