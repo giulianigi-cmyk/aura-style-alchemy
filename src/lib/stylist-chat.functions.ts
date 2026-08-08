@@ -46,14 +46,17 @@ const InputSchema = z.object({
   profession: z.string().nullable().optional(),
   temperature: z.number().nullable().optional(),
   condition: z.string().nullable().optional(),
-  feedbackContext: z.enum(["liked", "disliked", "saved"]).nullable().optional(),
+    feedbackContext: z.enum(["liked", "disliked", "saved"]).nullable().optional(),
+  todayDate: z.string().nullable().optional(),
 });
 
 const OutputSchema = z.object({
   reply: z.string(),
   item_ids: z.array(z.string()),
   choices: z.array(z.string()).max(4).optional(),
+  eventDate: z.string().nullable().optional(),
 });
+
 
 const SAVE_ACTIONS = [
   { type: "save_canvas" as const, label: "Save to canvas" },
@@ -221,11 +224,14 @@ export const stylistChat = createServerFn({ method: "POST" })
       "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
       "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
       ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
+              ...(data.todayDate ? [`EVENT DATE: today's date is ${data.todayDate}. If the person's message clearly implies a specific date for the outfit they're asking about — an explicit date, a weekday name ('Monday', 'lunedì'), a relative expression ('in 3 days', 'tra tre giorni', 'next week') — work out the actual ISO date (YYYY-MM-DD) relative to today's date and return it as 'eventDate' in your JSON response. If no specific date is implied, or the person is just asking generally (not about a specific future occasion), leave eventDate null. Only set this when you're genuinely confident about the date; a wrong guess here is worse than leaving it empty.`] : []),
       wx,
+
       `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
       "",
       "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-      '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"], "choices": ["Option A", "Option B"]}',
+            '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"], "choices": ["Option A", "Option B"], "eventDate": "2026-08-15"}',
+
     ].join("\n");
     try {
       const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
@@ -312,11 +318,13 @@ export const stylistChat = createServerFn({ method: "POST" })
 
       return {
         ok: true as const,
-        reply: (finalReply ?? "").slice(0, 1200),
+                reply: (finalReply ?? "").slice(0, 1200),
         item_ids: finalItemIds,
         choices: (parsed.choices ?? []).slice(0, 4),
         actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
+        eventDate: parsed.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(parsed.eventDate) ? parsed.eventDate : null,
       };
+
     } catch (err) {
       console.error("[AURA stylist-chat] failed", err);
       return { ok: false as const, error: err instanceof Error ? err.message : "AI failed" };
