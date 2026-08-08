@@ -29,6 +29,8 @@ import {
   MATERIAL_OPTIONS,
   CURRENCY_OPTIONS,
 } from "@/lib/wardrobe-options";
+import { listLocations, moveItemsToLocation } from "@/lib/wardrobe-locations.functions";
+import type { WardrobeLocation } from "@/lib/wardrobe-location";
 
 const categories = ["All", ...ITEM_CATEGORIES];
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
@@ -48,6 +50,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [q, setQ] = useState("");
   const [seasonOnly, setSeasonOnly] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+  const [locations, setLocations] = useState<WardrobeLocation[]>([]);
+  const [viewLocationId, setViewLocationId] = useState<string | "all">("all");
   const [detail, setDetail] = useState<WardrobeItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [colorWheelOpen, setColorWheelOpen] = useState(false);
@@ -59,6 +63,8 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [tidying, setTidying] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
+  const fetchLocations = useServerFn(listLocations);
+  const moveItems = useServerFn(moveItemsToLocation);
   const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
   const [edit, setEdit] = useState({
     brand: "",
@@ -308,6 +314,18 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     toast.success(archived ? "Archived — hidden from styling suggestions until you restore it" : "Restored to your active closet");
   };
 
+  const moveDetailItem = async (locationId: string) => {
+    if (!detail) return;
+    try {
+      await moveItems({ data: { itemIds: [detail.id], locationId } });
+      setItems((prev) => prev.map((it) => (it.id === detail.id ? { ...it, location_id: locationId } as WardrobeItem : it)));
+      setDetail((d) => (d ? ({ ...d, location_id: locationId } as WardrobeItem) : d));
+      toast.success("Moved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't move item");
+    }
+  };
+
   const season = useMemo(() => currentSeason(), []);
 
   const runLegacyMigration = async () => {
@@ -382,6 +400,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       });
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    fetchLocations()
+      .then((res) => setLocations(res.locations))
+      .catch((e) => console.error("[AURA wardrobe] locations load failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const seasonMatches = useMemo(
     () => new Set(items.filter((i) => itemMatchesSeason(i, season)).map((i) => i.id)),
     [items, season],
@@ -395,12 +421,14 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const filtered = useMemo(() => items.filter(i => {
     const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
     if (showArchived) return isArchived;
-    return !isArchived &&
+    const locId = (i as unknown as { location_id?: string | null }).location_id ?? null;
+    const matchesLocation = viewLocationId === "all" || locId === viewLocationId;
+    return !isArchived && matchesLocation &&
       (cat === "All" || i.category === cat) &&
       (!seasonOnly || seasonMatches.has(i.id)) &&
       (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
         .some(v => v?.toLowerCase().includes(q.toLowerCase())));
-  }), [items, cat, q, seasonOnly, seasonMatches, showArchived]);
+  }), [items, cat, q, seasonOnly, seasonMatches, showArchived, viewLocationId]);
 
   const w = weather?.current;
   const wLabel = w ? describeWeather(w.weatherCode, w.isDay) : null;
@@ -542,6 +570,21 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         >
           {showArchived ? <><X size={11} /> Back to closet</> : <><Archive size={11} /> Archived ({archivedCount})</>}
         </button>
+      )}
+      {locations.length > 1 && !showArchived && (
+        <div className="mx-6 mt-3 flex gap-2 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setViewLocationId("all")}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === "all" ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+          >All</button>
+          {locations.map((loc) => (
+            <button
+              key={loc.id}
+              onClick={() => setViewLocationId(loc.id)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === loc.id ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+            >{loc.name}</button>
+          ))}
+        </div>
       )}
       {loading ? (
         <div className="flex items-center justify-center mt-20 text-muted-foreground"><Loader2 className="animate-spin" /></div>
@@ -763,6 +806,24 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                     ? <><ArchiveRestore size={12} /> Restore to closet</>
                     : <><Archive size={12} /> Archive — out of rotation</>}
                 </button>
+                {locations.length > 1 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">Kept at</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {locations.map((loc) => {
+                        const current = (detail as unknown as { location_id?: string | null }).location_id ?? null;
+                        const on = current === loc.id || (current == null && loc.is_primary);
+                        return (
+                          <button
+                            key={loc.id}
+                            onClick={() => void moveDetailItem(loc.id)}
+                            className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}
+                          >{loc.name}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                                             <button
                   onClick={() => setConfirmDelete(true)}
                   className="mt-3 w-full h-12 rounded-full border border-destructive/40 text-destructive text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2"
