@@ -12,6 +12,7 @@ import type { BBox } from "@/lib/outfit-detect-types";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { clearSegmentationCache, cropItemFromSegmentation } from "@/lib/outfit-segmentation";
 import { trimWhiteMargins } from "@/lib/auto-crop";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import type { WardrobeItem } from "@/lib/aura-types";
 
 type Draft = DetectedItemDraft & {
@@ -22,6 +23,7 @@ type Draft = DetectedItemDraft & {
   photoUrl: string | null;
   dedupe: DedupeResult;
   included: boolean;
+  bgRemoved: boolean;
 };
 
 async function cropFromUrl(src: string, bbox: BBox | null): Promise<string | null> {
@@ -136,6 +138,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             purchaseDate: new Date().toISOString().slice(0, 10),
             dedupe,
             included: dedupe.verdict !== "certain",
+            bgRemoved: false,
           });
         }
         if (!cancelled) setDrafts(built);
@@ -155,9 +158,46 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const adjustingDraft = drafts.find((d) => d.id === adjustingId) ?? null;
+  const [removingBgId, setRemovingBgId] = useState<string | null>(null);
 
-  const applyManualCrop = (id: string, dataUrl: string, box: FractionalBox) =>
-    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, cropUrl: dataUrl, bbox: box } : d)));
+  const removeBg = async (id: string, sourceUrl?: string) => {
+    const url = sourceUrl ?? drafts.find((x) => x.id === id)?.cropUrl;
+    if (!url) return;
+    setRemovingBgId(id);
+    try {
+      let bg = await removeBackgroundClient(url);
+      let attempt = 1;
+      while (!bg.ok && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+        bg = await removeBackgroundClient(url);
+        attempt++;
+      }
+      if (!bg.ok) {
+        toast.error("Couldn't remove the background — try again in a moment.");
+        return;
+      }
+      const trimmed = await trimWhiteMargins(bg.imageDataUrl);
+      setDrafts((prev) => prev.map((x) => (x.id === id ? { ...x, cropUrl: trimmed.dataUrl, bgRemoved: true } : x)));
+    } catch (e) {
+      console.error("[AURA batch-review] bg removal failed", e);
+      toast.error("Background removal failed");
+    } finally {
+      setRemovingBgId(null);
+    }
+  };
+
+  const applyManualCrop = async (id: string, dataUrl: string, box: FractionalBox) => {
+    const hadBgRemoved = drafts.find((d) => d.id === id)?.bgRemoved ?? false;
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, cropUrl: dataUrl, bbox: box, bgRemoved: false } : d)));
+    // A manual crop re-cuts from the ORIGINAL photo, which still has its
+    // background — if this item already had its background removed
+    // before adjusting the crop, silently losing that would mean
+    // re-doing it by hand for every single re-crop. Re-run it
+    // automatically instead, same as before the crop was touched.
+    if (hadBgRemoved) {
+      await removeBg(id, dataUrl);
+    }
+  };
 
   const discard = async (id: string) => {
     setDrafts((prev) => prev.filter((d) => d.id !== id));
@@ -303,10 +343,17 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 onRemove={() => discard(d.id)}
                 footer={
                   d.photoUrl && (
-                    <button
-                      onClick={() => setAdjustingId(d.id)}
-                      className="mt-3 w-full h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
-                    >Adjust crop</button>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => setAdjustingId(d.id)}
+                        className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
+                      >Adjust crop</button>
+                      <button
+                        onClick={() => void removeBg(d.id)}
+                        disabled={removingBgId === d.id}
+                        className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >{removingBgId === d.id ? <Loader2 size={11} className="animate-spin" /> : null}{d.bgRemoved ? "Background removed" : "Remove background"}</button>
+                    </div>
                   )
                 }
               />
@@ -319,7 +366,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               initialBox={adjustingDraft.bbox}
               onCancel={() => setAdjustingId(null)}
               onSave={({ dataUrl, box }) => {
-                applyManualCrop(adjustingDraft.id, dataUrl, box);
+                void applyManualCrop(adjustingDraft.id, dataUrl, box);
                 setAdjustingId(null);
               }}
             />
