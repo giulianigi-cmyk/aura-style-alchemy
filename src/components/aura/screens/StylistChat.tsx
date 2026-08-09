@@ -123,7 +123,8 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
   // Tuesday's — see openStylistChat in AuraApp.tsx. A ref (not state) so
   // the very first sendMessage call below sees it immediately, without
   // waiting on a re-render.
-  const eventWeatherRef = useRef<{ temperature: number | null; condition: string | null } | null>(null);
+    const eventWeatherRef = useRef<{ temperature: number | null; condition: string | null } | null>(null);
+  const eventDateRef = useRef<string | null>(null);
 
   const autoSentRef = useRef(false);
   useEffect(() => {
@@ -134,7 +135,9 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     // zero items, because the wardrobe hadn't loaded yet.
     if (initialMessage && itemsLoaded && !autoSentRef.current) {
       autoSentRef.current = true;
-      eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
+            eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
+      eventDateRef.current = initialMessage.date ?? null;
+
       void sendMessage(initialMessage.message);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,7 +166,8 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
           profession: profile?.profession ?? null,
           temperature: temp,
           condition: desc,
-          feedbackContext: feedbackContext ?? null,
+                    feedbackContext: feedbackContext ?? null,
+          todayDate: todayIso(),
           items: items.map((it) => ({
             id: it.id,
             category: it.category,
