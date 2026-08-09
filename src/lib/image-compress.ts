@@ -12,8 +12,9 @@
  * which is why batch uploads were sending full-resolution originals.
  */
 export async function compressImageForUpload(f: File, maxDimension = 1600, quality = 0.85): Promise<File> {
+  let bitmap: ImageBitmap | null = null;
   try {
-    const bitmap = await createImageBitmap(f);
+    bitmap = await createImageBitmap(f);
     const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
     const w = Math.round(bitmap.width * scale);
     const h = Math.round(bitmap.height * scale);
@@ -31,5 +32,12 @@ export async function compressImageForUpload(f: File, maxDimension = 1600, quali
   } catch (e) {
     console.warn("[AURA compress] failed, using original", e);
     return f;
+  } finally {
+    // ImageBitmap holds decoded, full-resolution pixel data (GPU/memory
+    // backed) until explicitly closed — never garbage-collected on its
+    // own in time to matter. Left open across a batch of 60+ photos,
+    // this is exactly what pushes iOS Safari into silently killing the
+    // tab partway through a large batch.
+    bitmap?.close();
   }
 }
