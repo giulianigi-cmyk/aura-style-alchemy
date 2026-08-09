@@ -10,6 +10,9 @@ import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
+import { generateWeeklyOutfits } from "@/lib/weekly-outfits.functions";
+import { listLocations } from "@/lib/wardrobe-locations.functions";
+import type { WardrobeLocation } from "@/lib/wardrobe-location";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
@@ -67,6 +70,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const [pickerForPlan, setPickerForPlan] = useState<string | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerCat, setPickerCat] = useState("All");
+  const [locations, setLocations] = useState<WardrobeLocation[]>([]);
+  const [weeklySheetOpen, setWeeklySheetOpen] = useState(false);
+  const [weeklyDays, setWeeklyDays] = useState<7 | 14>(7);
+  const [weeklyLocationId, setWeeklyLocationId] = useState<string | null>(null);
+  const [weeklyGenerating, setWeeklyGenerating] = useState(false);
+  const [weeklyResult, setWeeklyResult] = useState<{ created: number; skippedExisting: number; failed: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -80,12 +89,11 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         .select("id, event_date, occasion, outfit_id")
         .eq("user_id", user.id).eq("event_type", "worn")
         .order("event_date", { ascending: false }).limit(30),
-            (supabase.from("calendar_events_cache" as never) as any)
+      (supabase.from("calendar_events_cache" as never) as any)
         .select("id, title, start_time, all_day")
         .eq("user_id", user.id)
         .gte("start_time", `${today}T00:00:00`).lt("start_time", `${today}T23:59:59`),
     ]);
-
 
     const itemList = (i ?? []) as WardrobeItem[];
     setItems(itemList);
@@ -132,6 +140,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   }, [user]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    listLocations()
+      .then((res) => { setLocations(res.locations); setWeeklyLocationId(res.activeLocationId); })
+      .catch((e) => console.error("[AURA stylist] locations load failed", e));
+  }, []);
 
   const aiPick = async () => {
     const activeItems = items.filter((it) => !(it as unknown as { archived?: boolean }).archived);
@@ -193,6 +207,33 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     }
   };
 
+  const runWeeklyGeneration = async () => {
+    if (!user) return;
+    setWeeklyGenerating(true);
+    setWeeklyResult(null);
+    try {
+      const start = new Date();
+      start.setDate(start.getDate() + 1); // start tomorrow — today is handled by Today's Look already
+      const startDate = start.toISOString().slice(0, 10);
+
+      const dailyWeather = (weather?.daily ?? [])
+        .filter((d) => d.date >= startDate)
+        .slice(0, weeklyDays)
+        .map((d) => ({ date: d.date, tempMin: d.tempMin, tempMax: d.tempMax, weatherCode: d.weatherCode }));
+
+      const res = await generateWeeklyOutfits({
+        data: { startDate, numDays: weeklyDays, locationId: weeklyLocationId, dailyWeather },
+      });
+      setWeeklyResult({ created: res.created, skippedExisting: res.skippedExisting, failed: res.failed.length });
+      if (res.created > 0) void load();
+    } catch (e) {
+      console.error("[AURA weekly-outfits]", e);
+      toast.error(e instanceof Error ? e.message : "Couldn't generate work outfits");
+    } finally {
+      setWeeklyGenerating(false);
+    }
+  };
+
   const savedOutfits = outfits.filter((o) => !(o as unknown as { archived?: boolean }).archived);
   const archivedOutfits = outfits.filter((o) => (o as unknown as { archived?: boolean }).archived);
 
@@ -204,7 +245,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   });
 
   const today = todayIso();
-    const todayPlans = plans.filter((p) => p.date === today && p.status !== "cancelled");
+  const todayPlans = plans.filter((p) => p.date === today && p.status !== "cancelled");
 
   const pendingConfirmation = plans
     .filter((p) => p.date < today && p.status === "planned")
@@ -367,7 +408,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         <h1 className="font-serif text-4xl mt-1 italic">Stylist</h1>
       </header>
 
-           {!loading && todayPlans.length > 0 && (
+      {!loading && todayPlans.length > 0 && (
         <section className="mx-6 mt-5 space-y-3">
           {todayPlans.map((tp) => {
             const linkedEvent = tp.calendar_event_id ? todayCalEvents.find((e) => e.id === tp.calendar_event_id) : null;
@@ -405,7 +446,6 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           })}
         </section>
       )}
-
 
       {!loading && pendingConfirmation.length > 0 && (
         <section className="mx-6 mt-4 space-y-2">
@@ -590,6 +630,11 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           className="mt-2 w-full h-12 rounded-full border border-foreground text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
         ><Sparkles size={13} /> Ask your stylist</button>
 
+        <button
+          onClick={() => setWeeklySheetOpen(true)}
+          className="mt-2 w-full h-12 rounded-full border border-border text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
+        ><CalendarIcon size={13} /> Create work outfits</button>
+
         <details className="mt-4">
           <summary className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground cursor-pointer">More options</summary>
           <div className="mt-3">
@@ -694,6 +739,71 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           </div>
         );
       })()}
+
+      {weeklySheetOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => !weeklyGenerating && setWeeklySheetOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-4">
+            <p className="font-serif italic text-lg">Create work outfits</p>
+
+            {weeklyResult ? (
+              <div className="text-center py-2">
+                <p className="font-serif text-2xl">{weeklyResult.created} outfit{weeklyResult.created === 1 ? "" : "s"} created</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {weeklyResult.skippedExisting > 0 ? `${weeklyResult.skippedExisting} day${weeklyResult.skippedExisting === 1 ? "" : "s"} already had a plan, left untouched. ` : ""}
+                  {weeklyResult.failed > 0 ? `${weeklyResult.failed} day${weeklyResult.failed === 1 ? "" : "s"} couldn't be generated.` : ""}
+                </p>
+                <button
+                  onClick={() => { setWeeklySheetOpen(false); setWeeklyResult(null); }}
+                  className="mt-4 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]"
+                >Done</button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Period</p>
+                  <div className="flex gap-2">
+                    {([7, 14] as const).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setWeeklyDays(n)}
+                        className={`flex-1 h-10 rounded-full text-xs ${weeklyDays === n ? "bg-foreground text-background" : "bg-secondary/60"}`}
+                      >{n} days</button>
+                    ))}
+                  </div>
+                </div>
+                {locations.length > 1 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Wardrobe to use</p>
+                    <div className="flex flex-wrap gap-2">
+                      {locations.map((loc) => (
+                        <button
+                          key={loc.id}
+                          onClick={() => setWeeklyLocationId(loc.id)}
+                          className={`rounded-full px-3 py-1.5 text-xs border ${weeklyLocationId === loc.id ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}
+                        >{loc.name}</button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      If this period splits across two places, run this once per place instead.
+                    </p>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Fills in your work days only (set in your profile) — never touches a day you've already planned, and never touches an outfit already linked to a specific event.
+                </p>
+                <button
+                  onClick={() => void runWeeklyGeneration()}
+                  disabled={weeklyGenerating}
+                  className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {weeklyGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  Generate
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
