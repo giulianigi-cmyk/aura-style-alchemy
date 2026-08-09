@@ -20,11 +20,14 @@ const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal",
 type OutfitPlan = {
   id: string; date: string; item_ids: string[]; occasion: string | null;
   notes: string | null; status: string; weather_temp: number | null; weather_condition: string | null;
+  calendar_event_id?: string | null;
 };
+
 type WornEntry = {
   eventId: string; date: string; itemIds: string[]; outfitName: string | null; occasion: string | null;
 };
-type CalEvent = { title: string | null; start_time: string; all_day: boolean };
+type CalEvent = { id: string; title: string | null; start_time: string; all_day: boolean };
+
 type OutfitTab = "upcoming" | "worn" | "saved" | "archive";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -77,11 +80,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         .select("id, event_date, occasion, outfit_id")
         .eq("user_id", user.id).eq("event_type", "worn")
         .order("event_date", { ascending: false }).limit(30),
-      (supabase.from("calendar_events_cache" as never) as any)
-        .select("title, start_time, all_day")
+            (supabase.from("calendar_events_cache" as never) as any)
+        .select("id, title, start_time, all_day")
         .eq("user_id", user.id)
         .gte("start_time", `${today}T00:00:00`).lt("start_time", `${today}T23:59:59`),
     ]);
+
 
     const itemList = (i ?? []) as WardrobeItem[];
     setItems(itemList);
@@ -200,7 +204,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   });
 
   const today = todayIso();
-  const todayPlan = plans.find((p) => p.date === today && p.status !== "cancelled") ?? null;
+    const todayPlans = plans.filter((p) => p.date === today && p.status !== "cancelled");
+
   const pendingConfirmation = plans
     .filter((p) => p.date < today && p.status === "planned")
     .sort((a, b) => b.date.localeCompare(a.date))
