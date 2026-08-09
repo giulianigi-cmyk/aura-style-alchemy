@@ -1,4 +1,4 @@
-import { ArrowLeft, Sparkles, BarChart3, PiggyBank, TrendingDown } from "lucide-react";
+import { ArrowLeft, Sparkles, BarChart3, PiggyBank, TrendingDown, Eye, EyeOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,17 @@ function retentionFactor(ageYears: number): number {
 
 export function Insights({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
-  const [items, setItems] = useState<WardrobeItem[]>([]);
+   const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [showValues, setShowValues] = useState(() => {
+    try { return localStorage.getItem("aura-hide-values") !== "1"; } catch { return true; }
+  });
+  const toggleShowValues = () => {
+    setShowValues((v) => {
+      const next = !v;
+      try { localStorage.setItem("aura-hide-values", next ? "0" : "1"); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
@@ -144,11 +154,20 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
         <span className="w-10" />
       </header>
 
-      <section className="mx-6 mt-4 rounded-3xl gradient-warm border border-border/60 p-6 animate-fade-up">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Total wardrobe value</p>
+            <section className="mx-6 mt-4 rounded-3xl gradient-warm border border-border/60 p-6 animate-fade-up">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Total wardrobe value</p>
+          {stats.pricedCount > 0 && (
+            <button
+              onClick={toggleShowValues}
+              aria-label={showValues ? "Hide values" : "Show values"}
+              className="text-muted-foreground active:scale-90"
+            >{showValues ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+          )}
+        </div>
         {stats.pricedCount > 0 ? (
           <>
-            <p className="font-serif text-4xl mt-1">{fmt(stats.totalValue, stats.primaryCurrency)}</p>
+            <p className="font-serif text-4xl mt-1">{showValues ? fmt(stats.totalValue, stats.primaryCurrency) : "••••"}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Based on {stats.pricedCount - stats.excludedCount} of {items.length} pieces with a price on file
               {stats.excludedCount > 0 ? ` · ${stats.excludedCount} more priced in other currencies, not included above` : ""}
@@ -160,6 +179,7 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
           </p>
         )}
       </section>
+
 
       <section className="mx-6 mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-card border border-border/60 p-4">
@@ -243,9 +263,10 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
 
            <section className="mx-6 mt-6 mb-2 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Estimated current value</p>
-        {stats.estimatedValueCount > 0 ? (
+                {stats.estimatedValueCount > 0 ? (
           <>
-            <p className="font-serif text-2xl mt-1">{fmt(stats.estimatedValue, stats.primaryCurrency)}</p>
+            <p className="font-serif text-2xl mt-1">{showValues ? fmt(stats.estimatedValue, stats.primaryCurrency) : "••••"}</p>
+
             <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
               Estimated — based on {stats.estimatedValueCount} piece{stats.estimatedValueCount === 1 ? "" : "s"} with a purchase date, assuming value tapers gradually to about {Math.round(RETENTION_FLOOR * 100)}% of the original price by year {RETENTION_CLIFF_YEARS}. Not a market appraisal — it doesn't know brand, condition or trends.
               {stats.estimatedValueExcluded > 0 ? ` ${stats.estimatedValueExcluded} more priced piece${stats.estimatedValueExcluded === 1 ? "" : "s"} ${stats.estimatedValueExcluded === 1 ? "doesn't" : "don't"} have a purchase date, so ${stats.estimatedValueExcluded === 1 ? "isn't" : "aren't"} included.` : ""}
