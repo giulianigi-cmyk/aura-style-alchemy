@@ -34,6 +34,11 @@ const INDUSTRIES = [
 const WORK_DRESS_CODES = ["None", "Casual", "Smart Casual", "Business Casual", "Business Formal", "Uniform"];
 const PERSONAL_FORMALITY = ["Very casual", "Casual", "Smart Casual", "Elegant", "Very elegant"];
 const STYLE_BOLDNESS = ["Classic", "Balanced", "Creative", "Bold"];
+const WEEKDAYS: { code: string; label: string }[] = [
+  { code: "MO", label: "Mon" }, { code: "TU", label: "Tue" }, { code: "WE", label: "Wed" },
+  { code: "TH", label: "Thu" }, { code: "FR", label: "Fri" }, { code: "SA", label: "Sat" }, { code: "SU", label: "Sun" },
+];
+
 
 const DRESS_CODE_DEFINITIONS: { term: string; description: string }[] = [
   { term: "None", description: "No specific dress code — wear whatever you like." },
@@ -80,7 +85,9 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [industry, setIndustry] = useState<string>("");
   const [workDressCode, setWorkDressCode] = useState<string>("");
     const [personalFormality, setPersonalFormality] = useState<string>("");
-  const [styleBoldness, setStyleBoldness] = useState<string>("");
+    const [styleBoldness, setStyleBoldness] = useState<string>("");
+  const [workDays, setWorkDays] = useState<string[]>(["MO", "TU", "WE", "TH", "FR"]);
+
   const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
@@ -98,7 +105,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setIndustry(profile.industry ?? "");
     setWorkDressCode(profile.work_dress_code ?? "");
         setPersonalFormality(profile.personal_formality ?? "");
-    setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
+        setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
+
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
         setStyles(profile.style_preferences ?? []);
@@ -116,7 +124,9 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       industry: industry || null,
       work_dress_code: workDressCode || null,
       personal_formality: personalFormality || null,
-      style_boldness: styleBoldness || null,
+            style_boldness: styleBoldness || null,
+      work_days: workDays,
+
       profession: profession.trim() || null,
       bio: bio.trim() || null,
             style_preferences: styles,
@@ -325,7 +335,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">How much do you like to experiment?</p>
             <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">For occasions that aren't strictly formal (weekend, work depending on your job, casual dinners) — AURA will lean toward this instead of asking each time. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.</p>
             <div className="mt-1 flex flex-wrap gap-2">
-              {STYLE_BOLDNESS.map(b => (
+                            {STYLE_BOLDNESS.map(b => (
                 <button key={b} onClick={() => setStyleBoldness(styleBoldness === b ? "" : b)}
                   className={`rounded-full px-3 py-1.5 text-xs border transition ${styleBoldness === b ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
                   {b}
@@ -333,9 +343,25 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               ))}
             </div>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Work days</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Used when generating a week of work outfits at once.</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {WEEKDAYS.map(d => {
+                const on = workDays.includes(d.code);
+                return (
+                  <button key={d.code} onClick={() => setWorkDays(on ? workDays.filter(c => c !== d.code) : [...workDays, d.code])}
+                    className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {infoPopup && (
             <div
+
               className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
               onClick={() => setInfoPopup(null)}
             >
