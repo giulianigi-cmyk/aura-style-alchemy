@@ -68,6 +68,9 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [bulkBgRunning, setBulkBgRunning] = useState(false);
+  const [bulkBgProgress, setBulkBgProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -100,48 +103,59 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
         const built: Draft[] = [];
         clearSegmentationCache();
+        setLoadProgress({ done: 0, total: res.items.length });
         for (const it of res.items) {
-          const path = pathById.get(it.job_id);
-          const src = path ? signed.get(path) : undefined;
-          let cropUrl: string | null = null;
-          if (src && path) {
-            cropUrl = await cropItemFromSegmentation(path, src, it.category ?? "", it.bbox);
-          }
-          if (!cropUrl) {
-            cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
-          }
+          try {
+            const path = pathById.get(it.job_id);
+            const src = path ? signed.get(path) : undefined;
+            let cropUrl: string | null = null;
+            if (src && path) {
+              try {
+                cropUrl = await cropItemFromSegmentation(path, src, it.category ?? "", it.bbox);
+              } catch (segErr) {
+                console.error("[AURA batch-review] segmentation failed for item, falling back to plain crop", it.id, segErr);
+              }
+            }
+            if (!cropUrl) {
+              cropUrl = src ? (await cropFromUrl(src, it.bbox)) ?? src : null;
+            }
 
-          const category = it.category ?? "";
-          const colors = it.colors ?? [];
-          const dedupe = findBestMatch(
-            { category, subcategory: it.subcategory ?? undefined, colors },
-            wardrobe,
-          );
-          built.push({
-            id: it.id,
-            jobId: it.job_id,
-            bbox: it.bbox,
-            cropUrl,
-            photoUrl: src ?? null,
-            category,
-            subcategory: it.subcategory ?? "",
-            colors,
-            materials: it.material ?? [],
-            seasons: it.season ? [it.season] : [],
-            brand: it.brand ?? "",
-            description: it.description ?? "",
-            price: it.price != null ? String(it.price) : "",
-            currency: it.currency ?? "EUR",
-            size: "",
-            styles: it.style ? it.style.split(",").map((s) => s.trim()).filter(Boolean) : [],
-            occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
-            purchaseDate: new Date().toISOString().slice(0, 10),
-            dedupe,
-            included: dedupe.verdict !== "certain",
-            bgRemoved: false,
-          });
+            const category = it.category ?? "";
+            const colors = it.colors ?? [];
+            const dedupe = findBestMatch(
+              { category, subcategory: it.subcategory ?? undefined, colors },
+              wardrobe,
+            );
+            built.push({
+              id: it.id,
+              jobId: it.job_id,
+              bbox: it.bbox,
+              cropUrl,
+              photoUrl: src ?? null,
+              category,
+              subcategory: it.subcategory ?? "",
+              colors,
+              materials: it.material ?? [],
+              seasons: it.season ? [it.season] : [],
+              brand: it.brand ?? "",
+              description: it.description ?? "",
+              price: it.price != null ? String(it.price) : "",
+              currency: it.currency ?? "EUR",
+              size: "",
+              styles: it.style ? it.style.split(",").map((s) => s.trim()).filter(Boolean) : [],
+              occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
+              purchaseDate: new Date().toISOString().slice(0, 10),
+              dedupe,
+              included: dedupe.verdict !== "certain",
+              bgRemoved: false,
+            });
+          } catch (itemErr) {
+            console.error("[AURA batch-review] failed to process item, skipping it", it.id, itemErr);
+          } finally {
+            setLoadProgress((p) => ({ ...p, done: p.done + 1 }));
+            if (!cancelled) setDrafts([...built]);
+          }
         }
-        if (!cancelled) setDrafts(built);
       } catch (e) {
         console.error("[AURA batch-review] load failed", e);
         toast.error("Couldn't load this batch.");
@@ -178,10 +192,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
   const applyCopy = () => {
     const source = drafts.find((d) => d.id === copyFromId);
     if (!source || copyTargets.size === 0) { setCopyFromId(null); return; }
-    // Deliberately excludes anything tied to the specific photo itself
-    // (cropUrl, bbox, bgRemoved, dedupe match) — those are only ever
-    // right for the source item. Everything else about the piece (what
-    // it is, not which exact photo it came from) copies across.
     const { category, subcategory, colors, materials, seasons, brand, styles, occasions, price, currency, size } = source;
     setDrafts((prev) => prev.map((d) => (
       copyTargets.has(d.id)
@@ -192,10 +202,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     setCopyFromId(null);
   };
 
-  const removeBg = async (id: string, sourceUrl?: string) => {
-    const url = sourceUrl ?? drafts.find((x) => x.id === id)?.cropUrl;
-    if (!url) return;
-    setRemovingBgId(id);
+  const performBgRemoval = async (id: string, url: string): Promise<boolean> => {
     try {
       let bg = await removeBackgroundClient(url);
       let attempt = 1;
@@ -204,18 +211,47 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         bg = await removeBackgroundClient(url);
         attempt++;
       }
-      if (!bg.ok) {
-        toast.error("Couldn't remove the background — try again in a moment.");
-        return;
-      }
+      if (!bg.ok) return false;
       const trimmed = await trimWhiteMargins(bg.imageDataUrl);
       setDrafts((prev) => prev.map((x) => (x.id === id ? { ...x, cropUrl: trimmed.dataUrl, bgRemoved: true } : x)));
+      return true;
     } catch (e) {
-      console.error("[AURA batch-review] bg removal failed", e);
-      toast.error("Background removal failed");
+      console.error("[AURA batch-review] bg removal failed", id, e);
+      return false;
+    }
+  };
+
+  const removeBg = async (id: string, sourceUrl?: string) => {
+    const url = sourceUrl ?? drafts.find((x) => x.id === id)?.cropUrl;
+    if (!url) return;
+    setRemovingBgId(id);
+    try {
+      const ok = await performBgRemoval(id, url);
+      if (!ok) toast.error("Couldn't remove the background — try again in a moment.");
     } finally {
       setRemovingBgId(null);
     }
+  };
+
+  const removeBgFromAll = async () => {
+    const targets = drafts.filter((d) => !d.bgRemoved && d.cropUrl);
+    if (!targets.length) { toast("Every piece already has its background removed."); return; }
+    setBulkBgRunning(true);
+    setBulkBgProgress({ done: 0, total: targets.length });
+    let failed = 0;
+    for (const d of targets) {
+      const url = drafts.find((x) => x.id === d.id)?.cropUrl ?? d.cropUrl;
+      if (!url) { failed++; setBulkBgProgress((p) => ({ ...p, done: p.done + 1 })); continue; }
+      const ok = await performBgRemoval(d.id, url);
+      if (!ok) failed++;
+      setBulkBgProgress((p) => ({ ...p, done: p.done + 1 }));
+    }
+    setBulkBgRunning(false);
+    toast.success(
+      failed
+        ? `Background removed on ${targets.length - failed} piece${targets.length - failed === 1 ? "" : "s"} · ${failed} failed — retry those individually`
+        : `Background removed on all ${targets.length} piece${targets.length === 1 ? "" : "s"}`,
+    );
   };
 
   const applyManualCrop = async (id: string, dataUrl: string, box: FractionalBox) => {
@@ -327,7 +363,22 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       {loading && (
         <div className="mx-6 mt-16 text-center text-muted-foreground">
           <Loader2 size={18} className="mx-auto animate-spin" />
-          <p className="mt-3 text-sm">Cutting out each piece… this can take a few seconds per photo.</p>
+          {loadProgress.total > 0 ? (
+            <>
+              <p className="mt-3 text-sm">Cutting out each piece… {loadProgress.done}/{loadProgress.total}</p>
+              <div className="mt-3 mx-auto h-1.5 w-48 rounded-full bg-secondary/60 overflow-hidden">
+                <div
+                  className="h-full bg-foreground transition-all duration-300"
+                  style={{ width: `${Math.round((loadProgress.done / loadProgress.total) * 100)}%` }}
+                />
+              </div>
+              {drafts.length > 0 && (
+                <p className="mt-3 text-[11px]">Finished pieces are ready to review below while the rest keep processing.</p>
+              )}
+            </>
+          ) : (
+            <p className="mt-3 text-sm">Loading batch…</p>
+          )}
         </div>
       )}
 
@@ -337,11 +388,37 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         </p>
       )}
 
-      {!loading && drafts.length > 0 && (
+      {drafts.length > 0 && (
         <div className="mx-6 mt-4 space-y-4">
           <p className="text-sm text-muted-foreground">
             {drafts.length} suggested piece{drafts.length === 1 ? "" : "s"}. Edit anything, discard what you don't want.
           </p>
+
+          {!loading && drafts.some((d) => !d.bgRemoved) && (
+            <div className="rounded-2xl border border-border/60 bg-card p-3">
+              <button
+                onClick={() => void removeBgFromAll()}
+                disabled={bulkBgRunning}
+                className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {bulkBgRunning ? <Loader2 size={13} className="animate-spin" /> : null}
+                {bulkBgRunning ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}` : "Remove background from all"}
+              </button>
+              {bulkBgRunning && (
+                <div className="mt-2 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
+                  <div
+                    className="h-full bg-foreground transition-all duration-300"
+                    style={{ width: `${Math.round((bulkBgProgress.done / Math.max(1, bulkBgProgress.total)) * 100)}%` }}
+                  />
+                </div>
+              )}
+              {!bulkBgRunning && (
+                <p className="mt-1.5 text-[10px] text-muted-foreground text-center">
+                  Runs one photo at a time — steady rather than fast on a large batch, but safe on your phone's memory.
+                </p>
+              )}
+            </div>
+          )}
 
           {drafts.map((d) => (
             <div key={d.id} className="relative">
