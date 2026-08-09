@@ -367,36 +367,45 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         <h1 className="font-serif text-4xl mt-1 italic">Stylist</h1>
       </header>
 
-      {!loading && todayPlan && (
-        <section className="mx-6 mt-5 rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Today's look</p>
-            <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${todayPlan.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"}`}>
-              {todayPlan.status === "worn" ? "Worn" : "Planned"}
-            </span>
-          </div>
-          {todayCalEvents.length > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">{todayCalEvents.map((e) => e.title || "Event").join(" · ")}</p>
-          )}
-          <div className="mt-3">
-            {todayPlan.status === "worn"
-              ? <ItemThumbs ids={todayPlan.item_ids} />
-              : <EditableItemThumbs planId={todayPlan.id} ids={getWornIds(todayPlan)} />}
-          </div>
-          {todayPlan.weather_temp != null && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              {Math.round(todayPlan.weather_temp)}°{todayPlan.weather_condition ? ` · ${todayPlan.weather_condition}` : ""}
-            </p>
-          )}
-          {todayPlan.status !== "worn" && (
-            <button
-              onClick={() => void confirmWorn(todayPlan)}
-              disabled={confirmingPlanId === todayPlan.id || getWornIds(todayPlan).length === 0}
-              className="mt-3 w-full h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
-            ><Check size={12} /> This is what I'm wearing</button>
-          )}
+           {!loading && todayPlans.length > 0 && (
+        <section className="mx-6 mt-5 space-y-3">
+          {todayPlans.map((tp) => {
+            const linkedEvent = tp.calendar_event_id ? todayCalEvents.find((e) => e.id === tp.calendar_event_id) : null;
+            const label = tp.calendar_event_id ? (linkedEvent?.title || "Event") : "General";
+            return (
+              <div key={tp.id} className="rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Today's look</p>
+                    <p className="text-xs mt-0.5">{label}</p>
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${tp.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"}`}>
+                    {tp.status === "worn" ? "Worn" : "Planned"}
+                  </span>
+                </div>
+                <div className="mt-3">
+                  {tp.status === "worn"
+                    ? <ItemThumbs ids={tp.item_ids} />
+                    : <EditableItemThumbs planId={tp.id} ids={getWornIds(tp)} />}
+                </div>
+                {tp.weather_temp != null && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    {Math.round(tp.weather_temp)}°{tp.weather_condition ? ` · ${tp.weather_condition}` : ""}
+                  </p>
+                )}
+                {tp.status !== "worn" && (
+                  <button
+                    onClick={() => void confirmWorn(tp)}
+                    disabled={confirmingPlanId === tp.id || getWornIds(tp).length === 0}
+                    className="mt-3 w-full h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  ><Check size={12} /> This is what I'm wearing</button>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
+
 
       {!loading && pendingConfirmation.length > 0 && (
         <section className="mx-6 mt-4 space-y-2">
