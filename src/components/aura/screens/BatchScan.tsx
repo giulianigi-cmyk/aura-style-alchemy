@@ -233,9 +233,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       failures.push({ name: f.name, error: lastError });
       setStateAt(i, { status: "failed", error: lastError });
     };
-
         const CONCURRENCY = picked.length > 40 ? 2 : 3;
-
     let next = 0;
     const worker = async () => {
       while (next < picked.length) {
