@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Check, Loader2, AlertTriangle, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -159,6 +159,38 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const adjustingDraft = drafts.find((d) => d.id === adjustingId) ?? null;
   const [removingBgId, setRemovingBgId] = useState<string | null>(null);
+  const [copyFromId, setCopyFromId] = useState<string | null>(null);
+  const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
+
+  const openCopySheet = (id: string) => {
+    setCopyFromId(id);
+    setCopyTargets(new Set());
+  };
+
+  const toggleCopyTarget = (id: string) => {
+    setCopyTargets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const applyCopy = () => {
+    const source = drafts.find((d) => d.id === copyFromId);
+    if (!source || copyTargets.size === 0) { setCopyFromId(null); return; }
+    // Deliberately excludes anything tied to the specific photo itself
+    // (cropUrl, bbox, bgRemoved, dedupe match) — those are only ever
+    // right for the source item. Everything else about the piece (what
+    // it is, not which exact photo it came from) copies across.
+    const { category, subcategory, colors, materials, seasons, brand, styles, occasions, price, currency, size } = source;
+    setDrafts((prev) => prev.map((d) => (
+      copyTargets.has(d.id)
+        ? { ...d, category, subcategory, colors, materials, seasons, brand, styles, occasions, price, currency, size }
+        : d
+    )));
+    toast.success(`Copied to ${copyTargets.size} piece${copyTargets.size === 1 ? "" : "s"}`);
+    setCopyFromId(null);
+  };
 
   const removeBg = async (id: string, sourceUrl?: string) => {
     const url = sourceUrl ?? drafts.find((x) => x.id === id)?.cropUrl;
@@ -189,11 +221,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
   const applyManualCrop = async (id: string, dataUrl: string, box: FractionalBox) => {
     const hadBgRemoved = drafts.find((d) => d.id === id)?.bgRemoved ?? false;
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, cropUrl: dataUrl, bbox: box, bgRemoved: false } : d)));
-    // A manual crop re-cuts from the ORIGINAL photo, which still has its
-    // background — if this item already had its background removed
-    // before adjusting the crop, silently losing that would mean
-    // re-doing it by hand for every single re-crop. Re-run it
-    // automatically instead, same as before the crop was touched.
     if (hadBgRemoved) {
       await removeBg(id, dataUrl);
     }
@@ -343,16 +370,24 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 onRemove={() => discard(d.id)}
                 footer={
                   d.photoUrl && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => setAdjustingId(d.id)}
-                        className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
-                      >Adjust crop</button>
-                      <button
-                        onClick={() => void removeBg(d.id)}
-                        disabled={removingBgId === d.id}
-                        className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
-                      >{removingBgId === d.id ? <Loader2 size={11} className="animate-spin" /> : null}{d.bgRemoved ? "Background removed" : "Remove background"}</button>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAdjustingId(d.id)}
+                          className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
+                        >Adjust crop</button>
+                        <button
+                          onClick={() => void removeBg(d.id)}
+                          disabled={removingBgId === d.id}
+                          className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >{removingBgId === d.id ? <Loader2 size={11} className="animate-spin" /> : null}{d.bgRemoved ? "Background removed" : "Remove background"}</button>
+                      </div>
+                      {drafts.length > 1 && (
+                        <button
+                          onClick={() => openCopySheet(d.id)}
+                          className="w-full h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] flex items-center justify-center gap-1.5"
+                        ><Copy size={11} /> Copy these details to others</button>
+                      )}
                     </div>
                   )
                 }
@@ -371,6 +406,52 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               }}
             />
           )}
+
+          {copyFromId && (() => {
+            const others = drafts.filter((d) => d.id !== copyFromId);
+            return (
+              <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCopyFromId(null)}>
+                <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
+                  <div className="flex items-center justify-between shrink-0">
+                    <p className="font-serif italic text-lg">Copy details to which pieces?</p>
+                    <button onClick={() => setCopyFromId(null)} aria-label="Close" className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground shrink-0">
+                    Category, colors, material, brand and the rest — not the photo itself.
+                  </p>
+                  <button
+                    onClick={() => setCopyTargets(new Set(others.map((d) => d.id)))}
+                    className="mt-2 self-start text-[10px] uppercase tracking-[0.2em] text-muted-foreground underline shrink-0"
+                  >Select all ({others.length})</button>
+                  <div className="mt-3 overflow-y-auto grid grid-cols-3 gap-2 pb-4">
+                    {others.map((d) => {
+                      const on = copyTargets.has(d.id);
+                      return (
+                        <button
+                          key={d.id}
+                          onClick={() => toggleCopyTarget(d.id)}
+                          className={`relative aspect-square rounded-xl overflow-hidden border-2 ${on ? "border-foreground" : "border-border/60"}`}
+                          style={{ background: "#FFFFFF" }}
+                        >
+                          {d.cropUrl ? <img src={d.cropUrl} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                          {on && (
+                            <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center">
+                              <Check size={11} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={applyCopy}
+                    disabled={copyTargets.size === 0}
+                    className="mt-1 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 shrink-0"
+                  >Copy to {copyTargets.size} piece{copyTargets.size === 1 ? "" : "s"}</button>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="pt-2 pb-4">
             <button
