@@ -4,7 +4,7 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2, Archive, ArchiveRestore, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
@@ -52,6 +52,10 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const [showArchived, setShowArchived] = useState(false);
   const [locations, setLocations] = useState<WardrobeLocation[]>([]);
   const [viewLocationId, setViewLocationId] = useState<string | "all">("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [movingSelection, setMovingSelection] = useState(false);
+  const [bulkMovePicker, setBulkMovePicker] = useState(false);
   const [detail, setDetail] = useState<WardrobeItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [colorWheelOpen, setColorWheelOpen] = useState(false);
@@ -326,6 +330,36 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     }
   };
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBulkMovePicker(false);
+  };
+
+  const moveSelection = async (locationId: string) => {
+    if (selectedIds.size === 0) return;
+    setMovingSelection(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await moveItems({ data: { itemIds: ids, locationId } });
+      setItems((prev) => prev.map((it) => (selectedIds.has(it.id) ? { ...it, location_id: locationId } as WardrobeItem : it)));
+      toast.success(`Moved ${ids.length} piece${ids.length === 1 ? "" : "s"}`);
+      exitSelectMode();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't move those pieces");
+    } finally {
+      setMovingSelection(false);
+    }
+  };
+
   const season = useMemo(() => currentSeason(), []);
 
   const runLegacyMigration = async () => {
@@ -572,18 +606,24 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         </button>
       )}
       {locations.length > 1 && !showArchived && (
-        <div className="mx-6 mt-3 flex gap-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setViewLocationId("all")}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === "all" ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-          >All</button>
-          {locations.map((loc) => (
+        <div className="mx-6 mt-3 flex items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar flex-1">
             <button
-              key={loc.id}
-              onClick={() => setViewLocationId(loc.id)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === loc.id ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-            >{loc.name}</button>
-          ))}
+              onClick={() => setViewLocationId("all")}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === "all" ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+            >All</button>
+            {locations.map((loc) => (
+              <button
+                key={loc.id}
+                onClick={() => setViewLocationId(loc.id)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === loc.id ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{loc.name}</button>
+            ))}
+          </div>
+          <button
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest border ${selectMode ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground"}`}
+          >{selectMode ? "Cancel" : "Select"}</button>
         </div>
       )}
       {loading ? (
@@ -614,14 +654,15 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
             const path = toStoragePath(it.image_url);
             const src = path ? (signed[path] ?? "") : "";
             const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
+            const isSelected = selectedIds.has(it.id);
             return (
             <button
               key={it.id}
-              onClick={() => { setDetail(it); setConfirmDelete(false); }}
+              onClick={() => (selectMode ? toggleSelected(it.id) : (() => { setDetail(it); setConfirmDelete(false); })())}
               className="group animate-fade-up text-left"
               style={{ animationDelay: `${i * 0.04}s` }}
             >
-              <div className="overflow-hidden rounded-[1.25rem] border border-border/50 aspect-[4/5]" style={{ background: "#FFFFFF" }}>
+              <div className={`relative overflow-hidden rounded-[1.25rem] border aspect-[4/5] ${selectMode && isSelected ? "border-foreground border-2" : "border-border/50"}`} style={{ background: "#FFFFFF" }}>
                 {src ? (
                   <img
                     src={src} alt={`${it.brand ?? label} piece`}
@@ -630,6 +671,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   />
                 ) : (
                   <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
+                )}
+                {selectMode && (
+                  <span className={`absolute top-2 right-2 h-6 w-6 rounded-full border flex items-center justify-center ${isSelected ? "bg-foreground border-foreground" : "bg-background/80 border-border"}`}>
+                    {isSelected && <Check size={13} className="text-background" />}
+                  </span>
                 )}
               </div>
               <div className="px-0.5 mt-1.5">
@@ -993,6 +1039,41 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectMode && (
+        <div className="fixed bottom-24 left-6 right-6 z-40 rounded-full bg-foreground text-background px-5 py-3 flex items-center justify-between shadow-luxe">
+          <span className="text-xs">{selectedIds.size} selected</span>
+          <button
+            onClick={() => setBulkMovePicker(true)}
+            disabled={selectedIds.size === 0}
+            className="h-9 px-4 rounded-full bg-background text-foreground text-[10px] uppercase tracking-[0.25em] disabled:opacity-50"
+          >Move to…</button>
+        </div>
+      )}
+
+      {bulkMovePicker && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => !movingSelection && setBulkMovePicker(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-2">
+            <p className="font-serif italic text-lg">Move {selectedIds.size} piece{selectedIds.size === 1 ? "" : "s"} to…</p>
+            {locations.map((loc) => (
+              <button
+                key={loc.id}
+                onClick={() => void moveSelection(loc.id)}
+                disabled={movingSelection}
+                className="w-full h-12 rounded-full border border-border text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {movingSelection && <Loader2 size={12} className="animate-spin" />}
+                {loc.name}
+              </button>
+            ))}
+            <button
+              onClick={() => setBulkMovePicker(false)}
+              disabled={movingSelection}
+              className="w-full h-11 rounded-full text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
+            >Cancel</button>
           </div>
         </div>
       )}
