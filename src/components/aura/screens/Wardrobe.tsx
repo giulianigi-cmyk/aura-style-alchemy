@@ -823,7 +823,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   {detail.price != null && (
                     <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
                       {detail.worn_count ? (
-                        <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per wear</span>
+                                             <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per wear</span>
                       ) : (
                         <span>Not worn yet</span>
                       )}
