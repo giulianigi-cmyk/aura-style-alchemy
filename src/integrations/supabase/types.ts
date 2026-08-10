@@ -136,6 +136,65 @@ export type Database = {
           },
         ]
       }
+      essential_preset_items: {
+        Row: {
+          always_include: boolean
+          category: string | null
+          id: string
+          name: string
+          position: number
+          preset_id: string
+          quantity: number
+        }
+        Insert: {
+          always_include?: boolean
+          category?: string | null
+          id?: string
+          name: string
+          position?: number
+          preset_id: string
+          quantity?: number
+        }
+        Update: {
+          always_include?: boolean
+          category?: string | null
+          id?: string
+          name?: string
+          position?: number
+          preset_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "essential_preset_items_preset_id_fkey"
+            columns: ["preset_id"]
+            isOneToOne: false
+            referencedRelation: "essential_presets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      essential_presets: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       feedback_weights: {
         Row: {
           created_at: string
@@ -361,42 +420,66 @@ export type Database = {
       }
       outfit_plans: {
         Row: {
+          calendar_event_id: string | null
           created_at: string
           date: string
+          day_segment: string | null
           id: string
           item_ids: string[]
           notes: string | null
           occasion: string | null
           status: string
+          trip_id: string | null
           user_id: string
           weather_condition: string | null
           weather_temp: number | null
         }
         Insert: {
+          calendar_event_id?: string | null
           created_at?: string
           date: string
+          day_segment?: string | null
           id?: string
           item_ids?: string[]
           notes?: string | null
           occasion?: string | null
           status?: string
+          trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
           weather_temp?: number | null
         }
         Update: {
+          calendar_event_id?: string | null
           created_at?: string
           date?: string
+          day_segment?: string | null
           id?: string
           item_ids?: string[]
           notes?: string | null
           occasion?: string | null
           status?: string
+          trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
           weather_temp?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "outfit_plans_calendar_event_id_fkey"
+            columns: ["calendar_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events_cache"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outfit_plans_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outfit_sessions: {
         Row: {
@@ -504,6 +587,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active_location_id: string | null
           avatar_url: string | null
           bio: string | null
           birth_date: string | null
@@ -531,9 +615,11 @@ export type Database = {
           updated_at: string
           username: string | null
           value: string | null
+          work_days: string[]
           work_dress_code: string | null
         }
         Insert: {
+          active_location_id?: string | null
           avatar_url?: string | null
           bio?: string | null
           birth_date?: string | null
@@ -561,9 +647,11 @@ export type Database = {
           updated_at?: string
           username?: string | null
           value?: string | null
+          work_days?: string[]
           work_dress_code?: string | null
         }
         Update: {
+          active_location_id?: string | null
           avatar_url?: string | null
           bio?: string | null
           birth_date?: string | null
@@ -591,9 +679,18 @@ export type Database = {
           updated_at?: string
           username?: string | null
           value?: string | null
+          work_days?: string[]
           work_dress_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_active_location_id_fkey"
+            columns: ["active_location_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scan_detected_items: {
         Row: {
@@ -752,6 +849,257 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      trip_day_activities: {
+        Row: {
+          activity_date: string
+          activity_type: string
+          created_at: string
+          day_segment: string | null
+          destination_id: string | null
+          dress_code: string | null
+          id: string
+          notes: string | null
+          trip_id: string
+        }
+        Insert: {
+          activity_date: string
+          activity_type: string
+          created_at?: string
+          day_segment?: string | null
+          destination_id?: string | null
+          dress_code?: string | null
+          id?: string
+          notes?: string | null
+          trip_id: string
+        }
+        Update: {
+          activity_date?: string
+          activity_type?: string
+          created_at?: string
+          day_segment?: string | null
+          destination_id?: string | null
+          dress_code?: string | null
+          id?: string
+          notes?: string | null
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_day_activities_destination_id_fkey"
+            columns: ["destination_id"]
+            isOneToOne: false
+            referencedRelation: "trip_destinations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_day_activities_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_destinations: {
+        Row: {
+          destination_name: string
+          end_date: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          position: number
+          start_date: string
+          trip_id: string
+        }
+        Insert: {
+          destination_name: string
+          end_date: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          position: number
+          start_date: string
+          trip_id: string
+        }
+        Update: {
+          destination_name?: string
+          end_date?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          position?: number
+          start_date?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_destinations_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_essentials: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          name: string
+          quantity: number
+          status: string
+          trip_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          quantity?: number
+          status?: string
+          trip_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          quantity?: number
+          status?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_essentials_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_packing_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          quantity: number
+          source_location_id: string | null
+          status: string
+          trip_id: string
+          wardrobe_item_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          quantity?: number
+          source_location_id?: string | null
+          status?: string
+          trip_id: string
+          wardrobe_item_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          quantity?: number
+          source_location_id?: string | null
+          status?: string
+          trip_id?: string
+          wardrobe_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_packing_items_source_location_id_fkey"
+            columns: ["source_location_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_packing_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_packing_items_wardrobe_item_id_fkey"
+            columns: ["wardrobe_item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_source_locations: {
+        Row: {
+          id: string
+          location_id: string
+          trip_id: string
+        }
+        Insert: {
+          id?: string
+          location_id: string
+          trip_id: string
+        }
+        Update: {
+          id?: string
+          location_id?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_source_locations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_source_locations_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          created_at: string
+          id: string
+          laundry_available: boolean
+          name: string | null
+          status: string
+          trip_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          laundry_available?: boolean
+          name?: string | null
+          status?: string
+          trip_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          laundry_available?: boolean
+          name?: string | null
+          status?: string
+          trip_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_style_memory: {
         Row: {
@@ -936,6 +1284,7 @@ export type Database = {
           image_url: string
           last_worn: string | null
           length: string | null
+          location_id: string | null
           material: string[]
           occasion: string | null
           price: number | null
@@ -970,6 +1319,7 @@ export type Database = {
           image_url: string
           last_worn?: string | null
           length?: string | null
+          location_id?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
@@ -1004,6 +1354,7 @@ export type Database = {
           image_url?: string
           last_worn?: string | null
           length?: string | null
+          location_id?: string | null
           material?: string[]
           occasion?: string | null
           price?: number | null
@@ -1018,6 +1369,44 @@ export type Database = {
           toe_shape?: string | null
           user_id?: string
           worn_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wardrobe_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wardrobe_locations: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          is_primary: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_primary?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_primary?: boolean
+          name?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
