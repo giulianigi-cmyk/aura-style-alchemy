@@ -127,7 +127,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
                 <button onClick={() => openPreset(p)} className="w-full p-4 flex items-center justify-between text-left">
                   <div>
                     <p className="font-serif text-lg">{p.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{p.items.length} item{p.items.length === 1 ? "" : "s"}</p>
+                    <p className="text-[11px] text-muted-foreground">{(drafts[p.id] ?? p.items).length} item{(drafts[p.id] ?? p.items).length === 1 ? "" : "s"}{isOpen && drafts[p.id] && drafts[p.id].length !== p.items.length ? " · unsaved" : ""}</p>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePreset(p.id); }}
@@ -156,7 +156,8 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
                         </button>
                       </div>
                     ))}
-                    <div className="flex items-center gap-2 pt-1">
+                    <p className="text-[10px] text-muted-foreground pt-1">Type a name, then tap + (or press return) to add it — then Save changes.</p>
+                    <div className="flex items-center gap-2">
                       <input
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
