@@ -202,6 +202,35 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     setCopyFromId(null);
   };
 
+  /** Downsamples to a tiny canvas and checks how much of it has real
+   *  (non-transparent, non-near-white) content. Catches the failure mode
+   *  where background removal, run on a photo that's already tightly
+   *  isolated (e.g. from segmentation), gets confused and wipes the
+   *  garment along with the "background" instead of separating them. */
+  const hasVisibleContent = (dataUrl: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 48;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(true); return; }
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+        let filled = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3];
+          const isWhiteish = data[i] > 245 && data[i + 1] > 245 && data[i + 2] > 245;
+          if (alpha > 20 && !isWhiteish) filled++;
+        }
+        resolve(filled / (size * size) > 0.02);
+      };
+      img.onerror = () => resolve(true); // can't check — don't block on it
+      img.src = dataUrl;
+    });
+
   const performBgRemoval = async (id: string, url: string): Promise<boolean> => {
     try {
       let bg = await removeBackgroundClient(url);
@@ -213,6 +242,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       }
       if (!bg.ok) return false;
       const trimmed = await trimWhiteMargins(bg.imageDataUrl);
+      if (!(await hasVisibleContent(trimmed.dataUrl))) {
+        console.warn("[AURA batch-review] bg removal produced a near-blank result, keeping original", id);
+        return false;
+      }
       setDrafts((prev) => prev.map((x) => (x.id === id ? { ...x, cropUrl: trimmed.dataUrl, bgRemoved: true } : x)));
       return true;
     } catch (e) {
@@ -227,7 +260,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     setRemovingBgId(id);
     try {
       const ok = await performBgRemoval(id, url);
-      if (!ok) toast.error("Couldn't remove the background — try again in a moment.");
+      if (!ok) toast.error("Couldn't remove the background cleanly — kept the original.");
     } finally {
       setRemovingBgId(null);
     }
@@ -278,6 +311,25 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     if (!user || toSave.length === 0) return;
     setSaving(true);
     try {
+      // Cropping often happens quickly and imperfectly — rather than
+      // making background removal a separate step the person has to
+      // remember, catch anything still missing it right here, once,
+      // right before it actually matters (the final saved photo).
+      const stillNeedBg = toSave.filter((d) => !d.bgRemoved && d.cropUrl);
+      if (stillNeedBg.length) {
+        setBulkBgRunning(true);
+        setBulkBgProgress({ done: 0, total: stillNeedBg.length });
+        for (const d of stillNeedBg) {
+          const url = drafts.find((x) => x.id === d.id)?.cropUrl ?? d.cropUrl;
+          if (url) await performBgRemoval(d.id, url);
+          setBulkBgProgress((p) => ({ ...p, done: p.done + 1 }));
+        }
+        setBulkBgRunning(false);
+      }
+      // Re-read from state: performBgRemoval updates drafts in place, and
+      // toSave was computed before this pass ran.
+      const finalToSave = drafts.filter((d) => toSave.some((t) => t.id === d.id));
+
       const payload: Array<{
         id: string; image_path: string; category: string; subcategory: string;
         brand: string; colors: string[]; material: string[]; season: string | null;
@@ -285,8 +337,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         style: string | null; occasion: string | null; purchase_date: string | null;
       }> = [];
 
-      for (let i = 0; i < toSave.length; i++) {
-        const d = toSave[i];
+      for (let i = 0; i < finalToSave.length; i++) {
+        const d = finalToSave[i];
         if (!d.cropUrl) continue;
         const path = `${user.id}/batch-item-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.png`;
         const trimmed = await trimWhiteMargins(d.cropUrl);
@@ -394,32 +446,6 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             {drafts.length} suggested piece{drafts.length === 1 ? "" : "s"}. Edit anything, discard what you don't want.
           </p>
 
-          {!loading && drafts.some((d) => !d.bgRemoved) && (
-            <div className="rounded-2xl border border-border/60 bg-card p-3">
-              <button
-                onClick={() => void removeBgFromAll()}
-                disabled={bulkBgRunning}
-                className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {bulkBgRunning ? <Loader2 size={13} className="animate-spin" /> : null}
-                {bulkBgRunning ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}` : "Remove background from all"}
-              </button>
-              {bulkBgRunning && (
-                <div className="mt-2 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
-                  <div
-                    className="h-full bg-foreground transition-all duration-300"
-                    style={{ width: `${Math.round((bulkBgProgress.done / Math.max(1, bulkBgProgress.total)) * 100)}%` }}
-                  />
-                </div>
-              )}
-              {!bulkBgRunning && (
-                <p className="mt-1.5 text-[10px] text-muted-foreground text-center">
-                  Runs one photo at a time — steady rather than fast on a large batch, but safe on your phone's memory.
-                </p>
-              )}
-            </div>
-          )}
-
           {drafts.map((d) => (
             <div key={d.id} className="relative">
               {d.dedupe.verdict === "certain" && (
@@ -486,6 +512,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
           {copyFromId && (() => {
             const others = drafts.filter((d) => d.id !== copyFromId);
+            const source = drafts.find((d) => d.id === copyFromId);
+            const sourceLabel = source ? [source.colors[0], source.subcategory || source.category].filter(Boolean).join(" ") || "this piece" : "this piece";
             return (
               <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCopyFromId(null)}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
@@ -494,28 +522,31 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                     <button onClick={() => setCopyFromId(null)} aria-label="Close" className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground shrink-0">
-                    Category, colors, material, brand and the rest — not the photo itself.
+                    Copying from <span className="font-medium text-foreground">{sourceLabel}</span> — category, colors, material, brand and the rest, not the photo itself.
                   </p>
                   <button
                     onClick={() => setCopyTargets(new Set(others.map((d) => d.id)))}
                     className="mt-2 self-start text-[10px] uppercase tracking-[0.2em] text-muted-foreground underline shrink-0"
                   >Select all ({others.length})</button>
-                  <div className="mt-3 overflow-y-auto grid grid-cols-3 gap-2 pb-4">
+                  <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-2 pb-4">
                     {others.map((d) => {
                       const on = copyTargets.has(d.id);
+                      const label = [d.colors[0], d.subcategory || d.category].filter(Boolean).join(" ") || "Untitled piece";
                       return (
                         <button
                           key={d.id}
                           onClick={() => toggleCopyTarget(d.id)}
-                          className={`relative aspect-square rounded-xl overflow-hidden border-2 ${on ? "border-foreground" : "border-border/60"}`}
-                          style={{ background: "#FFFFFF" }}
+                          className={`relative rounded-xl overflow-hidden border-2 text-left ${on ? "border-foreground" : "border-border/60"}`}
                         >
-                          {d.cropUrl ? <img src={d.cropUrl} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
-                          {on && (
-                            <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center">
-                              <Check size={11} />
-                            </span>
-                          )}
+                          <div className="aspect-square" style={{ background: "#FFFFFF" }}>
+                            {d.cropUrl ? <img src={d.cropUrl} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                            {on && (
+                              <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background flex items-center justify-center">
+                                <Check size={11} />
+                              </span>
+                            )}
+                          </div>
+                          <p className={`px-2 py-1.5 text-[10px] truncate ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>{label}</p>
                         </button>
                       );
                     })}
@@ -530,6 +561,32 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             );
           })()}
 
+          {!loading && drafts.some((d) => !d.bgRemoved) && (
+            <div className="rounded-2xl border border-border/60 bg-card p-3">
+              <button
+                onClick={() => void removeBgFromAll()}
+                disabled={bulkBgRunning}
+                className="w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {bulkBgRunning ? <Loader2 size={13} className="animate-spin" /> : null}
+                {bulkBgRunning ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}` : "Remove background from all"}
+              </button>
+              {bulkBgRunning && (
+                <div className="mt-2 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
+                  <div
+                    className="h-full bg-foreground transition-all duration-300"
+                    style={{ width: `${Math.round((bulkBgProgress.done / Math.max(1, bulkBgProgress.total)) * 100)}%` }}
+                  />
+                </div>
+              )}
+              {!bulkBgRunning && (
+                <p className="mt-1.5 text-[10px] text-muted-foreground text-center">
+                  Only applies to pieces that don't have it yet — and happens automatically when you tap "Add" below anyway, so this is just for previewing first.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="pt-2 pb-4">
             <button
               onClick={saveAll}
@@ -537,8 +594,9 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              Add {toSave.length} item{toSave.length === 1 ? "" : "s"}
-              {skippedCount ? ` (${skippedCount} duplicate${skippedCount === 1 ? "" : "s"} skipped)` : ""}
+              {saving && bulkBgRunning
+                ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}`
+                : <>Add {toSave.length} item{toSave.length === 1 ? "" : "s"}{skippedCount ? ` (${skippedCount} duplicate${skippedCount === 1 ? "" : "s"} skipped)` : ""}</>}
             </button>
           </div>
         </div>
