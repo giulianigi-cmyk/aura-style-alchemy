@@ -40,9 +40,10 @@ const CreateTripSchema = z.object({
   name: z.string().trim().max(100).nullable().optional(),
   tripType: z.enum(["work", "leisure", "mixed"]),
   laundryAvailable: z.boolean(),
-  sourceLocationIds: z.array(z.string().uuid()).min(1),
+  sourceLocationIds: z.array(z.string().uuid()),
   destinations: z.array(DestinationInput).min(1),
 });
+
 
 export const createTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -64,9 +65,11 @@ export const createTrip = createServerFn({ method: "POST" })
     if (tripErr || !trip) throw new Error(tripErr?.message ?? "Couldn't create trip");
     const tripId = (trip as Trip).id;
 
-    const { error: locErr } = await (supabase.from("trip_source_locations" as never) as any)
-      .insert(data.sourceLocationIds.map((location_id) => ({ trip_id: tripId, location_id })));
-    if (locErr) throw new Error(locErr.message);
+        if (data.sourceLocationIds.length) {
+      const { error: locErr } = await (supabase.from("trip_source_locations" as never) as any)
+        .insert(data.sourceLocationIds.map((location_id) => ({ trip_id: tripId, location_id })));
+      if (locErr) throw new Error(locErr.message);
+    }
 
     const { error: destErr } = await (supabase.from("trip_destinations" as never) as any)
       .insert(data.destinations.map((d, i) => ({
