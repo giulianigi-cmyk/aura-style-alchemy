@@ -11,6 +11,7 @@ import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
+import { compressImageForUpload } from "@/lib/image-compress";
 import { trimWhiteMargins } from "@/lib/auto-crop";
 import { useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
@@ -20,7 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
-import { currentSeason, itemMatchesSeason, resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { currentSeason, itemMatchesSeason, resolveWardrobeUrls, toStoragePath, thumbSrc } from "@/lib/wardrobe-image";
 import {
   ITEM_CATEGORIES,
   SEASON_OPTIONS,
@@ -188,16 +189,33 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       });
       if (upErr) throw upErr;
 
+      let newThumbnailPath: string | null = null;
+      try {
+        const thumbFile = await compressImageForUpload(new File([finalBlob], "item.png", { type: "image/png" }), 400, 0.75);
+        const thumbPath = `${user.id}/thumb-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const { error: thumbErr } = await supabase.storage.from("wardrobe").upload(thumbPath, thumbFile, {
+          cacheControl: "3600", upsert: false, contentType: thumbFile.type || "image/jpeg",
+        });
+        if (!thumbErr) newThumbnailPath = thumbPath;
+      } catch (e) {
+        console.error("[AURA wardrobe] thumbnail regeneration failed after bg removal", e);
+      }
+
       const { data: updatedRow, error: updErr } = await supabase
-        .from("wardrobe_items").update({ image_url: newPath }).eq("id", detail.id).select("*").single();
+        .from("wardrobe_items").update({ image_url: newPath, thumbnail_path: newThumbnailPath } as never).eq("id", detail.id).select("*").single();
       if (updErr) throw updErr;
 
       const updated = updatedRow as WardrobeItem;
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
       setDetail(updated);
 
-      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrl(newPath, 3600);
-      if (signedData?.signedUrl) setSigned((prev) => ({ ...prev, [newPath]: signedData.signedUrl }));
+      const pathsToSign = [newPath, ...(newThumbnailPath ? [newThumbnailPath] : [])];
+      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrls(pathsToSign, 3600);
+      if (signedData) {
+        const additions: Record<string, string> = {};
+        signedData.forEach((row, i) => { if (row.signedUrl) additions[pathsToSign[i]] = row.signedUrl; });
+        setSigned((prev) => ({ ...prev, ...additions }));
+      }
 
       toast.success("Background removed");
     } catch (e) {
@@ -218,16 +236,33 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       });
       if (upErr) throw upErr;
 
+      let newThumbnailPath: string | null = null;
+      try {
+        const thumbFile = await compressImageForUpload(new File([blob], "item.png", { type: "image/png" }), 400, 0.75);
+        const thumbPath = `${user.id}/thumb-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const { error: thumbErr } = await supabase.storage.from("wardrobe").upload(thumbPath, thumbFile, {
+          cacheControl: "3600", upsert: false, contentType: thumbFile.type || "image/jpeg",
+        });
+        if (!thumbErr) newThumbnailPath = thumbPath;
+      } catch (e) {
+        console.error("[AURA wardrobe] thumbnail regeneration failed after manual crop", e);
+      }
+
       const { data: updatedRow, error: updErr } = await supabase
-        .from("wardrobe_items").update({ image_url: newPath }).eq("id", detail.id).select("*").single();
+        .from("wardrobe_items").update({ image_url: newPath, thumbnail_path: newThumbnailPath } as never).eq("id", detail.id).select("*").single();
       if (updErr) throw updErr;
 
       const updated = updatedRow as WardrobeItem;
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
       setDetail(updated);
 
-      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrl(newPath, 3600);
-      if (signedData?.signedUrl) setSigned((prev) => ({ ...prev, [newPath]: signedData.signedUrl }));
+      const pathsToSign = [newPath, ...(newThumbnailPath ? [newThumbnailPath] : [])];
+      const { data: signedData } = await supabase.storage.from("wardrobe").createSignedUrls(pathsToSign, 3600);
+      if (signedData) {
+        const additions: Record<string, string> = {};
+        signedData.forEach((row, i) => { if (row.signedUrl) additions[pathsToSign[i]] = row.signedUrl; });
+        setSigned((prev) => ({ ...prev, ...additions }));
+      }
 
       toast.success("Crop updated");
     } catch (e) {
@@ -651,8 +686,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       ) : (
         <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
           {filtered.map((it, i) => {
-            const path = toStoragePath(it.image_url);
-            const src = path ? (signed[path] ?? "") : "";
+            const src = thumbSrc(it, signed);
             const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
             const isSelected = selectedIds.has(it.id);
             return (
@@ -789,7 +823,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                   {detail.price != null && (
                     <div className="mt-3 inline-flex items-center rounded-full bg-secondary/60 px-3 py-1.5 text-[11px] text-muted-foreground">
                       {detail.worn_count ? (
-                        <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toFixed(2)} per wear</span>
+                        <span>{detail.currency ?? "€"}{(detail.price / detail.worn_count).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per wear</span>
                       ) : (
                         <span>Not worn yet</span>
                       )}
