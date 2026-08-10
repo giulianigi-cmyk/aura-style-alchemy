@@ -69,13 +69,16 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       style: it.style ? [it.style] : [],
       season: it.season,
       brand: it.brand,
+      material: it.material ?? [],
       locationId: it.location_id ?? null,
     }));
 
-    const datesWithGeneralPlan = new Set(
-      ((existingPlans ?? []) as { date: string; calendar_event_id: string | null }[])
-        .filter((p) => !p.calendar_event_id)
-        .map((p) => p.date),
+    // A day that already has ANY outfit — general or tied to a specific
+    // event — counts as "already planned" here. Filling in a work look
+    // next to an evening plan she set herself would be a silent
+    // surprise, not a helpful default.
+    const datesWithAnyPlan = new Set(
+      ((existingPlans ?? []) as { date: string; calendar_event_id: string | null }[]).map((p) => p.date),
     );
 
     const eventTitleByDate = new Map<string, string>();
@@ -95,7 +98,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       const date = addDaysIso(data.startDate, i);
       const dow = WEEKDAY_CODES[new Date(`${date}T00:00:00`).getDay()];
       if (!workDays.includes(dow)) continue;
-      if (datesWithGeneralPlan.has(date)) { skippedExisting.push(date); continue; }
+      if (datesWithAnyPlan.has(date)) { skippedExisting.push(date); continue; }
 
       const w = weatherByDate.get(date);
       const occasionHint = eventTitleByDate.get(date) ? `Work · ${eventTitleByDate.get(date)}` : "Work";
