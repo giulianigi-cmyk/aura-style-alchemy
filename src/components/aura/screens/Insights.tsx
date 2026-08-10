@@ -8,7 +8,8 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { Loader2 } from "lucide-react";
 
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
-const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${n.toFixed(0)}`;
+const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${Math.round(n).toLocaleString("en-US")}`;
+
 
 // Deliberately simple and stated plainly, not tuned to feel precise:
 // linear decline from 100% at purchase to a 25% floor by year 5, flat
