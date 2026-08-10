@@ -13,6 +13,7 @@ const ItemSchema = z.object({
   style: z.array(z.string()).nullable().optional(),
   season: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
+  material: z.array(z.string()).nullable().optional(),
   locationId: z.string().nullable().optional(),
 });
 
@@ -90,6 +91,7 @@ export async function suggestOutfitCore(params: {
     style: it.style ?? [],
     season: it.season ?? "",
     brand: it.brand ?? "",
+    material: it.material ?? [],
   }));
 
   const system = [
@@ -97,6 +99,9 @@ export async function suggestOutfitCore(params: {
     "You are a personal stylist. Compose ONE coherent outfit from the user's wardrobe.",
     "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
     "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
+    "NEVER pick more than one outerwear/layering piece in the same outfit — a blazer and a cardigan (or any two of blazer/cardigan/jacket/coat) are never worn together. Pick at most one.",
+    "Weather overrides everything else for outerwear: above ~26°C, do not include a blazer, jacket, cardigan, or coat at all, regardless of occasion — a lightweight top alone is correct. Only add outerwear when the temperature genuinely calls for it.",
+    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, or overtly evening/party-coded (check the material field for sequin/sparkle/lurex/metallic), exclude cocktail or evening dresses, and exclude very short skirts (mini-length) — these read as going-out wear, not workwear, even if the color/formality score looks fine on paper.",
     "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
     "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
     "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
