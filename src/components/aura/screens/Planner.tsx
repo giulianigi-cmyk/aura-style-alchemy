@@ -182,10 +182,11 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
               className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95 inline-flex items-center gap-1"
                         ><Sparkles size={11} /> Create outfit</button>
             <button
+                          <button
               onClick={() => go("trips")}
               aria-label="Trips"
-              className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-95"
-            ><Luggage size={14} /></button>
+              className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95"
+            ><Luggage size={19} /></button>
             <button
               onClick={() => setAnchor(startOfDay(new Date()))}
               className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
