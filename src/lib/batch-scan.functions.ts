@@ -355,9 +355,10 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
         continue;
       }
       try {
-        const { error: insErr } = await supabase.from("wardrobe_items").insert({
+                const { error: insErr } = await supabase.from("wardrobe_items").insert({
           user_id: userId,
           image_url: it.image_path,
+          thumbnail_path: it.thumbnail_path ?? null,
           category: it.category || null,
           subcategory: it.subcategory || null,
           brand: it.brand?.trim() || null,
