@@ -31,7 +31,9 @@ import { useProfile } from "@/hooks/use-profile";
 export type Screen =
     | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
-      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug";
+      | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
+      | "trips" | "trip-create" | "trip-detail" | "essential-presets";
+
 
 
 
@@ -57,7 +59,8 @@ function Inner() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
   const [stylistChatInit, setStylistChatInit] = useState<StylistChatInit>(null);
-  const [reviewScanId, setReviewScanId] = useState<string | null>(null);
+    const [reviewScanId, setReviewScanId] = useState<string | null>(null);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
