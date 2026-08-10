@@ -35,6 +35,7 @@ export const DetectedIdSchema = z.object({ id: z.string().uuid() });
 export const ConfirmItemSchema = z.object({
   id: z.string().uuid(),
   image_path: z.string().min(3),
+  thumbnail_path: z.string().min(3).nullable().optional(),
   category: z.string().nullable().optional(),
   subcategory: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
