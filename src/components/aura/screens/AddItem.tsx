@@ -388,9 +388,25 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       });
       if (upErr) throw upErr;
 
-      const payload: TablesInsert<"wardrobe_items"> = {
+      // A separate, much smaller copy just for grid views — the closet
+      // grid was loading dozens of full-size images at once, which is
+      // the actual bottleneck; the detail view still uses the full file.
+      let thumbnailPath: string | null = null;
+      try {
+        const thumbFile = await compressImageForUpload(trimmedFile, 400, 0.75);
+        const thumbPath = `${uid}/thumb-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const { error: thumbErr } = await supabase.storage.from("wardrobe").upload(thumbPath, thumbFile, {
+          cacheControl: "3600", upsert: false, contentType: thumbFile.type || "image/jpeg",
+        });
+        if (!thumbErr) thumbnailPath = thumbPath;
+      } catch (e) {
+        console.error("[AURA add-item] thumbnail generation failed, grid will use the full image", e);
+      }
+
+      const payload: TablesInsert<"wardrobe_items"> & { thumbnail_path?: string | null } = {
         user_id: uid,
         image_url: path,
+        thumbnail_path: thumbnailPath,
         category: categories.includes(category) ? category : "Tops",
         subcategory: subcategoriesFor(category).includes(subcategory) ? subcategory : null,
         brand: brand.trim() || null,
@@ -430,7 +446,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (insErr && /column .* does not exist|composition/i.test(String(insErr.message))) {
         console.warn("[AURA wardrobe] new column not in cache yet — saving without extended attributes", insErr.message);
         ({ data: inserted, error: insErr } = await supabase
-          .from("wardrobe_items").insert(payload).select("*").single());
+          .from("wardrobe_items").insert(payload as never).select("*").single());
       }
       if (insErr) throw insErr;
 
