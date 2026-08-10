@@ -7,6 +7,7 @@ import { applyPresetsToTrip } from "@/lib/essentials.functions";
 import { listEssentialPresets, type EssentialPreset } from "@/lib/essentials.functions";
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import type { WardrobeLocation } from "@/lib/wardrobe-location";
+import { searchDestinations, type DestinationSearchResult } from "@/lib/destination-search";
 
 const TYPES: { value: TripType; label: string; icon: typeof Briefcase }[] = [
   { value: "work", label: "Work", icon: Briefcase },
@@ -20,6 +21,11 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
   const [name, setName] = useState("");
   const [tripType, setTripType] = useState<TripType>("leisure");
   const [destinationName, setDestinationName] = useState("");
+  const [destinationLat, setDestinationLat] = useState<number | null>(null);
+  const [destinationLon, setDestinationLon] = useState<number | null>(null);
+  const [destinationQuery, setDestinationQuery] = useState("");
+  const [destinationResults, setDestinationResults] = useState<DestinationSearchResult[]>([]);
+  const [searchingDestination, setSearchingDestination] = useState(false);
   const [startDate, setStartDate] = useState(todayIso());
   const [endDate, setEndDate] = useState(todayIso());
   const [laundryAvailable, setLaundryAvailable] = useState(false);
@@ -46,12 +52,34 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
       .finally(() => setLoadingContext(false));
   }, []);
 
+  useEffect(() => {
+    if (destinationLat != null && destinationQuery === destinationName) return; // already picked, don't re-search
+    if (destinationQuery.trim().length < 2) { setDestinationResults([]); return; }
+    setSearchingDestination(true);
+    const t = setTimeout(() => {
+      searchDestinations(destinationQuery)
+        .then(setDestinationResults)
+        .finally(() => setSearchingDestination(false));
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destinationQuery]);
+
+  const pickDestination = (r: DestinationSearchResult) => {
+    const label = [r.name, r.admin1, r.country].filter(Boolean).join(", ");
+    setDestinationName(label);
+    setDestinationQuery(label);
+    setDestinationLat(r.latitude);
+    setDestinationLon(r.longitude);
+    setDestinationResults([]);
+  };
+
   const toggleLocation = (id: string) =>
     setSelectedLocationIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const togglePreset = (id: string) =>
     setSelectedPresetIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const canCreate = destinationName.trim().length > 0 && startDate && endDate && endDate >= startDate
+  const canCreate = destinationName.trim().length > 0 && destinationLat != null && startDate && endDate && endDate >= startDate
     && (locations.length === 0 || selectedLocationIds.length > 0);
 
   const create = async () => {
@@ -69,7 +97,7 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
           tripType,
           laundryAvailable,
           sourceLocationIds,
-          destinations: [{ destinationName: destinationName.trim(), startDate, endDate }],
+          destinations: [{ destinationName: destinationName.trim(), latitude: destinationLat, longitude: destinationLon, startDate, endDate }],
         },
       });
       if (selectedPresetIds.length) {
@@ -104,11 +132,29 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Where are you going?</p>
             <input
-              value={destinationName}
-              onChange={(e) => setDestinationName(e.target.value)}
-              placeholder="e.g. Paris"
+              value={destinationQuery}
+              onChange={(e) => { setDestinationQuery(e.target.value); setDestinationName(""); setDestinationLat(null); setDestinationLon(null); }}
+              placeholder="Search a city…"
               className="w-full bg-secondary/60 rounded-full px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
             />
+            {searchingDestination && <p className="mt-1.5 text-[11px] text-muted-foreground">Searching…</p>}
+            {destinationResults.length > 0 && (
+              <div className="mt-2 rounded-2xl border border-border/60 bg-card overflow-hidden">
+                {destinationResults.map((r, i) => (
+                  <button
+                    key={`${r.name}-${r.latitude}-${i}`}
+                    onClick={() => pickDestination(r)}
+                    className="w-full px-4 py-2.5 text-left text-sm border-b border-border/40 last:border-b-0 active:bg-secondary/40"
+                  >
+                    {r.name}
+                    <span className="text-muted-foreground">{[r.admin1, r.country].filter(Boolean).length ? ` — ${[r.admin1, r.country].filter(Boolean).join(", ")}` : ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {destinationLat != null && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Weather forecast will use this location.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
