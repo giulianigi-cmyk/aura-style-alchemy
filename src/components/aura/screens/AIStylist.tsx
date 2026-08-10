@@ -180,6 +180,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
             season: it.season,
             brand: it.brand,
+            material: it.material ?? [],
             locationId: (it as unknown as { location_id?: string | null }).location_id ?? null,
           })),
         },
@@ -420,9 +421,19 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Today's look</p>
                     <p className="text-xs mt-0.5">{label}</p>
                   </div>
-                  <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${tp.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"}`}>
-                    {tp.status === "worn" ? "Worn" : "Planned"}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${tp.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"}`}>
+                      {tp.status === "worn" ? "Worn" : "Planned"}
+                    </span>
+                    {tp.status !== "worn" && (
+                      <button
+                        onClick={() => void dismissPlan(tp)}
+                        disabled={confirmingPlanId === tp.id}
+                        aria-label="Remove this planned outfit"
+                        className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground disabled:opacity-50"
+                      ><X size={13} /></button>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3">
                   {tp.status === "worn"
@@ -498,7 +509,15 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             <div className="space-y-2">
               {upcomingPlans.map((p) => (
                 <div key={p.id} className="rounded-2xl border border-border/60 bg-card p-3">
-                  <p className="text-xs text-muted-foreground mb-2">{dateLabel(p.date)}{p.occasion ? ` · ${p.occasion}` : ""}</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-muted-foreground">{dateLabel(p.date)}{p.occasion ? ` · ${p.occasion}` : ""}</p>
+                    <button
+                      onClick={() => void dismissPlan(p)}
+                      disabled={confirmingPlanId === p.id}
+                      aria-label="Remove this planned outfit"
+                      className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground disabled:opacity-50"
+                    ><X size={13} /></button>
+                  </div>
                   <ItemThumbs ids={p.item_ids} size="h-14 w-14" />
                 </div>
               ))}
