@@ -87,6 +87,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     const [personalFormality, setPersonalFormality] = useState<string>("");
     const [styleBoldness, setStyleBoldness] = useState<string>("");
   const [workDays, setWorkDays] = useState<string[]>(["MO", "TU", "WE", "TH", "FR"]);
+  const [workStartTime, setWorkStartTime] = useState("09:00");
+  const [workEndTime, setWorkEndTime] = useState("18:00");
 
   const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | null>(null);
   const [profession, setProfession] = useState<string>("");
@@ -106,6 +108,9 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setWorkDressCode(profile.work_dress_code ?? "");
         setPersonalFormality(profile.personal_formality ?? "");
         setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
+        setWorkDays((profile as unknown as { work_days?: string[] }).work_days ?? ["MO", "TU", "WE", "TH", "FR"]);
+        setWorkStartTime((profile as unknown as { work_start_time?: string }).work_start_time ?? "09:00");
+        setWorkEndTime((profile as unknown as { work_end_time?: string }).work_end_time ?? "18:00");
 
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
@@ -126,6 +131,8 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       personal_formality: personalFormality || null,
             style_boldness: styleBoldness || null,
       work_days: workDays,
+      work_start_time: workStartTime,
+      work_end_time: workEndTime,
 
       profession: profession.trim() || null,
       bio: bio.trim() || null,
@@ -357,6 +364,29 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                 );
               })}
             </div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex-1">
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">From</p>
+                <input
+                  type="time"
+                  value={workStartTime}
+                  onChange={(e) => setWorkStartTime(e.target.value)}
+                  className="w-full bg-background border border-border rounded-full px-3 py-2 text-sm outline-none"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">To</p>
+                <input
+                  type="time"
+                  value={workEndTime}
+                  onChange={(e) => setWorkEndTime(e.target.value)}
+                  className="w-full bg-background border border-border rounded-full px-3 py-2 text-sm outline-none"
+                />
+              </div>
+            </div>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              An evening event outside these hours won't stop AURA from also planning your work outfit for that day.
+            </p>
           </div>
 
           {infoPopup && (
