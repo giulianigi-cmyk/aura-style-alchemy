@@ -12,6 +12,10 @@ import { StylistChat } from "./screens/StylistChat";
 import { OutfitScan } from "./screens/OutfitScan";
 import { BatchScan } from "./screens/BatchScan";
 import { BatchReview } from "./screens/BatchReview";
+import { Trips } from "./screens/Trips";
+import { TripCreate } from "./screens/TripCreate";
+import { TripDetail } from "./screens/TripDetail";
+import { EssentialPresets } from "./screens/EssentialPresets";
 import { Planner } from "./screens/Planner";
 import { Shop } from "./screens/Shop";
 import { ColorLab } from "./screens/ColorLab";
@@ -157,7 +161,11 @@ function Inner() {
           {screen === "stylist-chat" && <StylistChat go={go} openBuilder={openBuilder} initialMessage={stylistChatInit} />}
           {screen === "outfit-scan" && <OutfitScan go={go} />}
           {screen === "batch-scan" && <BatchScan go={go} openReview={openBatchReview} />}
-          {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
+                    {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
+          {screen === "trips" && <Trips go={go} openTrip={(id) => { setActiveTripId(id); setScreen("trip-detail"); }} />}
+          {screen === "trip-create" && <TripCreate go={go} onCreated={(id) => { setActiveTripId(id); setScreen("trip-detail"); }} />}
+          {screen === "trip-detail" && activeTripId && <TripDetail go={go} tripId={activeTripId} />}
+          {screen === "essential-presets" && <EssentialPresets go={go} />}
           {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
