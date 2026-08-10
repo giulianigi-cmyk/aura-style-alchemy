@@ -28,6 +28,7 @@ import { StorageDebug } from "./screens/StorageDebug";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
 import { TabBar } from "./TabBar";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
@@ -148,7 +149,8 @@ function Inner() {
   return (
     <PhoneFrame>
       <div className="relative h-full w-full overflow-hidden bg-background">
-        <div key={screen} className="absolute inset-0 animate-fade-in">
+                <div key={screen} className="absolute inset-0 animate-fade-in">
+          <ErrorBoundary onReset={() => go("home")}>
           {screen === "splash" && <Splash go={go} />}
           {screen === "onboarding" && <Onboarding onDone={finishOnboarding} />}
           {screen === "auth" && <Auth />}
@@ -178,6 +180,7 @@ function Inner() {
           {screen === "storage-debug" && <StorageDebug go={go} />}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
           {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
+          </ErrorBoundary>
         </div>
         {showTabs && <TabBar current={screen} go={go} />}
       </div>
