@@ -7,29 +7,37 @@ export type DestinationSearchResult = {
 };
 
 /**
- * Free, no-key geocoding — same provider already used for the manual
- * city fallback in useLocation(). Returns several candidates rather than
- * just the top hit, since place names are often ambiguous (there's more
- * than one "Alula").
+ * Photon (Komoot), built on OpenStreetMap data — free, no API key.
+ * Chosen over the Open-Meteo/GeoNames geocoder used for the weather
+ * fallback because GeoNames' coverage missed places like AlUla, a
+ * newer/actively-developed destination; OSM data tends to catch up on
+ * these faster since it's community-maintained. If this still isn't
+ * enough real-world coverage, the next step up is Google Places
+ * Autocomplete — free for the volumes this app would see, but requires
+ * a Google Cloud project with billing enabled.
  */
 export async function searchDestinations(query: string): Promise<DestinationSearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
   try {
     const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=${encodeURIComponent(q)}`
+      `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=en`
     );
     const data = await res.json();
-    const results = (data?.results ?? []) as Array<{
-      name: string; country?: string; admin1?: string; latitude: number; longitude: number;
+    const features = (data?.features ?? []) as Array<{
+      geometry?: { coordinates?: [number, number] };
+      properties?: { name?: string; country?: string; state?: string; city?: string; osm_key?: string };
     }>;
-    return results.map((r) => ({
-      name: r.name,
-      country: r.country ?? null,
-      admin1: r.admin1 ?? null,
-      latitude: Number(r.latitude),
-      longitude: Number(r.longitude),
-    }));
+    return features
+      .filter((f) => f.geometry?.coordinates && f.properties?.name)
+      .map((f) => ({
+        name: f.properties!.name!,
+        country: f.properties!.country ?? null,
+        admin1: f.properties!.state ?? f.properties!.city ?? null,
+        // GeoJSON order is [longitude, latitude] — easy to flip by mistake.
+        longitude: Number(f.geometry!.coordinates![0]),
+        latitude: Number(f.geometry!.coordinates![1]),
+      }));
   } catch (e) {
     console.error("[AURA destination-search] failed", e);
     return [];
