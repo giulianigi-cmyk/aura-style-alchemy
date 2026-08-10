@@ -13,6 +13,7 @@ import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { clearSegmentationCache, cropItemFromSegmentation } from "@/lib/outfit-segmentation";
 import { trimWhiteMargins } from "@/lib/auto-crop";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
+import { compressImageForUpload } from "@/lib/image-compress";
 import type { WardrobeItem } from "@/lib/aura-types";
 
 type Draft = DetectedItemDraft & {
@@ -331,7 +332,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       const finalToSave = drafts.filter((d) => toSave.some((t) => t.id === d.id));
 
       const payload: Array<{
-        id: string; image_path: string; category: string; subcategory: string;
+        id: string; image_path: string; thumbnail_path: string | null; category: string; subcategory: string;
         brand: string; colors: string[]; material: string[]; season: string | null;
         price: number | null; currency: string | null; size: string | null;
         style: string | null; occasion: string | null; purchase_date: string | null;
@@ -347,6 +348,23 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           cacheControl: "3600", upsert: false, contentType: "image/png",
         });
         if (error) throw error;
+
+        // Batches are often 50-150 photos — this is exactly where a
+        // heavy closet grid comes from, so a thumbnail here matters more
+        // than almost anywhere else in the app. Best-effort: if it fails,
+        // the grid just falls back to the full image for this one piece.
+        let thumbnailPath: string | null = null;
+        try {
+          const thumbFile = await compressImageForUpload(file, 400, 0.75);
+          const thumbPath = `${user.id}/thumb-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.jpg`;
+          const { error: thumbErr } = await supabase.storage.from("wardrobe").upload(thumbPath, thumbFile, {
+            cacheControl: "3600", upsert: false, contentType: thumbFile.type || "image/jpeg",
+          });
+          if (!thumbErr) thumbnailPath = thumbPath;
+        } catch (e) {
+          console.error("[AURA batch-review] thumbnail generation failed for item, grid will use full image", d.id, e);
+        }
+
         const priceNum = (() => {
           const n = parseFloat(d.price.replace(",", "."));
           return Number.isFinite(n) && n > 0 ? n : null;
@@ -354,6 +372,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         payload.push({
           id: d.id,
           image_path: path,
+          thumbnail_path: thumbnailPath,
           category: d.category,
           subcategory: d.subcategory,
           brand: d.brand,
