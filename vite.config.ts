@@ -15,5 +15,12 @@ export default defineConfig({
   },
   vite: {
     plugins: [mcpPlugin()],
+    // Pre-bundle Router with React on the first dev-server pass. Without this,
+    // Vite can discover Router later and replace the optimized React chunk;
+    // preview proxies without a working HMR socket may then keep react-dom's
+    // old chunk and trigger resolveDispatcher().use with a null dispatcher.
+    optimizeDeps: {
+      include: ["@tanstack/react-router", "@tanstack/react-query"],
+    },
   },
 });
