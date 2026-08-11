@@ -106,12 +106,34 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
   const toggleChip = (arr: string[], setter: (v: string[]) => void, v: string) =>
     setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const saveEdit = async () => {
+    const saveEdit = async () => {
     if (!detail) return;
     setSavingEdit(true);
     try {
       const priceNum = edit.price.trim() === "" ? null : Number(edit.price);
       if (priceNum != null && !Number.isFinite(priceNum)) throw new Error("Invalid price");
+
+      // Only the fields AI ever classifies get tracked here — price,
+      // size and purchase date are never AI-assigned, so there's nothing
+      // for a future re-classification pass to accidentally revert.
+      const sameArray = (a: string[], b: string[] | null | undefined) => {
+        const bb = b ?? [];
+        return a.length === bb.length && a.every((v) => bb.includes(v));
+      };
+      const changedFields: string[] = [];
+      if (edit.brand.trim() !== (detail.brand ?? "")) changedFields.push("brand");
+      if (edit.category !== detail.category) changedFields.push("category");
+      if (!sameArray(edit.colors, detail.colors)) changedFields.push("colors");
+      if (!sameArray(edit.seasons, splitCsv(detail.season))) changedFields.push("season");
+      if (!sameArray(edit.styles, splitCsv(detail.style))) changedFields.push("style");
+      if (!sameArray(edit.occasions, splitCsv(detail.occasion))) changedFields.push("occasion");
+      if (!sameArray(edit.materials, Array.isArray(detail.material) ? detail.material : [])) changedFields.push("material");
+
+      const existingEdited = (detail as unknown as { user_edited_fields?: string[] }).user_edited_fields ?? [];
+      const userEditedFields = changedFields.length
+        ? Array.from(new Set([...existingEdited, ...changedFields]))
+        : existingEdited;
+
       const patch = {
         brand: edit.brand.trim() || null,
         size: edit.size.trim() || null,
@@ -125,6 +147,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
         price: priceNum,
         currency: priceNum != null ? edit.currency : null,
         purchase_date: edit.purchaseDate || null,
+        user_edited_fields: userEditedFields,
       };
       const { data, error } = await supabase
         .from("wardrobe_items").update(patch as never).eq("id", detail.id).select("*").single();
