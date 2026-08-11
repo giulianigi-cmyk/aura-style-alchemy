@@ -9,7 +9,8 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
-import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { resolveWardrobeUrls, toStoragePath, thumbSrc } from "@/lib/wardrobe-image";
+import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
