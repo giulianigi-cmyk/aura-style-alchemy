@@ -160,7 +160,8 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     const validLengths = lengthOptionsFor(category, subcategory);
 
     return {
-          const rawSeasons = allowed(output.seasons, SEASONS);
+              const rawSeasons = allowed(output.seasons, SEASONS);
+
     // Safety net for the mutual-exclusivity rule above: if the model
     // still returns both "All Seasons" and a specific season despite the
     // instruction, the specific ones carry more information and win.
