@@ -40,6 +40,8 @@ export async function suggestOutfitCore(params: {
   condition: string | null;
   occasion: string | null;
   dressRules: string | null;
+  gender?: string | null;
+  styleBoldness?: string | null;
   items: SuggestOutfitItem[];
   avoidItemIds?: string[];
   locationIdOverride?: string | null;
@@ -94,11 +96,25 @@ export async function suggestOutfitCore(params: {
     material: it.material ?? [],
   }));
 
+  const genderLine = params.gender === "Man"
+    ? "This wardrobe belongs to a man: compose top + bottom (or a single one-piece garment) + shoes, and only add a bag if it genuinely fits the look — a bag is not a standard component for a men's outfit the way it is for women's. An accessory (belt, watch, scarf) is welcome when it adds something."
+    : params.gender === "Woman"
+    ? "This wardrobe belongs to a woman: a bag is a standard component of a complete outfit alongside top + bottom (or a dress) + shoes — include one whenever a suitable bag is available, plus an accessory when it adds something."
+    : null;
+
+  const boldnessLine = params.styleBoldness === "Bold" || params.styleBoldness === "Creative"
+    ? "This person likes to experiment: within every constraint above, lean into color and pattern — mixed prints, a strong color pairing, or a statement piece are welcome rather than defaulting to the safest neutral combination."
+    : params.styleBoldness === "Classic"
+    ? "This person prefers a classic wardrobe: favor neutral, coordinated colors and minimal pattern-mixing over bold color or print combinations, even when a bolder pairing would technically also work."
+    : null;
+
   const system = [
     ...(params.dressRules ? [params.dressRules, ""] : []),
     "You are a personal stylist. Compose ONE coherent outfit from the user's wardrobe.",
     "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
+    ...(genderLine ? [genderLine] : []),
     "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
+    ...(boldnessLine ? [boldnessLine] : []),
     "NEVER pick more than one outerwear/layering piece in the same outfit — a blazer and a cardigan (or any two of blazer/cardigan/jacket/coat) are never worn together. Pick at most one.",
     "Weather overrides everything else for outerwear: above ~26°C, do not include a blazer, jacket, cardigan, or coat at all, regardless of occasion — a lightweight top alone is correct. Only add outerwear when the temperature genuinely calls for it.",
     "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, or overtly evening/party-coded (check the material field for sequin/sparkle/lurex/metallic), exclude cocktail or evening dresses, and exclude very short skirts (mini-length) — these read as going-out wear, not workwear, even if the color/formality score looks fine on paper.",
@@ -160,13 +176,21 @@ export async function suggestOutfitCore(params: {
 export const suggestOutfitAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data, context }) => suggestOutfitCore({
-    supabase: context.supabase,
-    userId: context.userId,
-    temperature: data.temperature ?? null,
-    condition: data.condition ?? null,
-    occasion: data.occasion ?? null,
-    dressRules: data.dressRules ?? null,
-    items: data.items,
-    avoidItemIds: data.avoidItemIds,
-  }));
+  .handler(async ({ data, context }) => {
+    const { data: profileRow } = await (context.supabase.from("profiles" as never) as any)
+      .select("gender, style_boldness").eq("id", context.userId).maybeSingle();
+    const profile = profileRow as { gender?: string | null; style_boldness?: string | null } | null;
+
+    return suggestOutfitCore({
+      supabase: context.supabase,
+      userId: context.userId,
+      temperature: data.temperature ?? null,
+      condition: data.condition ?? null,
+      occasion: data.occasion ?? null,
+      dressRules: data.dressRules ?? null,
+      gender: profile?.gender ?? null,
+      styleBoldness: profile?.style_boldness ?? null,
+      items: data.items,
+      avoidItemIds: data.avoidItemIds,
+    });
+  });
