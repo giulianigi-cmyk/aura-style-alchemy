@@ -23,7 +23,7 @@ function buildPrompt(): string {
     `- subcategory: EXACTLY one value from this fixed list matching the category (e.g. if category is "Shoes", pick a Shoes value): ${ALL_SUBCATEGORIES.join(", ")}. Return an empty string only if truly none apply.`,
     `- colors: 1-2 items picked EXACTLY from this fixed palette (verbatim names): ${COLOR_NAMES.join(", ")}.`,
     `- materials: 0-2 items from: ${MATERIAL_OPTIONS.join(", ")}. Best guess from visible texture and garment type; empty array if genuinely unclear.`,
-    `- seasons: 0-3 items from: ${DETECT_SEASONS.join(", ")}.`,
+        `- seasons: 0-2 items from: ${DETECT_SEASONS.join(", ")}. Never combine "All Seasons" with a specific season — pick either "All Seasons" alone, or 1-2 specific seasons. Reason from material and coverage: heavy/insulating (wool, cashmere, shearling, coats, boots) → Autumn/Winter; light/breathable or minimal coverage (linen, thin cotton, shorts, sandals) → Spring/Summer. Reserve "All Seasons" for versatile mid-weight basics with no strong seasonal signal, not as a default when unsure.`,
     '- description: 3-6 words, e.g. "cropped denim jacket".',
     "- confidence: 0 to 1, how sure you are this is a distinct, correctly identified item.",
     "- bbox: the item's bounding box as FRACTIONS of the full image (0 to 1): x and y are the top-left corner, width and height the box size. Be generous enough to include the whole item.",
@@ -49,7 +49,10 @@ function sanitize(output: z.infer<typeof DetectOutputSchema>): DetectedOutfitIte
         subcategory: validSubs.includes(it.subcategory) ? it.subcategory : "",
         colors: it.colors.filter((c) => validColors.has(c)).slice(0, 2),
         materials: it.materials.filter((m) => MATERIAL_OPTIONS.includes(m)).slice(0, 2),
-        seasons: it.seasons.filter((s) => (DETECT_SEASONS as readonly string[]).includes(s)),
+                seasons: (() => {
+          const s = it.seasons.filter((x) => (DETECT_SEASONS as readonly string[]).includes(x));
+          return s.length > 1 && s.includes("All Seasons") ? s.filter((x) => x !== "All Seasons") : s;
+        })(),
         confidence: Math.max(0, Math.min(1, it.confidence)),
         bbox: {
           x: clamp01(b.x),
