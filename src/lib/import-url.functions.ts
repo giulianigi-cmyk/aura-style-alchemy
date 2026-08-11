@@ -389,7 +389,7 @@ const firecrawlScrape: FallbackScraper = async (url) => {
       method: "POST",
       signal: ctl.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
+            body: JSON.stringify({
         url,
         formats: ["rawHtml", "html"],
         onlyMainContent: false,
@@ -397,6 +397,7 @@ const firecrawlScrape: FallbackScraper = async (url) => {
         waitFor: 5000,
         location: { country: "IT", languages: ["it-IT"] },
         blockAds: true,
+        proxy: "auto",
       }),
     });
     if (!r.ok) {
