@@ -64,8 +64,9 @@ function Inner() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
   const [stylistChatInit, setStylistChatInit] = useState<StylistChatInit>(null);
-    const [reviewScanId, setReviewScanId] = useState<string | null>(null);
-  const [activeTripId, setActiveTripId] = useState<string | null>(null);
+   const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [wardrobeGapFilter, setWardrobeGapFilter] = useState<"price" | "purchase_date" | null>(null);
+const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
@@ -157,7 +158,8 @@ function Inner() {
           {screen === "reset" && <ResetPassword onDone={() => setScreen(user ? "home" : "auth")} />}
           {screen === "profile-setup" && <ProfileSetup onDone={() => setScreen("home")} />}
           {screen === "home" && <Home go={go} />}
-          {screen === "wardrobe" && <Wardrobe go={go} />}
+                    {screen === "wardrobe" && <Wardrobe go={go} gapFilter={wardrobeGapFilter} onClearGapFilter={() => setWardrobeGapFilter(null)} />}
+
           {screen === "add" && <AddItem onClose={() => go("wardrobe")} />}
           {screen === "ai" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "stylist-chat" && <StylistChat go={go} openBuilder={openBuilder} initialMessage={stylistChatInit} />}
@@ -173,7 +175,8 @@ function Inner() {
           {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} />}
           {screen === "profile" && <Profile go={go} />}
-          {screen === "insights" && <Insights go={go} />}
+                    {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
+
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
           {screen === "notifications" && <Notifications go={go} />}
           {screen === "invite" && <Invite go={go} />}
