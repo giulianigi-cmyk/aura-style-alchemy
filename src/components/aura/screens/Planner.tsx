@@ -352,6 +352,8 @@ function DayDetail({
   const [notes, setNotes] = useState(plan?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [filterSuggested, setFilterSuggested] = useState(false);
+  const [pickerQ, setPickerQ] = useState("");
+  const [pickerCat, setPickerCat] = useState("All");
 
   // Re-sync the form whenever the person switches which slot they're
   // looking at — this component stays mounted across that switch.
