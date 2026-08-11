@@ -55,6 +55,7 @@ export type StylistChatInit = {
   temperature: number | null;
   condition: string | null;
   date?: string | null;
+  eventId?: string | null;
 } | null;
 
 
