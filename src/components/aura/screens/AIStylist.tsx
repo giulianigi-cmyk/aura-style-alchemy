@@ -273,15 +273,14 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
   const assignToDay = async () => {
     if (!assignFor || !user) return;
-    await supabase.from("outfit_plans").delete().eq("user_id", user.id).eq("date", assignDate);
-    const { data, error } = await supabase.from("outfit_plans").insert({
+    const { data, error } = await supabase.from("outfit_plans").upsert({
       user_id: user.id,
       date: assignDate,
       item_ids: assignFor.item_ids,
       occasion: assignFor.occasion?.[0] ?? null,
       notes: assignFor.notes ?? assignFor.name ?? null,
       status: "planned",
-    } as never).select("id").single();
+    } as never, { onConflict: "user_id,general_date" }).select("id").single();
     if (error) { toast.error(error.message); return; }
     const { error: eventErr } = await logWardrobeEvent({
       userId: user.id,

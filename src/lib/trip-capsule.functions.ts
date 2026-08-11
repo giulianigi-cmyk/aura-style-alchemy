@@ -309,7 +309,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       usedRecently.push(...result.item_ids);
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
 
-      const { error: insErr } = await supabase.from("outfit_plans").insert({
+      const { error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
         trip_id: data.tripId,
         date: req.date,
@@ -318,7 +318,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         occasion: req.dressCode ?? req.label ?? null,
         notes: result.explanation || null,
         status: "planned",
-      } as never);
+      } as never, { onConflict: "trip_id,date,day_segment" });
 
       if (insErr) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: insErr.message });

@@ -13,9 +13,9 @@ const InputSchema = z.object({
  *
  * Ogni giorno può avere UN plan "general" (calendar_event_id IS NULL) e UN plan
  * per ciascun evento (calendar_event_id = <id>) — vincolo DB
- * outfit_plans_one_general_per_date. Un semplice insert quindi fallisce non
- * appena esiste già un plan per quello slot: bisogna prima cercarlo e fare
- * update, esattamente come fa Planner.tsx.
+ * outfit_plans_one_general_per_date. Gli upsert usano esattamente il vincolo
+ * dello slot: calendar_event_id per gli eventi, user_id + general_date per il
+ * piano generale.
  */
 export const saveOutfitPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -23,34 +23,16 @@ export const saveOutfitPlan = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const calendarEventId = data.calendarEventId ?? null;
 
-    let existingQuery = context.supabase
-      .from("outfit_plans")
-      .select("id")
-      .eq("user_id", context.userId)
-      .eq("date", data.date);
-
-    existingQuery = calendarEventId
-      ? existingQuery.eq("calendar_event_id", calendarEventId)
-      : existingQuery.is("calendar_event_id", null);
-
-    const { data: existing, error: findError } = await existingQuery.maybeSingle();
-    if (findError) throw new Error(findError.message);
-
-    if (existing) {
-      const { error } = await context.supabase
-        .from("outfit_plans")
-        .update({ item_ids: data.itemIds })
-        .eq("id", existing.id);
-      if (error) throw new Error(error.message);
-      return { ok: true as const };
-    }
-
-    const { error } = await context.supabase.from("outfit_plans").insert({
+    const payload = {
       user_id: context.userId,
       date: data.date,
       item_ids: data.itemIds,
       calendar_event_id: calendarEventId,
-    });
+    };
+    const onConflict = calendarEventId ? "calendar_event_id" : "user_id,general_date";
+    const { error } = await context.supabase
+      .from("outfit_plans")
+      .upsert(payload, { onConflict });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });

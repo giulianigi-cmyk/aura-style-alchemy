@@ -47,14 +47,13 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
 
   const assignToDay = async () => {
     if (!assignFor || !user) return;
-    await supabase.from("outfit_plans").delete().eq("user_id", user.id).eq("date", date);
-    const { error } = await supabase.from("outfit_plans").insert({
+    const { error } = await supabase.from("outfit_plans").upsert({
       user_id: user.id,
       date,
       item_ids: assignFor.item_ids,
       occasion: assignFor.occasion?.[0] ?? null,
       notes: assignFor.notes ?? assignFor.name ?? null,
-    });
+    }, { onConflict: "user_id,general_date" });
     if (error) { toast.error(error.message); return; }
     toast.success("Added to calendar");
     setAssignFor(null);
