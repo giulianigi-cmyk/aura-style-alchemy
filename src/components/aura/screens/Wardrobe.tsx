@@ -103,8 +103,20 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     setEditing(true);
   };
 
-  const toggleChip = (arr: string[], setter: (v: string[]) => void, v: string) =>
+    const toggleChip = (arr: string[], setter: (v: string[]) => void, v: string) =>
     setter(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  // All Seasons means "no specific season applies" — it can never be
+  // true at the same time as a specific one being selected, in either
+  // direction of the toggle.
+  const toggleSeasonChip = (arr: string[], setter: (v: string[]) => void, v: string) => {
+    if (v === "All Seasons") {
+      setter(arr.includes(v) ? [] : ["All Seasons"]);
+    } else {
+      const withoutAll = arr.filter((x) => x !== "All Seasons");
+      setter(withoutAll.includes(v) ? withoutAll.filter((x) => x !== v) : [...withoutAll, v]);
+    }
+  };
 
     const saveEdit = async () => {
     if (!detail) return;
@@ -1011,10 +1023,11 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 />
 
                 {([
-                  ["Season", SEASON_OPTIONS, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v }))],
-                  ["Style", STYLE_OPTIONS, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v }))],
-                  ["Occasion", OCCASION_OPTIONS, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v }))],
-                ] as const).map(([label, opts, values, setter]) => (
+                                  {([
+                  ["Season", SEASON_OPTIONS, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v })), toggleSeasonChip],
+                  ["Style", STYLE_OPTIONS, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v })), toggleChip],
+                  ["Occasion", OCCASION_OPTIONS, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v })), toggleChip],
+                ] as const).map(([label, opts, values, setter, toggler]) => (
                   <div key={label}>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -1023,7 +1036,7 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                         return (
                           <button
                             key={o}
-                            onClick={() => toggleChip(values, setter, o)}
+                            onClick={() => toggler(values, setter, o)}
                             className={`rounded-full px-3 py-1.5 text-xs ${
                               on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
                             }`}
