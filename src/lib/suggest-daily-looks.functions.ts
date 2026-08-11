@@ -12,6 +12,9 @@ const ItemSchema = z.object({
   style: z.array(z.string()).nullable().optional(),
   season: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
+  formality: z.number().nullable().optional(),
+  dayEvening: z.string().nullable().optional(),
+  styleTags: z.array(z.string()).nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -67,6 +70,9 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       style: it.style ?? [],
       season: it.season ?? "",
       brand: it.brand ?? "",
+      formality: it.formality ?? null,
+      dayEvening: it.dayEvening ?? "",
+      styleTags: it.styleTags ?? [],
     }));
 
     const system = [
@@ -125,12 +131,45 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
     };
     const TOO_SIMILAR = 0.7; // 70%+ shared items counts as "practically the same look"
 
+    const SLOT_LIMITS: Record<string, number> = {
+      Tops: 1, Bottoms: 1, Dresses: 1, Jumpsuits: 1, Shoes: 1, Bags: 1, Outerwear: 1,
+    };
+    /** Rejects a look with more than one item in a single-per-outfit slot
+     *  (e.g. two Bottoms, a skirt AND trousers) — structural coherence is a
+     *  hard requirement, never left to the model's judgment alone. */
+    const hasSlotViolation = (ids: string[]): boolean => {
+      const counts: Record<string, number> = {};
+      for (const id of ids) {
+        const cat = catalog.find((c) => c.id === id)?.category;
+        if (!cat) continue;
+        counts[cat] = (counts[cat] ?? 0) + 1;
+      }
+      return Object.entries(SLOT_LIMITS).some(([cat, limit]) => (counts[cat] ?? 0) > limit);
+    };
+
+    const EVENING_SIGNAL = /rhinestone|embellish|diamant|strappy|metallic|clutch|cocktail|sequin|paillette/i;
+    /** Hard exclusion for "Work": evening-coded pieces never pass, enforced
+     *  in code — not just requested in the prompt. */
+    const violatesWorkFormality = (ids: string[]): boolean =>
+      ids.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        if (!item) return false;
+        const text = `${item.subcategory} ${(item.styleTags ?? []).join(" ")}`;
+        if (EVENING_SIGNAL.test(text)) return true;
+        if (item.dayEvening === "evening" && (item.formality ?? 0) >= 4) return true;
+        return false;
+      });
+
     const sanitize = (r: DailyLooksResult): DailyLooksResult => {
       const today = { ...r.today, item_ids: r.today.item_ids.filter((id) => validIds.has(id)) };
       const seen = [today.item_ids];
       const curated = r.curated
         .map((l) => ({ ...l, item_ids: l.item_ids.filter((id) => validIds.has(id)) }))
         .filter((l) => l.item_ids.length >= 2)
+        // Structural coherence: no duplicate slots (e.g. two Bottoms).
+        .filter((l) => !hasSlotViolation(l.item_ids))
+        // Hard occasion exclusion: evening-coded pieces never pass for Work.
+        .filter((l) => !(l.occasion === "Work" && violatesWorkFormality(l.item_ids)))
         // Drop any curated look that's identical OR near-identical (>=70%
         // item overlap) to "today" or an earlier curated look — a real
         // similarity check, not just an exact-match string comparison.
