@@ -385,6 +385,11 @@ function DayDetail({
     () => (suggestedKeywords.length ? items.filter((it) => itemMatchesKeywords(it, suggestedKeywords, suggestedMaterials)) : []),
     [items, suggestedKeywords, suggestedMaterials],
   );
+  const [wornPickerOpen, setWornPickerOpen] = useState(false);
+  const [wornSelected, setWornSelected] = useState<string[]>([]);
+  const toggleWorn = (id: string) =>
+    setWornSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
   const baseItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
 
   const toggle = (id: string) =>
@@ -441,15 +446,18 @@ function DayDetail({
     if (hasMultipleSlots) setActiveSlot(null); else onClose();
   };
 
-  const confirmWorn = async () => {
+  const confirmWorn = async (actualItemIds?: string[]) => {
     if (!plan || !user) return;
+    if (actualItemIds && !actualItemIds.length) { toast.error("Pick at least one piece"); return; }
     setSaving(true);
     const { error } = await confirmOutfitPlanWorn(
       { id: plan.id, date: plan.date, item_ids: plan.item_ids, occasion: plan.occasion, notes: plan.notes },
       user.id,
+      actualItemIds,
     );
     setSaving(false);
     if (error) { toast.error(error); return; }
+    setWornPickerOpen(false);
     toast.success("Marked as worn");
     onSaved();
   };
@@ -744,6 +752,45 @@ function DayDetail({
           </>
         )}
       </div>
+
+      {wornPickerOpen && plan && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={(e) => { e.stopPropagation(); setWornPickerOpen(false); }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md h-[88vh] bg-background rounded-t-3xl flex flex-col animate-fade-up"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{dateLabel}</p>
+                <p className="font-serif text-lg italic">What did you actually wear?</p>
+              </div>
+              <button onClick={() => setWornPickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                {wornSelected.length} selected
+              </p>
+              <PiecePicker
+                className="mt-3"
+                items={items}
+                signed={signed}
+                selectedIds={wornSelected}
+                onToggle={toggleWorn}
+              />
+            </div>
+            <div className="border-t border-border/60 px-5 py-4">
+              <button
+                onClick={() => void confirmWorn(wornSelected)}
+                disabled={saving}
+                className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+                Confirm worn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
