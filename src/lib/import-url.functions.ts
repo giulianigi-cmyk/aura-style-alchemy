@@ -376,7 +376,45 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
   return scored[0]?.u ?? null;
 }
 
-type FallbackResult = { html: string | null; errored: boolean };
+const firecrawlScrape: FallbackScraper = async (url) => {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return { html: null, errored: true, debug: "no-api-key" };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 50000);
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      signal: ctl.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        url,
+        formats: ["rawHtml", "html"],
+        onlyMainContent: false,
+        timeout: 45000,
+        waitFor: 5000,
+        location: { country: "IT", languages: ["it-IT"] },
+        blockAds: true,
+        proxy: "auto",
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      return { html: null, errored: true, debug: `http-${r.status}:${body.slice(0, 150)}` };
+    }
+    const data = await r.json() as { success?: boolean; error?: string; data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } } };
+    const html = data.data?.rawHtml || data.data?.html || null;
+    const debug = `success=${data.success} error=${data.error ?? "none"} pageStatus=${data.data?.metadata?.statusCode ?? "n/a"} htmlLen=${html?.length ?? 0}`;
+    if (data.success === false) {
+      return { html: null, errored: true, debug };
+    }
+    return { html, errored: false, debug };
+  } catch (e) {
+    return { html: null, errored: true, debug: `exception:${String(e).slice(0, 150)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 type FallbackScraper = (url: string) => Promise<FallbackResult>;
 
 const firecrawlScrape: FallbackScraper = async (url) => {
