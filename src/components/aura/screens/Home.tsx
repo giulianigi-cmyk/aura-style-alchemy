@@ -125,6 +125,9 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   colors: it.colors ?? (it.color ? [it.color] : []),
                   style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
                   season: it.season, brand: it.brand,
+                  formality: it.formality ?? null,
+                  dayEvening: it.day_evening ?? "",
+                  styleTags: it.style_tags ?? [],
                 })),
               },
             });
