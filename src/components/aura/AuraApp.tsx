@@ -64,9 +64,9 @@ function Inner() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [builderInit, setBuilderInit] = useState<BuilderInit>(null);
   const [stylistChatInit, setStylistChatInit] = useState<StylistChatInit>(null);
-   const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [reviewScanId, setReviewScanId] = useState<string | null>(null);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [wardrobeGapFilter, setWardrobeGapFilter] = useState<"price" | "purchase_date" | null>(null);
-const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
