@@ -159,7 +159,6 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     const subcategory = validSubcats.includes(output.subcategory) ? output.subcategory : "";
     const validLengths = lengthOptionsFor(category, subcategory);
 
-    return {
               const rawSeasons = allowed(output.seasons, SEASONS);
 
     // Safety net for the mutual-exclusivity rule above: if the model
