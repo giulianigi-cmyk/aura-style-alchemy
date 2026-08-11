@@ -59,15 +59,17 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
 
     const { data: profileRow } = await (supabase.from("profiles" as never) as any)
-      .select("work_days, work_start_time, work_end_time, dress_preferences").eq("id", userId).maybeSingle();
+      .select("work_days, work_start_time, work_end_time, dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle();
     const profile = profileRow as {
       work_days?: string[]; work_start_time?: string; work_end_time?: string;
-      dress_preferences?: DressPreferences;
+      dress_preferences?: DressPreferences; gender?: string | null; style_boldness?: string | null;
     } | null;
     const workDays = profile?.work_days ?? ["MO", "TU", "WE", "TH", "FR"];
     const workStart = profile?.work_start_time ?? "09:00";
     const workEnd = profile?.work_end_time ?? "18:00";
     const dressRules = dressPreferencesToPrompt(profile?.dress_preferences ?? null);
+    const gender = profile?.gender ?? null;
+    const styleBoldness = profile?.style_boldness ?? null;
 
     const endDateExclusive = addDaysIso(data.startDate, data.numDays);
 
@@ -150,6 +152,8 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
         condition: null,
         occasion: occasionHint,
         dressRules,
+        gender,
+        styleBoldness,
         items,
         avoidItemIds: usedThisBatch,
         locationIdOverride: data.locationId,
