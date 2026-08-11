@@ -674,64 +674,14 @@ function DayDetail({
                         </button>
                       )}
                     </div>
-                    <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5">
-                      <Search size={15} className="text-muted-foreground" />
-                      <input
-                        value={pickerQ}
-                        onChange={(e) => setPickerQ(e.target.value)}
-                        placeholder="Search by color, fabric, brand…"
-                        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
-                      />
-                    </div>
+                    <PiecePicker
+                      className="mt-3"
+                      items={baseItems}
+                      signed={signed}
+                      selectedIds={selected}
+                      onToggle={toggle}
+                    />
 
-                    <div className="mt-3 -mx-5 px-5 flex gap-2 overflow-x-auto no-scrollbar">
-                      {["All", ...ITEM_CATEGORIES].map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setPickerCat(c)}
-                          className={`shrink-0 rounded-full px-4 py-2 text-xs tracking-wide transition ${
-                            pickerCat === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
-                          }`}
-                        >{c}</button>
-                      ))}
-                    </div>
-
-                    {visibleItems.length === 0 ? (
-                      <p className="mt-4 text-xs text-muted-foreground">
-                        {items.length === 0 ? "Add pieces to your closet first." : "No matches — clear the search or filters to see all."}
-                      </p>
-                    ) : (
-                      <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-5">
-                        {visibleItems.map((it) => {
-                          const src = thumbSrc(it, signed) || (toStoragePath(it.image_url) ? signed[toStoragePath(it.image_url)!] ?? "" : "");
-                          const on = selected.includes(it.id);
-                          const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
-                          return (
-                            <button key={it.id} onClick={() => toggle(it.id)} className="group text-left">
-                              <div
-                                className={`relative overflow-hidden rounded-[1.25rem] border aspect-[4/5] ${on ? "border-foreground border-2" : "border-border/50"}`}
-                                style={{ background: "#FFFFFF" }}
-                              >
-                                {src ? (
-                                  <img src={src} alt={`${it.brand ?? label} piece`} className="h-full w-full object-contain p-1 transition-transform duration-500 group-active:scale-95" loading="lazy" />
-                                ) : (
-                                  <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
-                                )}
-                                {on && (
-                                  <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground border border-foreground flex items-center justify-center">
-                                    <Check size={13} className="text-background" />
-                                  </span>
-                                )}
-                              </div>
-                              <div className="px-0.5 mt-1.5">
-                                <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
-                                <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
 
                   <div>
