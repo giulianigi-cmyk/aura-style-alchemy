@@ -711,7 +711,7 @@ function DayDetail({
                   ><Trash2 size={15} /></button>
                   {isPast && plan.status !== "worn" && (
                     <button
-                      onClick={() => void confirmWorn()}
+                      onClick={() => { setWornSelected(plan.item_ids); setWornPickerOpen(true); }}
                       disabled={saving}
                       className="h-11 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
                     >
@@ -719,6 +719,7 @@ function DayDetail({
                       Mark as worn
                     </button>
                   )}
+
                   <button
                     onClick={() => setEditing(true)}
                     className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
