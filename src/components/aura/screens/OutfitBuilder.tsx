@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
+import { PiecePicker } from "../PiecePicker";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
@@ -811,43 +812,48 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       )}
 
 
-      {/* Item picker */}
+      {/* Item picker — shared Closet-style grid (search, category and
+          location chips only help find pieces; the whole wardrobe stays
+          selectable). */}
       {pickerOpen && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setPickerOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[75%] bg-card rounded-t-3xl border-t border-border p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-serif italic text-lg">Add from closet</p>
-              <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
-                {(["all", "weather"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setPickerFilter(f)}
-                    className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.25em] ${pickerFilter === f ? "bg-foreground text-background" : "text-foreground/70"}`}
-                  >{f === "all" ? "All" : `For ${season}`}</button>
-                ))}
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={() => setPickerOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md h-[88vh] bg-background rounded-t-3xl flex flex-col animate-fade-up">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{placed.length} on canvas</p>
+                <p className="font-serif text-lg italic">Add from closet</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
+                  {(["all", "weather"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setPickerFilter(f)}
+                      className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.25em] ${pickerFilter === f ? "bg-foreground text-background" : "text-foreground/70"}`}
+                    >{f === "all" ? "All" : `For ${season}`}</button>
+                  ))}
+                </div>
+                <button onClick={() => setPickerOpen(false)} aria-label="Close" className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
               </div>
             </div>
-            {loading ? (
-              <div className="py-10 flex justify-center"><Loader2 className="animate-spin" /></div>
-            ) : pickerItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">No items match this filter.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {pickerItems.map((it) => {
-                  const path = toStoragePath(it.image_url);
-                  const url = path ? signed[path] : null;
-                  const ok = weatherOk(it);
-                  return (
-                    <button key={it.id} onClick={() => addItem(it)} className="relative aspect-square rounded-xl overflow-hidden active:scale-95" style={{ background: "#FFFFFF" }}>
-                      {url ? <img src={url} alt="" className="h-full w-full object-contain p-2" /> : <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No image</div>}
-                      {weather && ok && (
-                        <span className="absolute top-1 right-1 text-[8px] uppercase tracking-widest bg-foreground/90 text-background px-1.5 py-0.5 rounded-full">Today</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
+              <PiecePicker
+                items={pickerItems}
+                signed={signed}
+                loading={loading}
+                selectedIds={placed.map((p) => p.itemId)}
+                onToggle={(id) => {
+                  const already = placed.some((p) => p.itemId === id);
+                  if (already) {
+                    setPlaced((prev) => prev.filter((p) => p.itemId !== id));
+                    setSelectedKey(null);
+                    return;
+                  }
+                  const it = items.find((i) => i.id === id);
+                  if (it) addItem(it);
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
