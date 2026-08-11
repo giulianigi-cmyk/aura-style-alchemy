@@ -111,19 +111,21 @@ const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> 
     headline: "Wrap up — layered tailoring weather",
     tips: ["Wool coat", "Cashmere knit", "Boots", "Scarf", "Wool trousers", "Leather gloves"],
     categories: ["coat", "knit", "sweater", "boots", "scarf", "trousers", "gloves", "puffer"],
-    materials: ["Wool", "Cashmere", "Leather", "Knit", "Suede"],
+        materials: ["Wool", "Cashmere", "Leather", "Merino", "Suede"],
   },
   cool: {
     headline: "Crisp air — soft layering",
     tips: ["Trench or blazer", "Fine knit", "Trousers", "Ankle boots", "Denim jacket"],
     categories: ["jacket", "blazer", "knit", "trousers", "boots", "denim", "sweater"],
-    materials: ["Wool", "Knit", "Denim", "Cotton", "Leather"],
+        materials: ["Wool", "Merino", "Denim", "Cotton", "Leather"],
+
   },
   mild: {
     headline: "Mild day — easy elegance",
     tips: ["Light jacket", "Jeans or trousers", "Sneakers or loafers", "Cotton shirt", "Light knit"],
     categories: ["jacket", "shirt", "jeans", "trousers", "sneakers", "loafers", "knit"],
-    materials: ["Cotton", "Denim", "Knit", "Suede"],
+       materials: ["Cotton", "Denim", "Modal", "Suede"],
+
   },
   warm: {
     headline: "Warm — breathable pieces",
