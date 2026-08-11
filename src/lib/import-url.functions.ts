@@ -405,9 +405,21 @@ const firecrawlScrape: FallbackScraper = async (url) => {
       console.warn("[AURA import-url] firecrawl non-ok", r.status, body.slice(0, 300));
       return { html: null, errored: true };
     }
-    const data = await r.json() as { data?: { rawHtml?: string; html?: string } };
+        const data = await r.json() as { success?: boolean; error?: string; data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } } };
     const html = data.data?.rawHtml || data.data?.html || null;
-    console.log("[AURA import-url] firecrawl ok, html length:", html?.length ?? 0);
+    console.log(
+      "[AURA import-url] firecrawl response",
+      JSON.stringify({
+        success: data.success,
+        error: data.error,
+        pageStatusCode: data.data?.metadata?.statusCode,
+        htmlLength: html?.length ?? 0,
+      }),
+    );
+    if (data.success === false) {
+      console.warn("[AURA import-url] firecrawl reported failure:", data.error);
+      return { html: null, errored: true };
+    }
     return { html, errored: false };
   } catch (e) {
     console.warn("[AURA import-url] firecrawl failed", e);
