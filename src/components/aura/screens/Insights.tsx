@@ -28,7 +28,7 @@ function retentionFactor(ageYears: number): number {
   return 1 - (1 - RETENTION_FLOOR) * t;
 }
 
-export function Insights({ go }: { go: (s: Screen) => void }) {
+export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; openWardrobeGap: (filter: "price" | "purchase_date") => void }) {
   const { user } = useAuth();
    const [items, setItems] = useState<WardrobeItem[]>([]);
   const [showValues, setShowValues] = useState(() => {
@@ -99,10 +99,14 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
     const estimatedValueCount = withPurchaseDate.length;
     const estimatedValueExcluded = inPrimary.length - withPurchaseDate.length;
 
+    const missingPriceCount = items.filter((it) => it.price == null || it.price <= 0).length;
+    const missingPurchaseDateCount = items.filter((it) => !(it as unknown as { purchase_date?: string | null }).purchase_date).length;
+
     return {
       totalValue, primaryCurrency, excludedCount, pricedCount: priced.length,
       neverWornCount, neverWornPct, avgCpw, bestValue, categoryRows, topCategory,
       estimatedValue, estimatedValueCount, estimatedValueExcluded,
+      missingPriceCount, missingPurchaseDateCount,
     };
   }, [items]);
 
@@ -181,6 +185,29 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
           </p>
         )}
       </section>
+
+      {(stats.missingPriceCount > 0 || stats.missingPurchaseDateCount > 0) && (
+        <section className="mx-6 mt-3 flex gap-2">
+          {stats.missingPriceCount > 0 && (
+            <button
+              onClick={() => openWardrobeGap("price")}
+              className="flex-1 rounded-2xl border border-dashed border-border bg-card px-4 py-3 text-left active:scale-[0.98] transition"
+            >
+              <p className="font-serif text-lg">{stats.missingPriceCount}</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Without a price →</p>
+            </button>
+          )}
+          {stats.missingPurchaseDateCount > 0 && (
+            <button
+              onClick={() => openWardrobeGap("purchase_date")}
+              className="flex-1 rounded-2xl border border-dashed border-border bg-card px-4 py-3 text-left active:scale-[0.98] transition"
+            >
+              <p className="font-serif text-lg">{stats.missingPurchaseDateCount}</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Without a purchase date →</p>
+            </button>
+          )}
+        </section>
+      )}
 
 
       <section className="mx-6 mt-4 grid grid-cols-2 gap-3">
@@ -283,4 +310,3 @@ export function Insights({ go }: { go: (s: Screen) => void }) {
     </div>
   );
 }
-
