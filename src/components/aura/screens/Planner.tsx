@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage, Search, Check } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import type { Screen, StylistChatInit } from "../AuraApp";
