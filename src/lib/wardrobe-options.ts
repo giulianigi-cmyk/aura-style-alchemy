@@ -25,7 +25,7 @@ export const MATERIAL_OPTIONS = [
   "Polyester", "Polyamide", "Elastane", "Acrylic",
   "Denim", "Leather", "Suede", "Shearling", "Down",
   "Metal", "Gold", "Silver", "Steel", "Brass", "Pearl", "Rubber", "Canvas",
-  "Synthetic", "Knit",
+  "Synthetic",
 ];
 export const CURRENCY_OPTIONS = ["EUR", "USD", "GBP"];
 
