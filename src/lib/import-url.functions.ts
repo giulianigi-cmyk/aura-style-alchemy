@@ -393,8 +393,10 @@ const firecrawlScrape: FallbackScraper = async (url) => {
         url,
         formats: ["rawHtml", "html"],
         onlyMainContent: false,
-        timeout: 40000,
-        waitFor: 2000,
+        timeout: 45000,
+        waitFor: 5000,
+        location: { country: "IT", languages: ["it-IT"] },
+        blockAds: true,
       }),
     });
     if (!r.ok) {
