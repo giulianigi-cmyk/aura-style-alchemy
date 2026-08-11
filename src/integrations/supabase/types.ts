@@ -243,6 +243,39 @@ export type Database = {
         }
         Relationships: []
       }
+      home_suggestions: {
+        Row: {
+          curated: Json | null
+          date: string
+          generated_at: string
+          today_explanation: string | null
+          today_item_ids: string[]
+          today_occasion: string | null
+          user_id: string
+          wardrobe_fingerprint: string
+        }
+        Insert: {
+          curated?: Json | null
+          date: string
+          generated_at?: string
+          today_explanation?: string | null
+          today_item_ids?: string[]
+          today_occasion?: string | null
+          user_id: string
+          wardrobe_fingerprint: string
+        }
+        Update: {
+          curated?: Json | null
+          date?: string
+          generated_at?: string
+          today_explanation?: string | null
+          today_item_ids?: string[]
+          today_occasion?: string | null
+          user_id?: string
+          wardrobe_fingerprint?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -617,6 +650,8 @@ export type Database = {
           value: string | null
           work_days: string[]
           work_dress_code: string | null
+          work_end_time: string
+          work_start_time: string
         }
         Insert: {
           active_location_id?: string | null
@@ -649,6 +684,8 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_end_time?: string
+          work_start_time?: string
         }
         Update: {
           active_location_id?: string | null
@@ -681,6 +718,8 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_end_time?: string
+          work_start_time?: string
         }
         Relationships: [
           {
@@ -1296,7 +1335,9 @@ export type Database = {
           style: string | null
           style_tags: string[]
           subcategory: string | null
+          thumbnail_path: string | null
           toe_shape: string | null
+          user_edited_fields: string[]
           user_id: string
           worn_count: number
         }
@@ -1331,7 +1372,9 @@ export type Database = {
           style?: string | null
           style_tags?: string[]
           subcategory?: string | null
+          thumbnail_path?: string | null
           toe_shape?: string | null
+          user_edited_fields?: string[]
           user_id?: string
           worn_count?: number
         }
@@ -1366,7 +1409,9 @@ export type Database = {
           style?: string | null
           style_tags?: string[]
           subcategory?: string | null
+          thumbnail_path?: string | null
           toe_shape?: string | null
+          user_edited_fields?: string[]
           user_id?: string
           worn_count?: number
         }
