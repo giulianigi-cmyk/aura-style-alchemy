@@ -128,11 +128,13 @@ export const getTrip = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!trip) throw new Error("Trip not found");
 
-    const [{ data: destinations }, { data: sourceLocations }, { data: activities }, { data: essentials }] = await Promise.all([
+    const [{ data: destinations }, { data: sourceLocations }, { data: activities }, { data: essentials }, { data: packingItems }, { data: outfitPlans }] = await Promise.all([
       (supabase.from("trip_destinations" as never) as any).select("*").eq("trip_id", data.tripId).order("position"),
       (supabase.from("trip_source_locations" as never) as any).select("location_id").eq("trip_id", data.tripId),
       (supabase.from("trip_day_activities" as never) as any).select("*").eq("trip_id", data.tripId).order("activity_date"),
       (supabase.from("trip_essentials" as never) as any).select("*").eq("trip_id", data.tripId).order("category"),
+      (supabase.from("trip_packing_items" as never) as any).select("*").eq("trip_id", data.tripId).order("created_at"),
+      supabase.from("outfit_plans").select("*").eq("trip_id", data.tripId).order("date"),
     ]);
 
     return {
@@ -141,6 +143,8 @@ export const getTrip = createServerFn({ method: "GET" })
       sourceLocationIds: ((sourceLocations ?? []) as { location_id: string }[]).map((r) => r.location_id),
       activities: activities ?? [],
       essentials: essentials ?? [],
+      packingItems: packingItems ?? [],
+      outfitPlans: outfitPlans ?? [],
     };
   });
 
