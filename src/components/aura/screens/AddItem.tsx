@@ -363,9 +363,17 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
+    const toggle = (values: string[], setter: (next: string[]) => void, value: string) =>
     setter(values.includes(value) ? values.filter((x) => x !== value) : [...values, value]);
 
+  const toggleSeason = (values: string[], setter: (next: string[]) => void, value: string) => {
+    if (value === "All Seasons") {
+      setter(values.includes(value) ? [] : ["All Seasons"]);
+    } else {
+      const withoutAll = values.filter((x) => x !== "All Seasons");
+      setter(withoutAll.includes(value) ? withoutAll.filter((x) => x !== value) : [...withoutAll, value]);
+    }
+  };
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     void onPick(event.dataTransfer.files?.[0] ?? null);
@@ -703,15 +711,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             <div className="border-b border-border/60 pb-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {seasonOptions.map(s => {
+                                {seasonOptions.map(s => {
                   const on = seasons.includes(s);
                   return (
-                    <button key={s} onClick={() => toggle(seasons, setSeasons, s)}
+                    <button key={s} onClick={() => toggleSeason(seasons, setSeasons, s)}
                       className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
                       {s}
                     </button>
                   );
                 })}
+
               </div>
             </div>
 
