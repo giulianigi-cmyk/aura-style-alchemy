@@ -15,7 +15,8 @@ import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
 
-const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
+export const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
+
 
 function toISO(d: Date): string {
   const y = d.getFullYear();
