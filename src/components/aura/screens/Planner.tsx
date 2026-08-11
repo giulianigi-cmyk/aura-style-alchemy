@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage, Search, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import type { Screen, StylistChatInit } from "../AuraApp";
@@ -9,8 +9,8 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
-import { resolveWardrobeUrls, toStoragePath, thumbSrc } from "@/lib/wardrobe-image";
-import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
+import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { PiecePicker } from "../PiecePicker";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
@@ -352,8 +352,6 @@ function DayDetail({
   const [notes, setNotes] = useState(plan?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [filterSuggested, setFilterSuggested] = useState(false);
-  const [pickerQ, setPickerQ] = useState("");
-  const [pickerCat, setPickerCat] = useState("All");
 
   // Re-sync the form whenever the person switches which slot they're
   // looking at — this component stays mounted across that switch.
@@ -388,14 +386,6 @@ function DayDetail({
     [items, suggestedKeywords, suggestedMaterials],
   );
   const baseItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
-  const visibleItems = useMemo(() => {
-    const query = pickerQ.trim().toLowerCase();
-    return baseItems.filter((i) =>
-      (pickerCat === "All" || i.category === pickerCat) &&
-      (query === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
-        .some((v) => v?.toLowerCase().includes(query)))
-    );
-  }, [baseItems, pickerCat, pickerQ]);
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
