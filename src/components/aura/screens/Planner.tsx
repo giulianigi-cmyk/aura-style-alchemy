@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage, Search, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import type { Screen, StylistChatInit } from "../AuraApp";
@@ -9,8 +9,8 @@ import { useWeather } from "@/hooks/use-weather";
 import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
-import { resolveWardrobeUrls, toStoragePath, thumbSrc } from "@/lib/wardrobe-image";
-import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
+import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { PiecePicker } from "../PiecePicker";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
@@ -352,8 +352,6 @@ function DayDetail({
   const [notes, setNotes] = useState(plan?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [filterSuggested, setFilterSuggested] = useState(false);
-  const [pickerQ, setPickerQ] = useState("");
-  const [pickerCat, setPickerCat] = useState("All");
 
   // Re-sync the form whenever the person switches which slot they're
   // looking at — this component stays mounted across that switch.
@@ -387,15 +385,12 @@ function DayDetail({
     () => (suggestedKeywords.length ? items.filter((it) => itemMatchesKeywords(it, suggestedKeywords, suggestedMaterials)) : []),
     [items, suggestedKeywords, suggestedMaterials],
   );
+  const [wornPickerOpen, setWornPickerOpen] = useState(false);
+  const [wornSelected, setWornSelected] = useState<string[]>([]);
+  const toggleWorn = (id: string) =>
+    setWornSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
   const baseItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
-  const visibleItems = useMemo(() => {
-    const query = pickerQ.trim().toLowerCase();
-    return baseItems.filter((i) =>
-      (pickerCat === "All" || i.category === pickerCat) &&
-      (query === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
-        .some((v) => v?.toLowerCase().includes(query)))
-    );
-  }, [baseItems, pickerCat, pickerQ]);
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -451,15 +446,18 @@ function DayDetail({
     if (hasMultipleSlots) setActiveSlot(null); else onClose();
   };
 
-  const confirmWorn = async () => {
+  const confirmWorn = async (actualItemIds?: string[]) => {
     if (!plan || !user) return;
+    if (actualItemIds && !actualItemIds.length) { toast.error("Pick at least one piece"); return; }
     setSaving(true);
     const { error } = await confirmOutfitPlanWorn(
       { id: plan.id, date: plan.date, item_ids: plan.item_ids, occasion: plan.occasion, notes: plan.notes },
       user.id,
+      actualItemIds,
     );
     setSaving(false);
     if (error) { toast.error(error); return; }
+    setWornPickerOpen(false);
     toast.success("Marked as worn");
     onSaved();
   };
@@ -674,64 +672,14 @@ function DayDetail({
                         </button>
                       )}
                     </div>
-                    <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5">
-                      <Search size={15} className="text-muted-foreground" />
-                      <input
-                        value={pickerQ}
-                        onChange={(e) => setPickerQ(e.target.value)}
-                        placeholder="Search by color, fabric, brand…"
-                        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
-                      />
-                    </div>
+                    <PiecePicker
+                      className="mt-3"
+                      items={baseItems}
+                      signed={signed}
+                      selectedIds={selected}
+                      onToggle={toggle}
+                    />
 
-                    <div className="mt-3 -mx-5 px-5 flex gap-2 overflow-x-auto no-scrollbar">
-                      {["All", ...ITEM_CATEGORIES].map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setPickerCat(c)}
-                          className={`shrink-0 rounded-full px-4 py-2 text-xs tracking-wide transition ${
-                            pickerCat === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
-                          }`}
-                        >{c}</button>
-                      ))}
-                    </div>
-
-                    {visibleItems.length === 0 ? (
-                      <p className="mt-4 text-xs text-muted-foreground">
-                        {items.length === 0 ? "Add pieces to your closet first." : "No matches — clear the search or filters to see all."}
-                      </p>
-                    ) : (
-                      <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-5">
-                        {visibleItems.map((it) => {
-                          const src = thumbSrc(it, signed) || (toStoragePath(it.image_url) ? signed[toStoragePath(it.image_url)!] ?? "" : "");
-                          const on = selected.includes(it.id);
-                          const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
-                          return (
-                            <button key={it.id} onClick={() => toggle(it.id)} className="group text-left">
-                              <div
-                                className={`relative overflow-hidden rounded-[1.25rem] border aspect-[4/5] ${on ? "border-foreground border-2" : "border-border/50"}`}
-                                style={{ background: "#FFFFFF" }}
-                              >
-                                {src ? (
-                                  <img src={src} alt={`${it.brand ?? label} piece`} className="h-full w-full object-contain p-1 transition-transform duration-500 group-active:scale-95" loading="lazy" />
-                                ) : (
-                                  <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
-                                )}
-                                {on && (
-                                  <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground border border-foreground flex items-center justify-center">
-                                    <Check size={13} className="text-background" />
-                                  </span>
-                                )}
-                              </div>
-                              <div className="px-0.5 mt-1.5">
-                                <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
-                                <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
 
                   <div>
@@ -771,7 +719,7 @@ function DayDetail({
                   ><Trash2 size={15} /></button>
                   {isPast && plan.status !== "worn" && (
                     <button
-                      onClick={() => void confirmWorn()}
+                      onClick={() => { setWornSelected(plan.item_ids); setWornPickerOpen(true); }}
                       disabled={saving}
                       className="h-11 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
                     >
@@ -779,6 +727,7 @@ function DayDetail({
                       Mark as worn
                     </button>
                   )}
+
                   <button
                     onClick={() => setEditing(true)}
                     className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
@@ -803,6 +752,45 @@ function DayDetail({
           </>
         )}
       </div>
+
+      {wornPickerOpen && plan && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={(e) => { e.stopPropagation(); setWornPickerOpen(false); }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md h-[88vh] bg-background rounded-t-3xl flex flex-col animate-fade-up"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{dateLabel}</p>
+                <p className="font-serif text-lg italic">What did you actually wear?</p>
+              </div>
+              <button onClick={() => setWornPickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                {wornSelected.length} selected
+              </p>
+              <PiecePicker
+                className="mt-3"
+                items={items}
+                signed={signed}
+                selectedIds={wornSelected}
+                onToggle={toggleWorn}
+              />
+            </div>
+            <div className="border-t border-border/60 px-5 py-4">
+              <button
+                onClick={() => void confirmWorn(wornSelected)}
+                disabled={saving}
+                className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+                Confirm worn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
