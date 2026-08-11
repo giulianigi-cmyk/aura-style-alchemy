@@ -385,7 +385,15 @@ function DayDetail({
     () => (suggestedKeywords.length ? items.filter((it) => itemMatchesKeywords(it, suggestedKeywords, suggestedMaterials)) : []),
     [items, suggestedKeywords, suggestedMaterials],
   );
-  const visibleItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
+  const baseItems = filterSuggested && suggestedItems.length ? suggestedItems : items;
+  const visibleItems = useMemo(() => {
+    const query = pickerQ.trim().toLowerCase();
+    return baseItems.filter((i) =>
+      (pickerCat === "All" || i.category === pickerCat) &&
+      (query === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
+        .some((v) => v?.toLowerCase().includes(query)))
+    );
+  }, [baseItems, pickerCat, pickerQ]);
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
