@@ -103,16 +103,22 @@ export function DetectedItemCard({
       <div className="mt-3">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {SEASON_OPTIONS.map((s) => {
+                   {SEASON_OPTIONS.map((s) => {
             const on = item.seasons.includes(s);
+            const nextSeasons = (() => {
+              if (s === "All Seasons") return on ? [] : ["All Seasons"];
+              const withoutAll = item.seasons.filter((x) => x !== "All Seasons");
+              return withoutAll.includes(s) ? withoutAll.filter((x) => x !== s) : [...withoutAll, s];
+            })();
             return (
               <button
                 key={s}
-                onClick={() => onChange({ seasons: on ? item.seasons.filter((x) => x !== s) : [...item.seasons, s] })}
+                onClick={() => onChange({ seasons: nextSeasons })}
                 className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
               >{s}</button>
             );
           })}
+
         </div>
       </div>
 
