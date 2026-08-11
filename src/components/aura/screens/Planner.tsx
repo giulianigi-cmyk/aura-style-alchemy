@@ -416,15 +416,14 @@ function DayDetail({
       calendar_event_id: activeEventId,
     };
 
-    let planId = plan?.id ?? null;
-    if (plan) {
-      const { error } = await supabase.from("outfit_plans").update(payload as never).eq("id", plan.id);
-      if (error) { setSaving(false); toast.error(error.message); return; }
-    } else {
-      const { data, error } = await supabase.from("outfit_plans").insert(payload as never).select("id").single();
-      if (error) { setSaving(false); toast.error(error.message); return; }
-      planId = (data as { id: string }).id;
-    }
+    const onConflict = activeEventId ? "calendar_event_id" : "user_id,general_date";
+    const { data: savedPlan, error } = await supabase
+      .from("outfit_plans")
+      .upsert(payload as never, { onConflict })
+      .select("id")
+      .single();
+    if (error) { setSaving(false); toast.error(error.message); return; }
+    const planId = (savedPlan as { id: string }).id;
 
     const eventType = !plan ? (log ? "worn" : "planned") : (confirmingWear ? "worn" : "edited");
     const { error: eventErr } = await logWardrobeEvent({

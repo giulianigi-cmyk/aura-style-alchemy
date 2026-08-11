@@ -166,7 +166,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
 
       usedThisBatch.push(...result.item_ids);
 
-      const { data: planRow, error: insErr } = await supabase.from("outfit_plans").insert({
+      const { data: planRow, error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
         date,
         item_ids: result.item_ids,
@@ -175,7 +175,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
         weather_temp: w ? Math.round((w.tempMin + w.tempMax) / 2) : null,
         status: "planned",
         calendar_event_id: null,
-      } as never).select("id").single();
+      } as never, { onConflict: "user_id,general_date" }).select("id").single();
 
       if (insErr || !planRow) {
         failed.push({ date, error: insErr?.message ?? "Could not save" });

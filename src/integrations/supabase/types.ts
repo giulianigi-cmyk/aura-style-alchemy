@@ -457,6 +457,7 @@ export type Database = {
           created_at: string
           date: string
           day_segment: string | null
+          general_date: string | null
           id: string
           item_ids: string[]
           notes: string | null
@@ -472,6 +473,7 @@ export type Database = {
           created_at?: string
           date: string
           day_segment?: string | null
+          general_date?: string | null
           id?: string
           item_ids?: string[]
           notes?: string | null
@@ -487,6 +489,7 @@ export type Database = {
           created_at?: string
           date?: string
           day_segment?: string | null
+          general_date?: string | null
           id?: string
           item_ids?: string[]
           notes?: string | null
@@ -501,7 +504,7 @@ export type Database = {
           {
             foreignKeyName: "outfit_plans_calendar_event_id_fkey"
             columns: ["calendar_event_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "calendar_events_cache"
             referencedColumns: ["id"]
           },

@@ -20,13 +20,13 @@ export default defineTool({
     const sb = supabaseForUser(ctx);
     const { data, error } = await sb
       .from("outfit_plans")
-      .insert({
+      .upsert({
         user_id: ctx.getUserId()!,
         date,
         item_ids,
         occasion: occasion ?? null,
         notes: notes ?? null,
-      })
+      }, { onConflict: "user_id,general_date" })
       .select("id,date,item_ids,occasion,notes")
       .maybeSingle();
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };

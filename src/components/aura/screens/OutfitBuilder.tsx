@@ -487,15 +487,14 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     if (!user || !placed.length) return;
     setAddingToCalendar(true);
     try {
-      await supabase.from("outfit_plans").delete().eq("user_id", user.id).eq("date", calendarDate);
-      const { data, error } = await supabase.from("outfit_plans").insert({
+      const { data, error } = await supabase.from("outfit_plans").upsert({
         user_id: user.id,
         date: calendarDate,
         item_ids: placed.map((p) => p.itemId),
         occasion: occasion || null,
         notes: notes.trim() || name.trim() || null,
         status: "planned",
-      } as never).select("id").single();
+      } as never, { onConflict: "user_id,general_date" }).select("id").single();
       if (error) throw error;
       const { error: eventErr } = await logWardrobeEvent({
         userId: user.id,
