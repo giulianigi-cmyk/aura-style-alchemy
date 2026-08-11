@@ -402,17 +402,25 @@ const firecrawlScrape: FallbackScraper = async (url) => {
     });
     if (!r.ok) {
       const body = await r.text().catch(() => "");
+      console.warn("[AURA import-url] firecrawl non-ok", r.status, body.slice(0, 300));
       return { html: null, errored: true, debug: `http-${r.status}:${body.slice(0, 150)}` };
     }
-    const data = await r.json() as { success?: boolean; error?: string; data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } } };
+    const data = await r.json() as {
+      success?: boolean;
+      error?: string;
+      data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } };
+    };
     const html = data.data?.rawHtml || data.data?.html || null;
     const debug = `success=${data.success} error=${data.error ?? "none"} pageStatus=${data.data?.metadata?.statusCode ?? "n/a"} htmlLen=${html?.length ?? 0}`;
+    console.log("[AURA import-url] firecrawl response", debug);
     if (data.success === false) {
       return { html: null, errored: true, debug };
     }
     return { html, errored: false, debug };
   } catch (e) {
-    return { html: null, errored: true, debug: `exception:${String(e).slice(0, 150)}` };
+    const debug = `exception:${String(e).slice(0, 150)}`;
+    console.warn("[AURA import-url] firecrawl failed", e);
+    return { html: null, errored: true, debug };
   } finally {
     clearTimeout(timer);
   }
@@ -710,6 +718,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     let html: string | null = null;
     let blocked = false;
     let usedFallback = false;
+    let fbDebugMsg: string | undefined; // TEMP diagnostica — rimuovere una volta trovata la causa
 
     if (forceFallback) {
       if (!hasFallback) return { ok: false as const, error: FIRECRAWL_MISSING_MSG };
@@ -723,10 +732,11 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }
       const fb = await fallbackScraper(target.toString());
       if (fb.errored && !fb.html) {
-        return { ok: false as const, error: FIRECRAWL_FAILED_MSG };
+        return { ok: false as const, error: `${FIRECRAWL_FAILED_MSG} [DEBUG: ${fb.debug ?? "none"}]` };
       }
       html = fb.html;
       usedFallback = true;
+      fbDebugMsg = fb.debug;
     } else {
       const direct = await directFetch(target);
       html = direct.html;
@@ -755,13 +765,14 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }
       const fc = await fallbackScraper(target.toString());
       if (fc.errored && !fc.html) {
-        return { ok: false as const, error: FIRECRAWL_FAILED_MSG };
+        return { ok: false as const, error: `${FIRECRAWL_FAILED_MSG} [DEBUG: ${fc.debug ?? "none"}]` };
       }
       if (fc.html) {
         html = fc.html;
         usedFallback = true;
         extracted = extractFromHtml(fc.html, target);
       }
+      fbDebugMsg = fc.debug;
     }
 
     if (!extracted.imageUrl) {
@@ -769,7 +780,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         ok: false as const,
         error: blocked
           ? "This site blocks automated imports. Try a different URL or add the item manually."
-          : "No product image found on that page.",
+          : `No product image found on that page. [DEBUG: ${fbDebugMsg ?? "n/a"}]`,
       };
     }
 
