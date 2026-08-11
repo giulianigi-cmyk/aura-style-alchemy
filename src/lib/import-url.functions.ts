@@ -376,6 +376,9 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
   return scored[0]?.u ?? null;
 }
 
+type FallbackResult = { html: string | null; errored: boolean; debug?: string };
+type FallbackScraper = (url: string) => Promise<FallbackResult>;
+
 const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return { html: null, errored: true, debug: "no-api-key" };
@@ -410,58 +413,6 @@ const firecrawlScrape: FallbackScraper = async (url) => {
     return { html, errored: false, debug };
   } catch (e) {
     return { html: null, errored: true, debug: `exception:${String(e).slice(0, 150)}` };
-  } finally {
-    clearTimeout(timer);
-  }
-};
-
-type FallbackScraper = (url: string) => Promise<FallbackResult>;
-
-const firecrawlScrape: FallbackScraper = async (url) => {
-  const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) return { html: null, errored: true };
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 50000);
-  try {
-    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
-      method: "POST",
-      signal: ctl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-            body: JSON.stringify({
-        url,
-        formats: ["rawHtml", "html"],
-        onlyMainContent: false,
-        timeout: 45000,
-        waitFor: 5000,
-        location: { country: "IT", languages: ["it-IT"] },
-        blockAds: true,
-        proxy: "auto",
-      }),
-    });
-    if (!r.ok) {
-      const body = await r.text().catch(() => "");
-      console.warn("[AURA import-url] firecrawl non-ok", r.status, body.slice(0, 300));
-      return { html: null, errored: true };
-    }
-        const data = await r.json() as { success?: boolean; error?: string; data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } } };
-    const html = data.data?.rawHtml || data.data?.html || null;
-    console.log(
-      "[AURA import-url] firecrawl response",
-      JSON.stringify({
-        success: data.success,
-        error: data.error,
-        pageStatusCode: data.data?.metadata?.statusCode,
-        htmlLength: html?.length ?? 0,
-      }),
-    );
-    if (data.success === false) {
-      console.warn("[AURA import-url] firecrawl reported failure:", data.error);
-      return { html: null, errored: true };
-    }
-    return { html, errored: false };
-  } catch (e) {
-    console.warn("[AURA import-url] firecrawl failed", e);
-    return { html: null, errored: true };
   } finally {
     clearTimeout(timer);
   }
