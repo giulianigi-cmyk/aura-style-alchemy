@@ -488,6 +488,7 @@ function DayDetail({
       temperature: weather ? (weather.tempMin + weather.tempMax) / 2 : null,
       condition: weather ? describeWeather(weather.weatherCode).label : null,
       date,
+      eventId: event?.id ?? null,
     });
   };
 
