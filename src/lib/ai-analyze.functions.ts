@@ -80,7 +80,7 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     `Return colors as an array (1-3 items) picked EXACTLY from this fixed palette (use these names verbatim): ${COLOR_NAMES.join(", ")}. Pick the closest matches; never invent color names.`,
     `Return styles as an array (0-3) from: ${STYLES.join(", ")}.`,
     `Return occasions as an array (0-3) from: ${OCCASIONS.join(", ")}.`,
-    `Return seasons as an array (0-5) from: ${SEASONS.join(", ")}. Use "All Seasons" when unsure.`,
+        `Return seasons as an array from: ${SEASONS.join(", ")}. NEVER combine "All Seasons" with a specific season in the same answer — pick either "All Seasons" alone, or 1-3 specific seasons, never both. Reason from the garment's material, coverage and weight rather than guessing: heavy insulating materials (Wool, Cashmere, Shearling, Down, Alpaca, thick fleece) or covering outerwear (coats, heavy jackets, boots) → Autumn/Winter; lightweight breathable materials (Linen, thin Cotton, thin Viscose) or minimal-coverage pieces (shorts, tank tops, sandals, swimwear) → Spring/Summer. Reserve "All Seasons" for genuinely versatile mid-weight basics with no strong material or coverage signal pointing to a specific time of year (e.g. plain cotton t-shirt, straight jeans, a simple leather bag, classic sneakers) — it is not a fallback for uncertainty, and most garments should get a specific 1-2 season pick rather than "All Seasons".`,
         `Return materials as an array (1-2) from: ${MATERIALS.join(", ")}. Always give your best guess — materials power season matching and outfit suggestions, and the user can correct them before saving. Combine visible texture cues (sheen, weave, grain, knit stitches) with what this garment type is typically made of (t-shirts and shirts → Cotton; jeans and denim jackets → Denim; tailored blazers and coats → Wool, Polyester or Viscose; flowing dresses and blouses → Viscose, Silk, Linen or Polyester; chunky sweaters → Wool, Cashmere, Merino or Acrylic depending on visible fiber thickness and sheen; sporty/technical pieces → Polyester, Polyamide or Elastane; boots and belts → Leather or Suede; watches, jewelry and metal hardware → Metal, Steel, Gold, Silver or Pearl). "Knit" describes a construction technique, not a fiber — never return it as a material even if the garment is visibly knitted; name the actual fiber instead. Return an empty array only if the item is genuinely impossible to assess (e.g. heavily obscured or not a garment).`,
 
     "Return brand ONLY if a clearly visible logo/label is present in the image; otherwise return an empty string. Never guess a brand.",
@@ -160,16 +160,26 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     const validLengths = lengthOptionsFor(category, subcategory);
 
     return {
+          const rawSeasons = allowed(output.seasons, SEASONS);
+    // Safety net for the mutual-exclusivity rule above: if the model
+    // still returns both "All Seasons" and a specific season despite the
+    // instruction, the specific ones carry more information and win.
+    const seasons = rawSeasons.length > 1 && rawSeasons.includes("All Seasons")
+      ? rawSeasons.filter((s) => s !== "All Seasons")
+      : rawSeasons;
+
+    return {
       category,
       subcategory,
       colors: output.colors.filter(c => COLOR_NAMES.includes(c)),
       styles: allowed(output.styles, STYLES),
       occasions: allowed(output.occasions, OCCASIONS),
-      seasons: allowed(output.seasons, SEASONS),
+      seasons,
       brand: output.brand?.trim() ?? "",
       materials: allowed(output.materials, MATERIALS),
       length: validLengths.length ? single(output.length, validLengths as readonly string[]) : "",
       sleeveLength: ATTRIBUTE_APPLICABILITY.sleeveLength.includes(category) ? single(output.sleeveLength, SLEEVE_LENGTH_OPTIONS) : "",
+
       fit: ATTRIBUTE_APPLICABILITY.fit.includes(category) ? single(output.fit, FIT_OPTIONS) : "",
       heelHeight: ATTRIBUTE_APPLICABILITY.heelHeight.includes(category) ? single(output.heelHeight, HEEL_HEIGHT_OPTIONS) : "",
       toeShape: ATTRIBUTE_APPLICABILITY.toeShape.includes(category) ? single(output.toeShape, TOE_SHAPE_OPTIONS) : "",
