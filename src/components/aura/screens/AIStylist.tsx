@@ -17,7 +17,6 @@ import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
-
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
 type OutfitPlan = {
