@@ -125,6 +125,11 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
   // waiting on a re-render.
     const eventWeatherRef = useRef<{ temperature: number | null; condition: string | null } | null>(null);
   const eventDateRef = useRef<string | null>(null);
+  // The calendar event this whole session is about, if it started from a
+  // calendar event tap (see openStylistChat in AuraApp.tsx / askStylistFor
+  // in Planner.tsx). Used so a confirmed outfit is saved into that event's
+  // own outfit_plans slot instead of colliding with the day's general plan.
+  const eventIdRef = useRef<string | null>(null);
 
   const autoSentRef = useRef(false);
   useEffect(() => {
@@ -137,6 +142,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       autoSentRef.current = true;
             eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
       eventDateRef.current = initialMessage.date ?? null;
+      eventIdRef.current = initialMessage.eventId ?? null;
 
       void sendMessage(initialMessage.message);
     }
@@ -368,10 +374,10 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
   const confirmCalendarDate = async (index: number, itemIds: string[], date: string) => {
     try {
-      await saveOutfitPlan({ data: { itemIds, date } });
+      await saveOutfitPlan({ data: { itemIds, date, calendarEventId: eventIdRef.current } });
     } catch (e) {
       console.error("[AURA add_calendar]", e);
-      toast.error("Couldn't add it to your calendar");
+      toast.error(errorMessage(e, "Couldn't add it to your calendar"));
       return;
     }
     toast.success(
@@ -403,7 +409,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
             <Sparkles size={20} className="mx-auto text-muted-foreground" />
             <p className="mt-3 font-serif text-xl italic">What are you dressing for?</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-              Ask anything — “work dinner tonight, what should I wear?” — and I’ll style you
+              Ask anything — "work dinner tonight, what should I wear?" — and I'll style you
               with pieces you already own.
             </p>
           </div>
