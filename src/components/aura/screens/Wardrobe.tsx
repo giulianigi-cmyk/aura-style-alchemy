@@ -39,7 +39,11 @@ const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£"
 const splitCsv = (v: string | null | undefined) =>
   (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
-export function Wardrobe({ go }: { go: (s: Screen) => void }) {
+export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
+  go: (s: Screen) => void;
+  gapFilter?: "price" | "purchase_date" | null;
+  onClearGapFilter?: () => void;
+}) {
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -522,17 +526,27 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
     [items],
   );
 
-  const filtered = useMemo(() => items.filter(i => {
-    const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
-    if (showArchived) return isArchived;
-    const locId = (i as unknown as { location_id?: string | null }).location_id ?? null;
-    const matchesLocation = viewLocationId === "all" || locId === viewLocationId;
-    return !isArchived && matchesLocation &&
-      (cat === "All" || i.category === cat) &&
-      (!seasonOnly || seasonMatches.has(i.id)) &&
-      (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
-        .some(v => v?.toLowerCase().includes(q.toLowerCase())));
-  }), [items, cat, q, seasonOnly, seasonMatches, showArchived, viewLocationId]);
+  const filtered = useMemo(() => {
+    if (gapFilter) {
+      return items.filter((i) => {
+        const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
+        if (isArchived) return false;
+        if (gapFilter === "price") return i.price == null || i.price <= 0;
+        return !(i as unknown as { purchase_date?: string | null }).purchase_date;
+      });
+    }
+    return items.filter(i => {
+      const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
+      if (showArchived) return isArchived;
+      const locId = (i as unknown as { location_id?: string | null }).location_id ?? null;
+      const matchesLocation = viewLocationId === "all" || locId === viewLocationId;
+      return !isArchived && matchesLocation &&
+        (cat === "All" || i.category === cat) &&
+        (!seasonOnly || seasonMatches.has(i.id)) &&
+        (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
+          .some(v => v?.toLowerCase().includes(q.toLowerCase())));
+    });
+  }, [items, cat, q, seasonOnly, seasonMatches, showArchived, viewLocationId, gapFilter]);
 
   const w = weather?.current;
   const wLabel = w ? describeWeather(w.weatherCode, w.isDay) : null;
@@ -572,6 +586,18 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
           </button>
         </div>
       </header>
+
+      {gapFilter && (
+        <div className="mx-6 mt-2 flex items-center justify-between gap-2 rounded-2xl bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-4 py-2.5">
+          <p className="text-xs">
+            Showing {filtered.length} piece{filtered.length === 1 ? "" : "s"} without a {gapFilter === "price" ? "price" : "purchase date"} — tap one to add it.
+          </p>
+          <button
+            onClick={() => onClearGapFilter?.()}
+            className="shrink-0 text-[10px] uppercase tracking-widest underline text-muted-foreground"
+          >Show all</button>
+        </div>
+      )}
 
       <div className="px-6 -mt-1 flex justify-end">
         <button
@@ -701,12 +727,17 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
       ) : filtered.length === 0 ? (
         <div className="px-6 mt-16 text-center animate-fade-up">
           <p className="font-serif text-2xl italic">
-            {showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
+            {gapFilter ? "All set — nothing left here" : showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            {showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
+            {gapFilter ? `Every piece now has a ${gapFilter === "price" ? "price" : "purchase date"} on file.` : showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
           </p>
-          {items.length === 0 ? (
+          {gapFilter ? (
+            <button
+              onClick={() => onClearGapFilter?.()}
+              className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
+            >Back to closet</button>
+          ) : items.length === 0 ? (
             <button
               onClick={() => go("add")}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
@@ -1023,7 +1054,6 @@ export function Wardrobe({ go }: { go: (s: Screen) => void }) {
                 />
 
                 {([
-                    
                   ["Season", SEASON_OPTIONS, edit.seasons, (v: string[]) => setEdit((s) => ({ ...s, seasons: v })), toggleSeasonChip],
                   ["Style", STYLE_OPTIONS, edit.styles, (v: string[]) => setEdit((s) => ({ ...s, styles: v })), toggleChip],
                   ["Occasion", OCCASION_OPTIONS, edit.occasions, (v: string[]) => setEdit((s) => ({ ...s, occasions: v })), toggleChip],
