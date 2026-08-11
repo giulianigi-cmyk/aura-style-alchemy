@@ -674,25 +674,59 @@ function DayDetail({
                         </button>
                       )}
                     </div>
+                    <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5">
+                      <Search size={15} className="text-muted-foreground" />
+                      <input
+                        value={pickerQ}
+                        onChange={(e) => setPickerQ(e.target.value)}
+                        placeholder="Search by color, fabric, brand…"
+                        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
+                      />
+                    </div>
+
+                    <div className="mt-3 -mx-5 px-5 flex gap-2 overflow-x-auto no-scrollbar">
+                      {["All", ...ITEM_CATEGORIES].map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setPickerCat(c)}
+                          className={`shrink-0 rounded-full px-4 py-2 text-xs tracking-wide transition ${
+                            pickerCat === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                          }`}
+                        >{c}</button>
+                      ))}
+                    </div>
+
                     {visibleItems.length === 0 ? (
                       <p className="mt-4 text-xs text-muted-foreground">
-                        {items.length === 0 ? "Add pieces to your closet first." : "No matches — turn off Suggested to see all."}
+                        {items.length === 0 ? "Add pieces to your closet first." : "No matches — clear the search or filters to see all."}
                       </p>
                     ) : (
-                      <div className="mt-2 grid grid-cols-3 gap-2">
+                      <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-5">
                         {visibleItems.map((it) => {
-                          const path = toStoragePath(it.image_url);
-                          const src = path ? signed[path] : "";
+                          const src = thumbSrc(it, signed) || (toStoragePath(it.image_url) ? signed[toStoragePath(it.image_url)!] ?? "" : "");
                           const on = selected.includes(it.id);
+                          const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
                           return (
-                            <button
-                              key={it.id}
-                              onClick={() => toggle(it.id)}
-                              className={`relative aspect-square rounded-xl overflow-hidden border-2 transition ${on ? "border-foreground" : "border-transparent"}`}
-                              style={{ background: "#FFFFFF" }}
-                            >
-                              {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
-                              {on && <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background text-[10px] flex items-center justify-center">✓</span>}
+                            <button key={it.id} onClick={() => toggle(it.id)} className="group text-left">
+                              <div
+                                className={`relative overflow-hidden rounded-[1.25rem] border aspect-[4/5] ${on ? "border-foreground border-2" : "border-border/50"}`}
+                                style={{ background: "#FFFFFF" }}
+                              >
+                                {src ? (
+                                  <img src={src} alt={`${it.brand ?? label} piece`} className="h-full w-full object-contain p-1 transition-transform duration-500 group-active:scale-95" loading="lazy" />
+                                ) : (
+                                  <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
+                                )}
+                                {on && (
+                                  <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground border border-foreground flex items-center justify-center">
+                                    <Check size={13} className="text-background" />
+                                  </span>
+                                )}
+                              </div>
+                              <div className="px-0.5 mt-1.5">
+                                <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
+                                <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
+                              </div>
                             </button>
                           );
                         })}
