@@ -56,22 +56,6 @@ Conferma utente (solo se il risultato resta ambiguo)
 
 **D8 — Il preprocessing è la prima ipotesi da verificare, prima di modificare rappresentazione o modello.**
 *Perché*: la qualità del ritaglio/segmentazione a monte limita strutturalmente ciò che l'embedding può fare a valle; è anche la variabile più economica da testare. Isolare le cause prima di cambiare architettura, non il contrario.
-
----
-
-## Cosa NON è ancora deciso (vive nel Benchmark Protocol, non qui)
-
-- Quale modello vince (DINOv2-Base vs alternative fashion-specific)
-- Quale rappresentazione vince (CLS vs pooling patch vs combinazione)
-- Soglie numeriche di similarità per certo/dubbio/nuovo
-
-## Cosa è rimandato deliberatamente (roadmap, non blocco)
-
-- Worker automatico di retry oltre `pg_cron` base — solo se i fallimenti reali lo giustificano
-- Ricerca visiva ("trova capi simili") — stessa infrastruttura, feature futura
-- Confronto con modelli fashion-specific in produzione — dopo il primo benchmark
-
----
 D9 — Product Library come entità separata, alimentata solo da fonti
 proprie o autorizzate (mai da foto di altri utenti).
 
@@ -101,6 +85,22 @@ Effetto collaterale utile: quando un capo caricato in Batch Scan trova un
 match nella Product Library, i suoi attributi possono essere precompilati
 invece di richiedere un'analisi AI completa da zero — la Library diventa
 un pezzo dell'infrastruttura di ingestion, non solo una feature di ricerca.
+---
+
+## Cosa NON è ancora deciso (vive nel Benchmark Protocol, non qui)
+
+- Quale modello vince (DINOv2-Base vs alternative fashion-specific)
+- Quale rappresentazione vince (CLS vs pooling patch vs combinazione)
+- Soglie numeriche di similarità per certo/dubbio/nuovo
+
+## Cosa è rimandato deliberatamente (roadmap, non blocco)
+
+- Worker automatico di retry oltre `pg_cron` base — solo se i fallimenti reali lo giustificano
+- Ricerca visiva ("trova capi simili") — stessa infrastruttura, feature futura
+- Confronto con modelli fashion-specific in produzione — dopo il primo benchmark
+- Product Knowledge Library — Livello 2 (visual knowledge condivisa tra utenti) — vedi roadmap
+---
+
 
 ## Come si aggiorna questo documento
 
