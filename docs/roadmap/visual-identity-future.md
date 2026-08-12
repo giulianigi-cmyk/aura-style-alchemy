@@ -66,32 +66,20 @@
 
 ---
 
+## Product Knowledge Library — Livello 2 (Visual Knowledge condivisa)
+
+**Cosa sarebbe**: usare gli embedding visivi dei capi di più utenti per riconoscere che oggetti diversi caricati da persone diverse sono lo stesso prodotto reale (es. lo stesso blazer Zara comprato da tre utenti diversi), creando una Product Entity condivisa — senza mai esporre le foto originali tra utenti.
+
+**Perché è rimandata**: non è un'estensione della dedup personale già prevista, è un problema diverso. Richiede:
+- un consent flow esplicito e granulare (opt-in reale, non una clausola nei ToS) prima di usare la foto di un utente per arricchire la conoscenza visiva condivisa;
+- un servizio che confronta embedding *tra* utenti, quindi eseguito fuori dalle RLS standard (service role), che scrive solo entità/cluster anonimizzati e mai l'origine (quale utente, quale foto);
+- un algoritmo di entity-resolution vero (clustering multi-utente), diverso dal confronto a coppie della dedup personale, con un modo per correggere merge sbagliati;
+- una scala e un rischio di privacy diversi da quelli testati nel Benchmark Protocol attuale (30 capi, un solo utente).
+
+**Trigger per riprenderla**: il Livello 1 (Product Library da fonti retail/testo) è in produzione stabile, la dedup personale è validata, e — solo a quel punto — si disegna e valida (anche legalmente) un consent flow esplicito prima di raccogliere qualunque dato cross-utente. Non si procede per opportunità tecnica.
+
+---
+
 ## Nota generale
 
 Ogni voce qui sopra ha un trigger esplicito. Se una voce viene ripresa, si sposta prima nel Benchmark Protocol (se è ancora un'ipotesi da validare) o direttamente nell'ADR (se è già chiaro che va implementata) — non si implementa direttamente da qui.
-## Product Knowledge Library — Livello 2 (Visual Knowledge condivisa)
-
-Cosa sarebbe: usare gli embedding visivi dei capi di più utenti per riconoscere
-che oggetti diversi caricati da persone diverse sono lo stesso prodotto reale
-(es. lo stesso blazer Zara comprato da tre utenti diversi), creando una
-Product Entity condivisa — senza mai esporre le foto originali tra utenti.
-
-Perché è rimandata: non è un'estensione della dedup personale già prevista,
-è un problema diverso. Richiede:
-- un consent flow esplicito e granulare (opt-in reale, non una clausola nei
-  ToS) prima di usare la foto di un utente per arricchire la conoscenza
-  visiva condivisa;
-- un servizio che confronta embedding *tra* utenti, quindi eseguito fuori
-  dalle RLS standard (service role), che scrive solo entità/cluster
-  anonimizzati e mai l'origine (quale utente, quale foto);
-- un algoritmo di entity-resolution vero (clustering multi-utente), diverso
-  dal confronto a coppie della dedup personale, con un modo per correggere
-  merge sbagliati;
-- una scala e un rischio di privacy diversi da quelli testati nel Benchmark
-  Protocol attuale (30 capi, un solo utente).
-
-Trigger per riprenderla: il Livello 1 (Product Library da fonti retail/testo)
-è in produzione stabile, la dedup personale è validata, e — solo a quel
-punto — si disegna e valida (anche legalmente) un consent flow esplicito
-prima di raccogliere qualunque dato cross-utente. Non si procede per
-opportunità tecnica.
