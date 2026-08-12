@@ -1,4 +1,4 @@
-import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon } from "lucide-react";
+import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
+import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
 import { trimFileMargins } from "@/lib/auto-crop";
@@ -178,7 +179,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<"capture" | "url" | "details">("capture");
+  const [step, setStep] = useState<"capture" | "url" | "library" | "details">("capture");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [transparent, setTransparent] = useState(false);
@@ -191,6 +192,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [altImages, setAltImages] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState<string | null>(null);
   const [importReferer, setImportReferer] = useState<string>("");
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryResults, setLibraryResults] = useState<ProductLibraryItem[]>([]);
+  const [librarySearching, setLibrarySearching] = useState(false);
+  const [libraryLoadingId, setLibraryLoadingId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
@@ -226,7 +232,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setPurchaseDate(new Date().toISOString().slice(0, 10));
   };
 
-  const runPipeline = async (initialFile: File, opts?: { brand?: string; source?: "photo" | "url"; price?: string; currency?: string; materials?: string[]; composition?: CompositionEntry[] }) => {
+    const runPipeline = async (initialFile: File, opts?: {
+    brand?: string; source?: "photo" | "url" | "library"; price?: string; currency?: string;
+    materials?: string[]; composition?: CompositionEntry[]; productId?: string;
+    category?: string; subcategory?: string; colors?: string[]; season?: string;
+  }) => {
+
     const compressedFile = await compressImageForUpload(initialFile);
     setFile(compressedFile);
     setPreview(URL.createObjectURL(compressedFile));
@@ -236,16 +247,22 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (opts?.brand) setBrand(opts.brand);
     if (opts?.price) setPrice(opts.price);
     if (opts?.currency) setCurrency(opts.currency);
-    if (opts?.materials?.length) setMaterials(opts.materials);
+    if    if (opts?.materials?.length) setMaterials(opts.materials);
     if (opts?.composition?.length) setComposition(opts.composition);
+    if (opts?.category) setCategory(opts.category);
+    if (opts?.subcategory) setSubcategory(opts.subcategory);
+    if (opts?.colors?.length) setColors(opts.colors);
+    if (opts?.season) setSeasons([opts.season]);
+    setSelectedProductId(opts?.productId ?? null);
 
     const dataUrl = await readFileAsDataUrl(compressedFile);
 
     setStage("analyze");
+    const fromLibrary = opts?.source === "library";
     const analysisPromise = analyze({ data: { imageDataUrl: dataUrl } })
       .then(result => {
-        if (result.category) setCategory(result.category);
-        if (result.subcategory) setSubcategory(result.subcategory);
+        if (result.category && !fromLibrary) setCategory(result.category);
+        if (result.subcategory && !fromLibrary) setSubcategory(result.subcategory);
         if (result.length) setLength(result.length);
         if (result.sleeveLength) setSleeveLength(result.sleeveLength);
         if (result.fit) setFit(result.fit);
@@ -256,7 +273,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 if (result.styleTags?.length) setStyleTags(result.styleTags);
         if (result.formality != null) setFormality(result.formality);
         if (result.dayEvening) setDayEvening(result.dayEvening);
-        if (result.colors?.length) setColors(result.colors);
+                if (result.colors?.length && !fromLibrary) setColors(result.colors);
         if (result.styles?.length) setStyles(result.styles);
         if (result.occasions?.length) setOccasions(result.occasions);
         if (result.seasons?.length) setSeasons(result.seasons);
@@ -336,6 +353,47 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       toast.error("Could not import from that URL");
     } finally {
       setImporting(false);
+
+  const handleSelectProduct = async (p: ProductLibraryItem) => {
+    if (libraryLoadingId) return;
+    if (!p.canonical_image_url) { toast.error("This entry has no photo yet — add the item manually."); return; }
+    setLibraryLoadingId(p.id);
+    try {
+      const res = await downloadImage({ data: { url: p.canonical_image_url } });
+      if (!res.ok) { toast.error(res.error); return; }
+      const rawF = await dataUrlToFile(res.imageDataUrl, `library-${Date.now()}.jpg`);
+      const f = await normalizeForPipeline(rawF);
+      await runPipeline(f, {
+        brand: p.brand || undefined,
+        source: "library",
+        productId: p.id,
+        category: p.category || undefined,
+        subcategory: p.subcategory || undefined,
+        colors: p.color ? [p.color] : undefined,
+        season: p.season || undefined,
+        materials: p.material ? [p.material] : undefined,
+      });
+      toast.message("Loaded from the AURA Library", { description: "Double-check the details before saving." });
+    } catch (e) {
+      console.error("[AURA product-library] select failed", e);
+      toast.error("Could not load that product");
+    } finally {
+      setLibraryLoadingId(null);
+    }
+  };
+
+  const runLibrarySearch = async () => {
+    const q = libraryQuery.trim();
+    if (!q) { setLibraryResults([]); return; }
+    setLibrarySearching(true);
+    try {
+      const results = await searchProductLibrary(q);
+      setLibraryResults(results);
+    } finally {
+      setLibrarySearching(false);
+    }
+  };
+
     }
   };
 
@@ -446,8 +504,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 formality: formality,
         day_evening: dayEvening || null,
         purchase_date: purchaseDate || null,
-        location_id: activeLocationId,
+               location_id: activeLocationId,
+        product_id: selectedProductId,
       } as unknown as TablesInsert<"wardrobe_items">;
+
 
       let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
