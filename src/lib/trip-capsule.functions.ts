@@ -47,6 +47,43 @@ const DEFAULT_FORMALITY_RANGE: [number, number] = [1, 3];
 const TOP_ROLE = new Set(["Tops"]);
 const BOTTOM_ROLE = new Set(["Bottoms", "Dresses", "Jumpsuits"]);
 const SHOE_ROLE = new Set(["Shoes"]);
+const SWIM_ROLE = new Set(["Swimwear"]);
+const ACTIVE_ROLE = new Set(["Activewear"]);
+
+/** Categories whose classification (formality / day_evening) is almost
+ *  never filled in, because they're bought for a single obvious purpose.
+ *  Rather than silently dropping them from the pool, they get the only
+ *  sensible reading: casual (1) and daytime. */
+const IMPLICIT_CLASSIFICATION: Record<string, { formality: number; dayEvening: string }> = {
+  Swimwear: { formality: 1, dayEvening: "day" },
+  Activewear: { formality: 1, dayEvening: "day" },
+};
+
+/** Free-text activity names are the only signal for pool/beach or sport
+ *  days, since the dress_code vocabulary has no entry for either. */
+const SWIM_KEYWORDS = ["pool", "piscina", "swim", "nuot", "beach", "spiagg", "mare", "sea", "snorkel", "lido", "water park", "acquapark"];
+const SPORT_KEYWORDS = ["yoga", "gym", "palestra", "run", "corsa", "hike", "trek", "workout", "fitness", "pilates", "bike", "cycl", "tennis", "padel", "climb"];
+
+type ActivityKind = "swim" | "sport" | null;
+
+/** Swim wins over sport when both read (a "pool workout" still needs a
+ *  swimsuit); dress_code "Sport" only ever implies sport. */
+function activityKind(req: Requirement): ActivityKind {
+  const text = `${req.label ?? ""}`.toLowerCase();
+  if (SWIM_KEYWORDS.some((k) => text.includes(k))) return "swim";
+  if (SPORT_KEYWORDS.some((k) => text.includes(k)) || req.dressCode === "Sport") return "sport";
+  return null;
+}
+
+/** The activity name must survive into the AI prompt even when a dress
+ *  code exists — "Sport" alone loses "Yoga at sunset", and the prompt
+ *  rules below key off those words. */
+function occasionText(req: Requirement): string {
+  const parts = [req.label, req.dressCode].filter(Boolean) as string[];
+  if (!parts.length) return "Trip";
+  return parts.length === 2 && parts[0] !== parts[1] ? `${parts[0]} (${parts[1]})` : parts[0];
+}
+
 
 /** Northern-hemisphere month→season, same convention as currentSeason()
  *  in wardrobe-image.ts — duplicated locally rather than imported, since
@@ -103,13 +140,21 @@ function versatility(it: PoolItem): number {
 
 function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolItem[] {
   const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
+  const kind = activityKind(req);
+  const purposeRole = kind === "swim" ? SWIM_ROLE : kind === "sport" ? ACTIVE_ROLE : null;
   return pool.filter((it) => {
-    if (it.formality < min || it.formality > max) return false;
+    // A pool or gym day's defining garment is exempt from the formality
+    // window: it's the right piece by purpose, not by score.
+    const isPurpose = purposeRole?.has(it.category ?? "") ?? false;
+    if (!isPurpose && (it.formality < min || it.formality > max)) return false;
     if (it.dayEvening !== "both" && it.dayEvening !== req.daySegment) return false;
-    if (!matchesSeasonLoose(it.season, season)) return false;
+    // Season is also skipped for the purpose garment: a swimsuit tagged
+    // Summer is still the right piece for a February pool day abroad.
+    if (!isPurpose && !matchesSeasonLoose(it.season, season)) return false;
     return true;
   });
 }
+
 
 function hasRole(items: PoolItem[], role: Set<string>): boolean {
   return items.some((it) => role.has(it.category ?? ""));
@@ -139,13 +184,22 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
 
   for (const { req, eligible } of withEligibility) {
     const inCapsule = eligible.filter((it) => capsule.has(it.id));
+    const kind = activityKind(req);
     const missingRoles: Set<string>[] = [];
-    if (!hasRole(inCapsule, TOP_ROLE) && !hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(TOP_ROLE, BOTTOM_ROLE);
-    else {
-      if (!hasRole(inCapsule, TOP_ROLE)) missingRoles.push(TOP_ROLE);
-      if (!hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(BOTTOM_ROLE);
+    // A swim or sport day needs its purpose garment in the capsule
+    // first — otherwise the greedy pass only ever packs city tops and
+    // the AI never sees a swimsuit to pick from.
+    if (kind === "swim" && !hasRole(inCapsule, SWIM_ROLE)) missingRoles.push(SWIM_ROLE);
+    if (kind === "sport" && !hasRole(inCapsule, ACTIVE_ROLE)) missingRoles.push(ACTIVE_ROLE);
+    if (kind !== "swim") {
+      if (!hasRole(inCapsule, TOP_ROLE) && !hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(TOP_ROLE, BOTTOM_ROLE);
+      else {
+        if (!hasRole(inCapsule, TOP_ROLE)) missingRoles.push(TOP_ROLE);
+        if (!hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(BOTTOM_ROLE);
+      }
     }
     if (!hasRole(inCapsule, SHOE_ROLE)) missingRoles.push(SHOE_ROLE);
+
 
     for (const role of missingRoles) {
       const candidates = eligible
@@ -240,13 +294,21 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const pool: PoolItem[] = [];
     let unclassifiedExcluded = 0;
     for (const it of locationFiltered) {
-      if (it.formality == null || !it.day_evening) { unclassifiedExcluded++; continue; }
+      // Swimwear/Activewear are single-purpose categories that almost
+      // nobody classifies, so an implicit casual/daytime reading is used
+      // instead of dropping them — for every other category a missing
+      // value is still never guessed.
+      const implicit = IMPLICIT_CLASSIFICATION[it.category ?? ""];
+      const formality = it.formality ?? implicit?.formality ?? null;
+      const dayEvening = it.day_evening || implicit?.dayEvening || null;
+      if (formality == null || !dayEvening) { unclassifiedExcluded++; continue; }
       pool.push({
         id: it.id, category: it.category, subcategory: it.subcategory,
         colors: it.colors ?? (it.color ? [it.color] : []),
         style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
         season: it.season, brand: it.brand, material: Array.isArray(it.material) ? it.material : [],
-        locationId: it.location_id ?? null, formality: it.formality, dayEvening: it.day_evening,
+        locationId: it.location_id ?? null, formality, dayEvening,
+
       });
     }
 
@@ -292,7 +354,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         supabase, userId,
         temperature: null,
         condition: null,
-        occasion: req.dressCode ?? req.label ?? "Trip",
+        occasion: occasionText(req),
         dressRules,
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
