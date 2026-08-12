@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
@@ -43,6 +43,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [addingActivity, setAddingActivity] = useState(false);
+  const [duplicatingActivity, setDuplicatingActivity] = useState<TripActivity | null>(null);
   const [actDate, setActDate] = useState("");
   const [actType, setActType] = useState("");
   const [actSegment, setActSegment] = useState<DaySegment>("day");
@@ -147,10 +148,25 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         },
       });
       setActivities((prev) => [...prev, res.activity].sort((a, b) => a.activity_date.localeCompare(b.activity_date)));
-      setActType(""); setActDressCode(""); setActSegment("day"); setAddingActivity(false);
+      setActType(""); setActDressCode(""); setActSegment("day"); setActDate(""); setAddingActivity(false); setDuplicatingActivity(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't add activity");
     }
+  };
+
+  const startDuplicateActivity = (activity: TripActivity) => {
+    setDuplicatingActivity(activity);
+    setActDate(activity.activity_date);
+    setActType(activity.activity_type);
+    setActSegment(activity.day_segment ?? "day");
+    setActDressCode(activity.dress_code ?? "");
+    setAddingActivity(true);
+  };
+
+  const cancelActivityForm = () => {
+    setAddingActivity(false);
+    setDuplicatingActivity(null);
+    setActType(""); setActDressCode(""); setActSegment("day"); setActDate("");
   };
 
   const removeActivity = async (id: string) => {
@@ -469,6 +485,13 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
                   {fmtDate(a.activity_date)}{a.dress_code ? ` · ${a.dress_code}` : ""}
                 </p>
               </div>
+              <button
+                onClick={() => startDuplicateActivity(a)}
+                aria-label={`Duplicate ${a.activity_type}`}
+                className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+              >
+                <Copy size={12} />
+              </button>
               <button onClick={() => void removeActivity(a.id)} aria-label={`Remove ${a.activity_type}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                 <X size={13} />
               </button>
@@ -478,6 +501,9 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
 
         {addingActivity ? (
           <div className="mt-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              {duplicatingActivity ? "Duplicate activity" : "New activity"}
+            </p>
             <div className="flex items-center gap-2">
               <input
                 type="date"
@@ -516,13 +542,15 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
               ))}
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setAddingActivity(false)} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
-              <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">Add</button>
+              <button onClick={() => cancelActivityForm()} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
+              <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">
+                {duplicatingActivity ? "Duplicate" : "Add"}
+              </button>
             </div>
           </div>
         ) : (
           <button
-            onClick={() => { setActDate(minDate ?? ""); setAddingActivity(true); }}
+            onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
             className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
           ><Plus size={13} /> Add activity</button>
         )}
