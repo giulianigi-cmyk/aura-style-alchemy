@@ -353,6 +353,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       toast.error("Could not import from that URL");
     } finally {
       setImporting(false);
+    }
+  };
 
   const handleSelectProduct = async (p: ProductLibraryItem) => {
     if (libraryLoadingId) return;
@@ -391,9 +393,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setLibraryResults(results);
     } finally {
       setLibrarySearching(false);
-    }
-  };
-
     }
   };
 
