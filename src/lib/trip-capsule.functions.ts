@@ -182,13 +182,22 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
 
   for (const { req, eligible } of withEligibility) {
     const inCapsule = eligible.filter((it) => capsule.has(it.id));
+    const kind = activityKind(req);
     const missingRoles: Set<string>[] = [];
-    if (!hasRole(inCapsule, TOP_ROLE) && !hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(TOP_ROLE, BOTTOM_ROLE);
-    else {
-      if (!hasRole(inCapsule, TOP_ROLE)) missingRoles.push(TOP_ROLE);
-      if (!hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(BOTTOM_ROLE);
+    // A swim or sport day needs its purpose garment in the capsule
+    // first — otherwise the greedy pass only ever packs city tops and
+    // the AI never sees a swimsuit to pick from.
+    if (kind === "swim" && !hasRole(inCapsule, SWIM_ROLE)) missingRoles.push(SWIM_ROLE);
+    if (kind === "sport" && !hasRole(inCapsule, ACTIVE_ROLE)) missingRoles.push(ACTIVE_ROLE);
+    if (kind !== "swim") {
+      if (!hasRole(inCapsule, TOP_ROLE) && !hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(TOP_ROLE, BOTTOM_ROLE);
+      else {
+        if (!hasRole(inCapsule, TOP_ROLE)) missingRoles.push(TOP_ROLE);
+        if (!hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(BOTTOM_ROLE);
+      }
     }
     if (!hasRole(inCapsule, SHOE_ROLE)) missingRoles.push(SHOE_ROLE);
+
 
     for (const role of missingRoles) {
       const candidates = eligible
