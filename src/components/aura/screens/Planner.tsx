@@ -416,7 +416,14 @@ function DayDetail({
       calendar_event_id: activeEventId,
     };
 
-    const onConflict = activeEventId ? "calendar_event_id" : "user_id,general_date";
+    // Slot choice (and therefore the unique constraint we upsert against)
+    // is derived from whether this plan belongs to a calendar event — see
+    // src/lib/outfit-plan-slot.ts.
+    if (activeEventId) {
+      const problem = await validateEventSlot(supabase, user.id, activeEventId, date);
+      if (problem) { setSaving(false); toast.error(problem); return; }
+    }
+    const { onConflict } = resolvePlanSlot({ calendarEventId: activeEventId });
     const { data: savedPlan, error } = await supabase
       .from("outfit_plans")
       .upsert(payload as never, { onConflict })
