@@ -292,13 +292,21 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const pool: PoolItem[] = [];
     let unclassifiedExcluded = 0;
     for (const it of locationFiltered) {
-      if (it.formality == null || !it.day_evening) { unclassifiedExcluded++; continue; }
+      // Swimwear/Activewear are single-purpose categories that almost
+      // nobody classifies, so an implicit casual/daytime reading is used
+      // instead of dropping them — for every other category a missing
+      // value is still never guessed.
+      const implicit = IMPLICIT_CLASSIFICATION[it.category ?? ""];
+      const formality = it.formality ?? implicit?.formality ?? null;
+      const dayEvening = it.day_evening || implicit?.dayEvening || null;
+      if (formality == null || !dayEvening) { unclassifiedExcluded++; continue; }
       pool.push({
         id: it.id, category: it.category, subcategory: it.subcategory,
         colors: it.colors ?? (it.color ? [it.color] : []),
         style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
         season: it.season, brand: it.brand, material: Array.isArray(it.material) ? it.material : [],
-        locationId: it.location_id ?? null, formality: it.formality, dayEvening: it.day_evening,
+        locationId: it.location_id ?? null, formality, dayEvening,
+
       });
     }
 
