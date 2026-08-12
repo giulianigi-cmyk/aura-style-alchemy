@@ -501,6 +501,9 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
 
         {addingActivity ? (
           <div className="mt-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              {duplicatingActivity ? "Duplicate activity" : "New activity"}
+            </p>
             <div className="flex items-center gap-2">
               <input
                 type="date"
@@ -539,13 +542,15 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
               ))}
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setAddingActivity(false)} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
-              <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">Add</button>
+              <button onClick={() => cancelActivityForm()} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
+              <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">
+                {duplicatingActivity ? "Duplicate" : "Add"}
+              </button>
             </div>
           </div>
         ) : (
           <button
-            onClick={() => { setActDate(minDate ?? ""); setAddingActivity(true); }}
+            onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
             className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
           ><Plus size={13} /> Add activity</button>
         )}
