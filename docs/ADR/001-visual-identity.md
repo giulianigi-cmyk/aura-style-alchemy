@@ -89,8 +89,9 @@ Solo se una decisione qui elencata si rivela sbagliata **con dati reali di produ
 ## Stato
 
 - [x] Proposto
-- [ ] Validato dal benchmark
-- [ ] In produzione
+- [ ] Validato dal benchmark (D1–D8, in attesa del Benchmark Protocol)
+- [x] In produzione (D9 — Livello 1: tabella `products` e collegamento `wardrobe_items.product_id` creati il 2026-08-12, verificato via query diretta su `information_schema`)
 
 Data: 2026-08-02
-Ultima revisione: dopo Benchmark Protocol v1
+Ultima revisione: 2026-08-12 — D9 Livello 1 in produzione
+
