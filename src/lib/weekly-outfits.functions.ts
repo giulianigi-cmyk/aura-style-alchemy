@@ -107,21 +107,31 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       plansByDate.set(p.date, arr);
     });
 
-    // A date only counts as "already handled" if it has a General plan,
-    // or an event-linked plan whose event genuinely falls within work
-    // hours — an evening dinner plan doesn't block the day outfit.
-    const isDateAlreadyHandled = (date: string): boolean => {
+    const isWorkHoursEvent = (ev: { all_day: boolean; start_time: string; end_time: string | null }): boolean => {
+      if (ev.all_day) return true;
+      const evStart = clockTime(ev.start_time);
+      const evEnd = ev.end_time ? clockTime(ev.end_time) : evStart;
+      return timeRangesOverlap(evStart, evEnd, workStart, workEnd);
+    };
+
+    // The real work event for a day, if there is one. When it exists the
+    // work outfit is written into THAT event's slot (unique on
+    // calendar_event_id) rather than the day's general slot — which is what
+    // lets a work outfit and a generic/evening outfit coexist on one date.
+    const workEventByDate = new Map<string, { id: string; title: string | null }>();
+    eventById.forEach((e) => {
+      const d = e.start_time.slice(0, 10);
+      if (!workEventByDate.has(d) && isWorkHoursEvent(e)) workEventByDate.set(d, { id: e.id, title: e.title });
+    });
+
+    // A day is "already handled" only if its target slot is taken: the
+    // event slot when there's a work event, otherwise the general slot.
+    // An evening dinner plan never blocks the work outfit.
+    const isSlotTaken = (date: string, eventId: string | null): boolean => {
       const dayPlans = plansByDate.get(date) ?? [];
-      for (const p of dayPlans) {
-        if (!p.calendar_event_id) return true;
-        const ev = eventById.get(p.calendar_event_id);
-        if (!ev) continue;
-        if (ev.all_day) return true;
-        const evStart = clockTime(ev.start_time);
-        const evEnd = ev.end_time ? clockTime(ev.end_time) : evStart;
-        if (timeRangesOverlap(evStart, evEnd, workStart, workEnd)) return true;
-      }
-      return false;
+      return eventId
+        ? dayPlans.some((p) => p.calendar_event_id === eventId)
+        : dayPlans.some((p) => !p.calendar_event_id);
     };
 
     const eventTitleByDate = new Map<string, string>();
@@ -141,7 +151,16 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       const date = addDaysIso(data.startDate, i);
       const dow = WEEKDAY_CODES[new Date(`${date}T00:00:00`).getDay()];
       if (!workDays.includes(dow)) continue;
-      if (isDateAlreadyHandled(date)) { skippedExisting.push(date); continue; }
+
+      const workEvent = workEventByDate.get(date) ?? null;
+      const calendarEventId = workEvent?.id ?? null;
+      if (isSlotTaken(date, calendarEventId)) { skippedExisting.push(date); continue; }
+
+      // Event-linked writes are validated first: same owner, matching day.
+      if (calendarEventId) {
+        const problem = await validateEventSlot(supabase, userId, calendarEventId, date);
+        if (problem) { failed.push({ date, error: problem }); continue; }
+      }
 
       const w = weatherByDate.get(date);
       const occasionHint = eventTitleByDate.get(date) ? `Work · ${eventTitleByDate.get(date)}` : "Work";
@@ -166,6 +185,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
 
       usedThisBatch.push(...result.item_ids);
 
+      const { onConflict } = resolvePlanSlot({ calendarEventId });
       const { data: planRow, error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
         date,
@@ -174,8 +194,9 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
         notes: result.explanation || null,
         weather_temp: w ? Math.round((w.tempMin + w.tempMax) / 2) : null,
         status: "planned",
-        calendar_event_id: null,
-      } as never, { onConflict: "user_id,general_date" }).select("id").single();
+        calendar_event_id: calendarEventId,
+      } as never, { onConflict }).select("id").single();
+
 
       if (insErr || !planRow) {
         failed.push({ date, error: insErr?.message ?? "Could not save" });
