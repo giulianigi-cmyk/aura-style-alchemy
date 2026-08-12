@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
 import { dressPreferencesToPrompt, type DressPreferences } from "./dress-preferences";
+import { resolvePlanSlot, validateEventSlot } from "./outfit-plan-slot";
 
 const DailyWeatherSchema = z.object({
   date: z.string(),
