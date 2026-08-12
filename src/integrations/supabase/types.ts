@@ -621,6 +621,63 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          brand: string | null
+          canonical_image_url: string | null
+          category: string | null
+          color: string | null
+          color_family: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          material: string | null
+          provider_metadata: Json | null
+          season: string | null
+          source: string
+          source_url: string | null
+          subcategory: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          canonical_image_url?: string | null
+          category?: string | null
+          color?: string | null
+          color_family?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          material?: string | null
+          provider_metadata?: Json | null
+          season?: string | null
+          source: string
+          source_url?: string | null
+          subcategory?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          canonical_image_url?: string | null
+          category?: string | null
+          color?: string | null
+          color_family?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          material?: string | null
+          provider_metadata?: Json | null
+          season?: string | null
+          source?: string
+          source_url?: string | null
+          subcategory?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active_location_id: string | null
@@ -1330,6 +1387,7 @@ export type Database = {
           material: string[]
           occasion: string | null
           price: number | null
+          product_id: string | null
           purchase_date: string | null
           season: string | null
           size: string | null
@@ -1367,6 +1425,7 @@ export type Database = {
           material?: string[]
           occasion?: string | null
           price?: number | null
+          product_id?: string | null
           purchase_date?: string | null
           season?: string | null
           size?: string | null
@@ -1404,6 +1463,7 @@ export type Database = {
           material?: string[]
           occasion?: string | null
           price?: number | null
+          product_id?: string | null
           purchase_date?: string | null
           season?: string | null
           size?: string | null
@@ -1424,6 +1484,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "wardrobe_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wardrobe_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
