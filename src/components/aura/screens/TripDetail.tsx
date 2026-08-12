@@ -519,6 +519,39 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         </div>
       )}
 
+      {editingPlan && (
+        <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Edit outfit</p>
+              <p className="font-serif text-xl italic truncate">
+                {activities.find((a) => a.id === editingPlan.trip_activity_id)?.activity_type ?? editingPlan.occasion ?? fmtDate(editingPlan.date)}
+              </p>
+            </div>
+            <button onClick={() => setEditingPlan(null)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center shrink-0"><X size={16} /></button>
+          </div>
+          <PiecePicker
+            className="flex-1 overflow-y-auto no-scrollbar px-5 py-4"
+            items={wardrobeItems}
+            signed={wardrobeSigned}
+            selectedIds={editItemIds}
+            onToggle={(id) => setEditItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+            loading={wardrobeLoading}
+            emptyHint="No pieces in your wardrobe yet."
+          />
+          <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
+            <button
+              onClick={() => void saveEditPlan()}
+              disabled={savingPlan}
+              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              {savingPlan ? <Loader2 size={14} className="animate-spin" /> : null}
+              Save {editItemIds.length} piece{editItemIds.length === 1 ? "" : "s"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <section className="px-6 mt-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-serif text-xl italic flex items-center gap-1.5"><CalendarDays size={16} /> Activities</h2>
