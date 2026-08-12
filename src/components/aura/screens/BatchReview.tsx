@@ -12,7 +12,7 @@ import type { BBox } from "@/lib/outfit-detect-types";
 import { findBestMatch, type DedupeResult } from "@/lib/outfit-dedupe";
 import { clearSegmentationCache, cropItemFromSegmentation } from "@/lib/outfit-segmentation";
 import { trimWhiteMargins } from "@/lib/auto-crop";
-import { removeBackgroundClient } from "@/lib/bg-removal-client";
+import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { compressImageForUpload } from "@/lib/image-compress";
 import type { WardrobeItem } from "@/lib/aura-types";
 
@@ -65,6 +65,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
   const load = useServerFn(listDetectedItems);
   const confirm = useServerFn(confirmDetectedItems);
   const reject = useServerFn(rejectDetectedItem);
+  const removeBgServer = useServerFn(removeBackground);
 
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,11 +235,11 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
   const performBgRemoval = async (id: string, url: string): Promise<boolean> => {
     try {
-      let bg = await removeBackgroundClient(url);
+      let bg = await removeBgServer({ data: { imageDataUrl: url } });
       let attempt = 1;
       while (!bg.ok && attempt < 3) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
-        bg = await removeBackgroundClient(url);
+        bg = await removeBgServer({ data: { imageDataUrl: url } });
         attempt++;
       }
       if (!bg.ok) return false;
