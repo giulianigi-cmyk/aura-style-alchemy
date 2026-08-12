@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { convertCurrency, RATES_AS_OF } from "@/lib/currency-rates";
+
 import { Loader2 } from "lucide-react";
 
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
@@ -59,20 +61,13 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
   const stats = useMemo(() => {
     const priced = items.filter((it) => it.price != null && it.price > 0);
 
-    const currencyCounts = new Map<string, number>();
-    for (const it of priced) currencyCounts.set(it.currency || "EUR", (currencyCounts.get(it.currency || "EUR") ?? 0) + 1);
-    const primaryCurrency = [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "EUR";
-    const inPrimary = priced.filter((it) => (it.currency || "EUR") === primaryCurrency);
-    const excludedCount = priced.length - inPrimary.length;
-
-    const totalValue = inPrimary.reduce((s, it) => s + (it.price ?? 0), 0);
-
+    const currencyCounts = new Map<string,
     const neverWornCount = items.filter((it) => !(it.worn_count ?? 0)).length;
     const neverWornPct = items.length ? Math.round((neverWornCount / items.length) * 100) : 0;
 
     const cpwEligible = inPrimary
       .filter((it) => (it.worn_count ?? 0) > 0)
-      .map((it) => ({ item: it, cpw: (it.price ?? 0) / (it.worn_count ?? 1) }));
+            .map((it) => ({ item: it, cpw: toPrimary(it) / (it.worn_count ?? 1) }));
     const avgCpw = cpwEligible.length ? cpwEligible.reduce((s, x) => s + x.cpw, 0) / cpwEligible.length : null;
     const bestValue = [...cpwEligible].sort((a, b) => a.cpw - b.cpw).slice(0, 5);
 
@@ -81,7 +76,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
       const cat = it.category || "Uncategorized";
       const cur = byCategory.get(cat) ?? { count: 0, value: 0 };
       cur.count += 1;
-      if (inPrimary.includes(it)) cur.value += it.price ?? 0;
+            if (priced.includes(it)) cur.value += toPrimary(it);
       byCategory.set(cat, cur);
     }
     const categoryRows = [...byCategory.entries()]
@@ -94,7 +89,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
     const estimatedValue = withPurchaseDate.reduce((sum, it) => {
       const pd = new Date(`${(it as unknown as { purchase_date: string }).purchase_date}T00:00:00`);
       const ageYears = (now - pd.getTime()) / (365.25 * 24 * 3600 * 1000);
-      return sum + (it.price ?? 0) * retentionFactor(ageYears);
+            return sum + toPrimary(it) * retentionFactor(ageYears);
     }, 0);
     const estimatedValueCount = withPurchaseDate.length;
     const estimatedValueExcluded = inPrimary.length - withPurchaseDate.length;
@@ -103,7 +98,8 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
     const missingPurchaseDateCount = items.filter((it) => !(it as unknown as { purchase_date?: string | null }).purchase_date).length;
 
     return {
-      totalValue, primaryCurrency, excludedCount, pricedCount: priced.length,
+            totalValue, primaryCurrency, convertedCount, pricedCount: priced.length,
+
       neverWornCount, neverWornPct, avgCpw, bestValue, categoryRows, topCategory,
       estimatedValue, estimatedValueCount, estimatedValueExcluded,
       missingPriceCount, missingPurchaseDateCount,
@@ -175,8 +171,9 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
           <>
             <p className="font-serif text-4xl mt-1">{showValues ? fmt(stats.totalValue, stats.primaryCurrency) : "••••"}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Based on {stats.pricedCount - stats.excludedCount} of {items.length} pieces with a price on file
-              {stats.excludedCount > 0 ? ` · ${stats.excludedCount} more priced in other currencies, not included above` : ""}
+                            Based on {stats.pricedCount} of {items.length} pieces with a price on file
+              {stats.convertedCount > 0 ? ` · ${stats.convertedCount} converted from other currencies (approx., rates as of ${RATES_AS_OF})` : ""}
+
             </p>
           </>
         ) : (
