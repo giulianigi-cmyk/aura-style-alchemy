@@ -148,7 +148,9 @@ function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolIt
     const isPurpose = purposeRole?.has(it.category ?? "") ?? false;
     if (!isPurpose && (it.formality < min || it.formality > max)) return false;
     if (it.dayEvening !== "both" && it.dayEvening !== req.daySegment) return false;
-    if (!matchesSeasonLoose(it.season, season)) return false;
+    // Season is also skipped for the purpose garment: a swimsuit tagged
+    // Summer is still the right piece for a February pool day abroad.
+    if (!isPurpose && !matchesSeasonLoose(it.season, season)) return false;
     return true;
   });
 }
@@ -352,7 +354,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         supabase, userId,
         temperature: null,
         condition: null,
-        occasion: req.dressCode ?? req.label ?? "Trip",
+        occasion: occasionText(req),
         dressRules,
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
