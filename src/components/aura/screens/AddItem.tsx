@@ -247,7 +247,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (opts?.brand) setBrand(opts.brand);
     if (opts?.price) setPrice(opts.price);
     if (opts?.currency) setCurrency(opts.currency);
-    if    if (opts?.materials?.length) setMaterials(opts.materials);
+    if (opts?.materials?.length) setMaterials(opts.materials);
     if (opts?.composition?.length) setComposition(opts.composition);
     if (opts?.category) setCategory(opts.category);
     if (opts?.subcategory) setSubcategory(opts.subcategory);
