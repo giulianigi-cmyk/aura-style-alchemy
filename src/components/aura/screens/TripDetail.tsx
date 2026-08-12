@@ -148,10 +148,25 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         },
       });
       setActivities((prev) => [...prev, res.activity].sort((a, b) => a.activity_date.localeCompare(b.activity_date)));
-      setActType(""); setActDressCode(""); setActSegment("day"); setAddingActivity(false);
+      setActType(""); setActDressCode(""); setActSegment("day"); setActDate(""); setAddingActivity(false); setDuplicatingActivity(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't add activity");
     }
+  };
+
+  const startDuplicateActivity = (activity: TripActivity) => {
+    setDuplicatingActivity(activity);
+    setActDate(activity.activity_date);
+    setActType(activity.activity_type);
+    setActSegment(activity.day_segment ?? "day");
+    setActDressCode(activity.dress_code ?? "");
+    setAddingActivity(true);
+  };
+
+  const cancelActivityForm = () => {
+    setAddingActivity(false);
+    setDuplicatingActivity(null);
+    setActType(""); setActDressCode(""); setActSegment("day"); setActDate("");
   };
 
   const removeActivity = async (id: string) => {
