@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
