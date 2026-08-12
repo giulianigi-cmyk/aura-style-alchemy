@@ -43,6 +43,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [addingActivity, setAddingActivity] = useState(false);
+  const [duplicatingActivity, setDuplicatingActivity] = useState<TripActivity | null>(null);
   const [actDate, setActDate] = useState("");
   const [actType, setActType] = useState("");
   const [actSegment, setActSegment] = useState<DaySegment>("day");
