@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, thumbSrc } from "@/lib/wardrobe-image";
 import { useAuth } from "@/hooks/use-auth";
-import { OCCASIONS } from "./Planner";
+import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
 
