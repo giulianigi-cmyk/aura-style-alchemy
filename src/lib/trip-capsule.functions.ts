@@ -140,13 +140,19 @@ function versatility(it: PoolItem): number {
 
 function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolItem[] {
   const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
+  const kind = activityKind(req);
+  const purposeRole = kind === "swim" ? SWIM_ROLE : kind === "sport" ? ACTIVE_ROLE : null;
   return pool.filter((it) => {
-    if (it.formality < min || it.formality > max) return false;
+    // A pool or gym day's defining garment is exempt from the formality
+    // window: it's the right piece by purpose, not by score.
+    const isPurpose = purposeRole?.has(it.category ?? "") ?? false;
+    if (!isPurpose && (it.formality < min || it.formality > max)) return false;
     if (it.dayEvening !== "both" && it.dayEvening !== req.daySegment) return false;
     if (!matchesSeasonLoose(it.season, season)) return false;
     return true;
   });
 }
+
 
 function hasRole(items: PoolItem[], role: Set<string>): boolean {
   return items.some((it) => role.has(it.category ?? ""));
