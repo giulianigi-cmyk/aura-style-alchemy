@@ -72,6 +72,35 @@ Conferma utente (solo se il risultato resta ambiguo)
 - Confronto con modelli fashion-specific in produzione — dopo il primo benchmark
 
 ---
+D9 — Product Library come entità separata, alimentata solo da fonti
+proprie o autorizzate (mai da foto di altri utenti).
+
+Cosa: tabella `products` (o `product_entities`) con brand, categoria,
+materiale, colore, stagione, descrizione, fonte (`retailer` | `url_import` |
+`user_import` | `curated`), immagine canonica. `wardrobe_items` guadagna una
+colonna `product_id` opzionale (nullable, mai obbligatoria — coerente con D5,
+il capo si salva sempre anche senza collegamento a un prodotto).
+
+Ricerca: testuale (brand/modello/materiale/descrizione) ed eventualmente
+visiva — ma la similarità visiva si applica solo dentro la Product Library
+stessa (capo dell'utente vs. prodotti noti), mai tra i guardaroba di utenti
+diversi. Riusa la Embedding Provider Interface già definita in D1.
+
+Fonte dati: solo da retailer, URL prodotto incollato dall'utente, import
+e-commerce, o fonti curate/autorizzate. Mai dalle foto caricate da altri
+utenti — quello è un problema diverso, deliberatamente rimandato
+(vedi roadmap, "Product Knowledge Library — Livello 2").
+
+Perché: stessa logica di D2 applicata al prodotto invece che all'embedding —
+un dato di natura diversa (condiviso, riutilizzabile, non personale) merita
+un'entità propria, distinta sia da `wardrobe_items` sia da `visual_embeddings`
+personali. Separare le fonti (solo proprie/autorizzate) evita fin dall'inizio
+qualunque ambiguità su consenso o provenienza dei dati.
+
+Effetto collaterale utile: quando un capo caricato in Batch Scan trova un
+match nella Product Library, i suoi attributi possono essere precompilati
+invece di richiedere un'analisi AI completa da zero — la Library diventa
+un pezzo dell'infrastruttura di ingestion, non solo una feature di ricerca.
 
 ## Come si aggiorna questo documento
 
@@ -87,3 +116,4 @@ Solo se una decisione qui elencata si rivela sbagliata **con dati reali di produ
 
 Data: 2026-08-02
 Ultima revisione: dopo Benchmark Protocol v1
+
