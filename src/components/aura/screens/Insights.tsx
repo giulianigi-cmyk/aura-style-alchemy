@@ -58,16 +58,27 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
       });
   }, [user]);
 
-  const stats = useMemo(() => {
+    const stats = useMemo(() => {
     const priced = items.filter((it) => it.price != null && it.price > 0);
 
-    const currencyCounts = new Map<string,
+    const currencyCounts = new Map<string, number>();
+    for (const it of priced) currencyCounts.set(it.currency || "EUR", (currencyCounts.get(it.currency || "EUR") ?? 0) + 1);
+    const primaryCurrency = [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "EUR";
+    // Ogni capo prezzato viene convertito nella valuta primaria con una
+    // tabella statica e approssimativa (non live), così un guardaroba
+    // multi-valuta ha un totale onesto invece di un'esclusione arbitraria.
+    const toPrimary = (it: WardrobeItem) => convertCurrency(it.price ?? 0, it.currency || "EUR", primaryCurrency);
+    const inPrimary = priced;
+    const convertedCount = priced.filter((it) => (it.currency || "EUR") !== primaryCurrency).length;
+
+    const totalValue = priced.reduce((s, it) => s + toPrimary(it), 0);
+
     const neverWornCount = items.filter((it) => !(it.worn_count ?? 0)).length;
     const neverWornPct = items.length ? Math.round((neverWornCount / items.length) * 100) : 0;
 
     const cpwEligible = inPrimary
       .filter((it) => (it.worn_count ?? 0) > 0)
-            .map((it) => ({ item: it, cpw: toPrimary(it) / (it.worn_count ?? 1) }));
+      .map((it) => ({ item: it, cpw: toPrimary(it) / (it.worn_count ?? 1) }));
     const avgCpw = cpwEligible.length ? cpwEligible.reduce((s, x) => s + x.cpw, 0) / cpwEligible.length : null;
     const bestValue = [...cpwEligible].sort((a, b) => a.cpw - b.cpw).slice(0, 5);
 
