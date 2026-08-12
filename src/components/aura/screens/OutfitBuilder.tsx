@@ -487,6 +487,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     if (!user || !placed.length) return;
     setAddingToCalendar(true);
     try {
+      // Builder "add to calendar" has no event context: general slot.
       const { data, error } = await supabase.from("outfit_plans").upsert({
         user_id: user.id,
         date: calendarDate,
@@ -494,7 +495,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         occasion: occasion || null,
         notes: notes.trim() || name.trim() || null,
         status: "planned",
-      } as never, { onConflict: "user_id,general_date" }).select("id").single();
+        calendar_event_id: null,
+      } as never, { onConflict: resolvePlanSlot({}).onConflict }).select("id").single();
       if (error) throw error;
       const { error: eventErr } = await logWardrobeEvent({
         userId: user.id,
