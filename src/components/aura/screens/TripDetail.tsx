@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
@@ -14,6 +14,8 @@ import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, thumbSrc } from "@/lib/wardrobe-image";
 import { useAuth } from "@/hooks/use-auth";
 import { OCCASIONS } from "./Planner";
+import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
+
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
 
@@ -50,6 +52,11 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [wardrobeSigned, setWardrobeSigned] = useState<Record<string, string>>({});
   const [wardrobeLoading, setWardrobeLoading] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
+
+  const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
+  const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
+
 
   const load = () => {
     Promise.all([getTrip({ data: { tripId } }), listLocations()])
@@ -522,6 +529,28 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
       </section>
 
       <section className="px-6 mt-8">
+        {visibleCulturalNotes.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-border/60 bg-secondary/40 p-3.5 space-y-3">
+            {visibleCulturalNotes.map((note) => {
+              const country = note.countryKeywords[0].replace(/\b\w/g, (c) => c.toUpperCase());
+              return (
+                <div key={note.countryKeywords[0]} className="flex items-start gap-2.5">
+                  <Info size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
+                  <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
+                    <span className="font-medium text-foreground">Suggerimento: {country}</span>{" "}
+                    {note.message}
+                  </p>
+                  <button
+                    onClick={() => setDismissedNotes((prev) => [...prev, note.countryKeywords[0]])}
+                    aria-label="Hide note"
+                    className="h-6 w-6 rounded-full border border-border/60 flex items-center justify-center shrink-0"
+                  ><X size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-serif text-xl italic">Day-by-day outfits</h2>
           {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{outfitPlans.length} generated</p>}
@@ -532,6 +561,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
             Builds a packing capsule and a look for each activity logged above — the smallest set of pieces that covers the whole trip.
           </p>
         )}
+
 
         {outfitPlans.length > 0 && (
           <div className="space-y-3 mb-3">
