@@ -646,31 +646,63 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         )}
 
 
-        {outfitPlans.length > 0 && (
+        {activities.length > 0 && (
           <div className="space-y-3 mb-3">
-            {[...outfitPlans].sort((a, b) => a.date.localeCompare(b.date)).map((op) => (
-              <div key={op.id} className="rounded-2xl bg-secondary/40 p-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  {op.day_segment === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
-                  <p className="text-[11px] text-muted-foreground">
-                    {fmtDate(op.date)}{op.occasion ? ` · ${op.occasion}` : ""}
-                  </p>
-                </div>
-                <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                  {op.item_ids.map((id) => {
-                    const it = wardrobeItems.find((w) => w.id === id);
-                    const src = it ? thumbSrc(it, wardrobeSigned) : "";
-                    return (
-                      <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
-                        {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
+            {[...activities]
+              .sort((a, b) => a.activity_date.localeCompare(b.activity_date) || (a.day_segment ?? "day").localeCompare(b.day_segment ?? "day"))
+              .map((a) => {
+                const op = outfitPlans.find((p) => p.trip_activity_id === a.id);
+                return (
+                  <div key={a.id} className="rounded-2xl bg-secondary/40 p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      {(a.day_segment ?? "day") === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
+                      <p className="text-[11px] text-muted-foreground flex-1 min-w-0 truncate">
+                        {fmtDate(a.activity_date)} · {a.activity_type}{a.dress_code ? ` · ${a.dress_code}` : ""}
+                      </p>
+                      <button
+                        onClick={() => void regenerateActivity(a.id)}
+                        disabled={regeneratingId === a.id}
+                        aria-label={`Regenerate outfit for ${a.activity_type}`}
+                        className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90 disabled:opacity-40"
+                      >
+                        {regeneratingId === a.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      </button>
+                      {op && (
+                        <>
+                          <button
+                            onClick={() => startEditPlan(op)}
+                            aria-label={`Edit outfit for ${a.activity_type}`}
+                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+                          ><Pencil size={12} /></button>
+                          <button
+                            onClick={() => void removePlan(op.id)}
+                            aria-label={`Delete outfit for ${a.activity_type}`}
+                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+                          ><Trash2 size={12} /></button>
+                        </>
+                      )}
+                    </div>
+                    {op ? (
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                        {op.item_ids.map((id) => {
+                          const it = wardrobeItems.find((w) => w.id === id);
+                          const src = it ? thumbSrc(it, wardrobeSigned) : "";
+                          return (
+                            <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+                              {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">No outfit yet — generate one for this activity.</p>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         )}
+
 
         {genResult && (genResult.failed.length > 0 || genResult.unclassifiedExcluded > 0) && (
           <div className="mb-3 rounded-2xl bg-secondary/40 p-3 space-y-1.5">
