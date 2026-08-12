@@ -52,6 +52,11 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [wardrobeSigned, setWardrobeSigned] = useState<Record<string, string>>({});
   const [wardrobeLoading, setWardrobeLoading] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
+
+  const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
+  const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
+
 
   const load = () => {
     Promise.all([getTrip({ data: { tripId } }), listLocations()])
