@@ -485,6 +485,13 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
                   {fmtDate(a.activity_date)}{a.dress_code ? ` · ${a.dress_code}` : ""}
                 </p>
               </div>
+              <button
+                onClick={() => startDuplicateActivity(a)}
+                aria-label={`Duplicate ${a.activity_type}`}
+                className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+              >
+                <Copy size={12} />
+              </button>
               <button onClick={() => void removeActivity(a.id)} aria-label={`Remove ${a.activity_type}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                 <X size={13} />
               </button>
