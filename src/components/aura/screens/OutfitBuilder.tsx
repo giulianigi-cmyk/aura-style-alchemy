@@ -24,6 +24,7 @@ import {
 import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent } from "@/lib/wardrobe-events";
+import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 

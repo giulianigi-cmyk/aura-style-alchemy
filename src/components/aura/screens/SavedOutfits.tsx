@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
 
 type Outfit = Tables<"outfits">;
 
