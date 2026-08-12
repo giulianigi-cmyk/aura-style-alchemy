@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import type { Tables } from "@/integrations/supabase/types";
+import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
 
 type Outfit = Tables<"outfits">;
 
@@ -47,13 +48,16 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
 
   const assignToDay = async () => {
     if (!assignFor || !user) return;
+    // No calendar event / trip here: this is the day's general slot, whose
+    // unique constraint is (user_id, general_date). See outfit-plan-slot.ts.
     const { error } = await supabase.from("outfit_plans").upsert({
       user_id: user.id,
       date,
       item_ids: assignFor.item_ids,
       occasion: assignFor.occasion?.[0] ?? null,
       notes: assignFor.notes ?? assignFor.name ?? null,
-    }, { onConflict: "user_id,general_date" });
+      calendar_event_id: null,
+    }, { onConflict: resolvePlanSlot({}).onConflict });
     if (error) { toast.error(error.message); return; }
     toast.success("Added to calendar");
     setAssignFor(null);

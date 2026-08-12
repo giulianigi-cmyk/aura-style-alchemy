@@ -12,6 +12,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { PiecePicker } from "../PiecePicker";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
+import { resolvePlanSlot, validateEventSlot } from "@/lib/outfit-plan-slot";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
@@ -416,7 +417,14 @@ function DayDetail({
       calendar_event_id: activeEventId,
     };
 
-    const onConflict = activeEventId ? "calendar_event_id" : "user_id,general_date";
+    // Slot choice (and therefore the unique constraint we upsert against)
+    // is derived from whether this plan belongs to a calendar event — see
+    // src/lib/outfit-plan-slot.ts.
+    if (activeEventId) {
+      const problem = await validateEventSlot(supabase, user.id, activeEventId, date);
+      if (problem) { setSaving(false); toast.error(problem); return; }
+    }
+    const { onConflict } = resolvePlanSlot({ calendarEventId: activeEventId });
     const { data: savedPlan, error } = await supabase
       .from("outfit_plans")
       .upsert(payload as never, { onConflict })

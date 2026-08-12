@@ -17,6 +17,7 @@ import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
+import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
 type OutfitPlan = {
@@ -273,6 +274,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
   const assignToDay = async () => {
     if (!assignFor || !user) return;
+    // General slot only — assigning a saved outfit to a day isn't tied to a
+    // calendar event, so it conflicts on (user_id, general_date).
     const { data, error } = await supabase.from("outfit_plans").upsert({
       user_id: user.id,
       date: assignDate,
@@ -280,7 +283,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       occasion: assignFor.occasion?.[0] ?? null,
       notes: assignFor.notes ?? assignFor.name ?? null,
       status: "planned",
-    } as never, { onConflict: "user_id,general_date" }).select("id").single();
+      calendar_event_id: null,
+    } as never, { onConflict: resolvePlanSlot({}).onConflict }).select("id").single();
     if (error) { toast.error(error.message); return; }
     const { error: eventErr } = await logWardrobeEvent({
       userId: user.id,
