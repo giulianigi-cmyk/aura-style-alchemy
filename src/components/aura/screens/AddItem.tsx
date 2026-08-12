@@ -285,11 +285,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setStage("bgremove");
     try {
-      let bg = await removeBg({ data: { imageDataUrl: dataUrl } })
+      let bg = await removeBg({ data: { imageDataUrl: dataUrl } });
       let attempt = 1;
       while (!bg.ok && attempt < 3) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
-        bg = await removeBg({ data: { imageDataUrl: dataUrl } })
+        bg = await removeBg({ data: { imageDataUrl: dataUrl } });
         attempt++;
       }
       if (!bg.ok) toast.message("Background not removed", { description: bg.error });
