@@ -88,5 +88,3 @@ Stato
 
 Data: 2026-08-02
 Ultima revisione: dopo Benchmark Protocol v1
-
-Fammi sapere quando hai committato, ricontrollo con raw.githubusercontent.com.
