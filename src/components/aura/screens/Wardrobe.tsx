@@ -13,7 +13,7 @@ import { removeBackground } from "@/lib/ai-bgremove.functions";
 import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { trimWhiteMargins } from "@/lib/auto-crop";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
@@ -498,16 +498,27 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     return () => window.removeEventListener("aura:wardrobe-item-created", onCreated);
   }, [user?.id]);
 
+    const loadItems = useCallback((uid: string) => {
+    setLoading(true);
+    return supabase.from("wardrobe_items")
+      .select("*").eq("user_id", uid).order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("[AURA wardrobe] load error", error);
+          toast.error(`Couldn't load your closet — ${error.message}`);
+          setLoading(false);
+          return;
+        }
+        setItems((data ?? []) as WardrobeItem[]);
+        setLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     if (!user) { setItems([]); setLoading(false); return; }
-    setLoading(true);
-    supabase.from("wardrobe_items")
-      .select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error("[AURA wardrobe] load error", error); setLoading(false); return; }
-        setItems((data ?? []) as WardrobeItem[]); setLoading(false);
-      });
-  }, [user]);
+    void loadItems(user.id);
+  }, [user, loadItems]);
+
 
   useEffect(() => {
     if (!user) return;
@@ -727,18 +738,24 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         <div className="flex items-center justify-center mt-20 text-muted-foreground"><Loader2 className="animate-spin" /></div>
       ) : filtered.length === 0 ? (
         <div className="px-6 mt-16 text-center animate-fade-up">
-          <p className="font-serif text-2xl italic">
-            {gapFilter ? "All set — nothing left here" : showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
+                    <p className="font-serif text-2xl italic">
+            {gapFilter && items.length === 0 ? "Couldn't load your closet" : gapFilter ? "All set — nothing left here" : showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            {gapFilter ? `Every piece now has a ${gapFilter === "price" ? "price" : "purchase date"} on file.` : showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
+            {gapFilter && items.length === 0 ? "Something went wrong loading your pieces — try again." : gapFilter ? `Every piece now has a ${gapFilter === "price" ? "price" : "purchase date"} on file.` : showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
           </p>
-          {gapFilter ? (
+          {gapFilter && items.length === 0 ? (
+            <button
+              onClick={() => user && void loadItems(user.id)}
+              className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
+            >Retry</button>
+          ) : gapFilter ? (
             <button
               onClick={() => onClearGapFilter?.()}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
             >Back to closet</button>
           ) : items.length === 0 ? (
+
             <button
               onClick={() => go("add")}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
