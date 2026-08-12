@@ -47,6 +47,43 @@ const DEFAULT_FORMALITY_RANGE: [number, number] = [1, 3];
 const TOP_ROLE = new Set(["Tops"]);
 const BOTTOM_ROLE = new Set(["Bottoms", "Dresses", "Jumpsuits"]);
 const SHOE_ROLE = new Set(["Shoes"]);
+const SWIM_ROLE = new Set(["Swimwear"]);
+const ACTIVE_ROLE = new Set(["Activewear"]);
+
+/** Categories whose classification (formality / day_evening) is almost
+ *  never filled in, because they're bought for a single obvious purpose.
+ *  Rather than silently dropping them from the pool, they get the only
+ *  sensible reading: casual (1) and daytime. */
+const IMPLICIT_CLASSIFICATION: Record<string, { formality: number; dayEvening: string }> = {
+  Swimwear: { formality: 1, dayEvening: "day" },
+  Activewear: { formality: 1, dayEvening: "day" },
+};
+
+/** Free-text activity names are the only signal for pool/beach or sport
+ *  days, since the dress_code vocabulary has no entry for either. */
+const SWIM_KEYWORDS = ["pool", "piscina", "swim", "nuot", "beach", "spiagg", "mare", "sea", "snorkel", "lido", "water park", "acquapark"];
+const SPORT_KEYWORDS = ["yoga", "gym", "palestra", "run", "corsa", "hike", "trek", "workout", "fitness", "pilates", "bike", "cycl", "tennis", "padel", "climb"];
+
+type ActivityKind = "swim" | "sport" | null;
+
+/** Swim wins over sport when both read (a "pool workout" still needs a
+ *  swimsuit); dress_code "Sport" only ever implies sport. */
+function activityKind(req: Requirement): ActivityKind {
+  const text = `${req.label ?? ""}`.toLowerCase();
+  if (SWIM_KEYWORDS.some((k) => text.includes(k))) return "swim";
+  if (SPORT_KEYWORDS.some((k) => text.includes(k)) || req.dressCode === "Sport") return "sport";
+  return null;
+}
+
+/** The activity name must survive into the AI prompt even when a dress
+ *  code exists — "Sport" alone loses "Yoga at sunset", and the prompt
+ *  rules below key off those words. */
+function occasionText(req: Requirement): string {
+  const parts = [req.label, req.dressCode].filter(Boolean) as string[];
+  if (!parts.length) return "Trip";
+  return parts.length === 2 && parts[0] !== parts[1] ? `${parts[0]} (${parts[1]})` : parts[0];
+}
+
 
 /** Northern-hemisphere month→season, same convention as currentSeason()
  *  in wardrobe-image.ts — duplicated locally rather than imported, since
