@@ -577,9 +577,18 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+                    <button
+            onClick={() => setStep("library")}
+            className="mb-3 w-full h-14 rounded-full border border-foreground/15 bg-secondary/40 flex items-center justify-center gap-2 active:scale-[0.98] transition"
+          >
+            <Search size={16} />
+            <span className="text-xs uppercase tracking-[0.3em]">Search the AURA Library</span>
+          </button>
+
           <div className="grid grid-cols-3 gap-3">
             <button
               onClick={() => galleryRef.current?.click()}
+
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
               <ImageIcon size={16} />
@@ -601,10 +610,74 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </div>
+            ) : step === "library" ? (
+        <div className="flex-1 flex flex-col px-6 pb-10 animate-fade-in overflow-y-auto">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">AURA Library</p>
+          <p className="font-serif text-2xl italic mt-2">Search known products</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Brand, type, material or description — we'll pre-fill the details from a match.
+          </p>
+          <div className="mt-5 rounded-full bg-background border border-border flex items-center px-4 py-2.5">
+            <Search size={14} className="text-muted-foreground shrink-0" />
+            <input
+              value={libraryQuery}
+              onChange={(e) => setLibraryQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void runLibrarySearch(); }}
+              placeholder="e.g. Zara black blazer"
+              className="flex-1 ml-2 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+              autoFocus
+            />
+          </div>
+          <button
+            onClick={runLibrarySearch}
+            disabled={librarySearching || !libraryQuery.trim()}
+            className="mt-4 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 text-xs uppercase tracking-[0.3em] disabled:opacity-60"
+          >
+            {librarySearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            Search
+          </button>
+          <button
+            onClick={() => setStep("capture")}
+            className="mt-3 w-full h-10 rounded-full border border-border text-xs uppercase tracking-[0.3em]"
+          >
+            Back
+          </button>
+
+          {!librarySearching && libraryQuery.trim() && libraryResults.length === 0 && (
+            <p className="mt-6 text-xs text-muted-foreground text-center">
+              No match yet — add it manually and it'll enrich the Library for next time.
+            </p>
+          )}
+
+          <div className="mt-6 space-y-2">
+            {libraryResults.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleSelectProduct(p)}
+                disabled={libraryLoadingId !== null}
+                className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left active:scale-[0.98] transition disabled:opacity-60"
+              >
+                <div className="h-16 w-14 shrink-0 rounded-xl overflow-hidden bg-secondary/40">
+                  {p.canonical_image_url && (
+                    <img src={p.canonical_image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{[p.brand, p.category].filter(Boolean).join(" — ") || "Untitled product"}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {[p.subcategory, p.color, p.material].filter(Boolean).join(" · ") || p.description || ""}
+                  </p>
+                </div>
+                {libraryLoadingId === p.id && <Loader2 size={14} className="animate-spin shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </div>
       ) : step === "url" ? (
         <div className="flex-1 flex flex-col px-6 pb-10 animate-fade-in">
           <div className="rounded-2xl bg-secondary/40 p-6">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Import from URL</p>
+
             <p className="font-serif text-2xl italic mt-2">Paste a product link</p>
             <p className="text-xs text-muted-foreground mt-2">
               Works with most fashion stores.
