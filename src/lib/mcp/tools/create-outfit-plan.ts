@@ -18,6 +18,8 @@ export default defineTool({
       return { content: [{ type: "text", text: "Not authenticated" }], isError: true };
     }
     const sb = supabaseForUser(ctx);
+    // This tool only creates general (non-event, non-trip) plans, so the
+    // conflict target is (user_id, general_date). See src/lib/outfit-plan-slot.ts.
     const { data, error } = await sb
       .from("outfit_plans")
       .upsert({
@@ -26,6 +28,7 @@ export default defineTool({
         item_ids,
         occasion: occasion ?? null,
         notes: notes ?? null,
+        calendar_event_id: null,
       }, { onConflict: "user_id,general_date" })
       .select("id,date,item_ids,occasion,notes")
       .maybeSingle();
