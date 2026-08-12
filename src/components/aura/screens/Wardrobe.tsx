@@ -498,26 +498,35 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     return () => window.removeEventListener("aura:wardrobe-item-created", onCreated);
   }, [user?.id]);
 
-    const loadItems = useCallback((uid: string) => {
+      const loadItems = useCallback((uid: string) => {
     setLoading(true);
-    return supabase.from("wardrobe_items")
-      .select("*").eq("user_id", uid).order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("[AURA wardrobe] load error", error);
-          toast.error(`Couldn't load your closet — ${error.message}`);
-          setLoading(false);
-          return;
-        }
-        setItems((data ?? []) as WardrobeItem[]);
+    const query = supabase.from("wardrobe_items")
+      .select("*").eq("user_id", uid).order("created_at", { ascending: false });
+    const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 10000));
+    return Promise.race([query, timeout]).then((result) => {
+      if (result === "timeout") {
+        console.error("[AURA wardrobe] load timed out after 10s");
+        toast.error("Loading your closet is taking too long — check your connection and retry.");
         setLoading(false);
-      });
+        return;
+      }
+      const { data, error } = result;
+      if (error) {
+        console.error("[AURA wardrobe] load error", error);
+        toast.error(`Couldn't load your closet — ${error.message}`);
+        setLoading(false);
+        return;
+      }
+      setItems((data ?? []) as WardrobeItem[]);
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
     if (!user) { setItems([]); setLoading(false); return; }
     void loadItems(user.id);
   }, [user, loadItems]);
+
 
 
   useEffect(() => {
