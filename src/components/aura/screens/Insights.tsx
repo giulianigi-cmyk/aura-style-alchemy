@@ -10,7 +10,6 @@ import { Loader2 } from "lucide-react";
 
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
 const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${Math.round(n).toLocaleString("it-IT")}`;
-
 // Deliberately simple and stated plainly, not tuned to feel precise:
 // linear decline from 100% at purchase to a 25% floor by year 5, flat
 // after that. This is a general rule of thumb, not a market appraisal —
