@@ -29,14 +29,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type PlanSlot =
   | { kind: "event"; onConflict: "calendar_event_id" }
   | { kind: "general"; onConflict: "user_id,general_date" }
-  | { kind: "trip"; onConflict: "trip_id,date,day_segment" };
+  | { kind: "trip_activity"; onConflict: "trip_activity_id" };
 
+/**
+ * Trip plans are keyed on the activity they dress, not on (trip, date,
+ * segment): two activities in the same afternoon each deserve their own
+ * look instead of being merged into one. The old
+ * outfit_plans_one_per_trip_segment index was replaced by a partial
+ * UNIQUE(trip_activity_id).
+ */
 export function resolvePlanSlot(input: {
   calendarEventId?: string | null;
-  tripId?: string | null;
+  tripActivityId?: string | null;
 }): PlanSlot {
   if (input.calendarEventId) return { kind: "event", onConflict: "calendar_event_id" };
-  if (input.tripId) return { kind: "trip", onConflict: "trip_id,date,day_segment" };
+  if (input.tripActivityId) return { kind: "trip_activity", onConflict: "trip_activity_id" };
   return { kind: "general", onConflict: "user_id,general_date" };
 }
 

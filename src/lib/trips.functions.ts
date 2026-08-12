@@ -205,3 +205,37 @@ export const updateTripSourceLocations = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
+
+// --- Manual editing of a single trip-activity outfit -----------------
+// Trip plans are keyed on trip_activity_id, so each activity's look can
+// be tweaked or dropped on its own without touching its neighbours.
+
+const UpdatePlanItemsSchema = z.object({
+  planId: z.string().uuid(),
+  itemIds: z.array(z.string().uuid()).min(1).max(20),
+});
+
+export const updateTripOutfitPlanItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => UpdatePlanItemsSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase.from("outfit_plans")
+      .update({ item_ids: data.itemIds } as never)
+      .eq("id", data.planId).eq("user_id", userId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+const PlanIdSchema = z.object({ planId: z.string().uuid() });
+
+export const deleteTripOutfitPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => PlanIdSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase.from("outfit_plans").delete()
+      .eq("id", data.planId).eq("user_id", userId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });

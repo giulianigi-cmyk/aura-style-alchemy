@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
-import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
+import { getTrip, deleteTrip, updateTripOutfitPlanItems, deleteTripOutfitPlan, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
 import { addTripEssential, removeTripEssential, updateTripEssential, type TripEssential } from "@/lib/essentials.functions";
 import { addTripActivity, removeTripActivity, type TripActivity } from "@/lib/trip-activities.functions";
 import { addTripPackingItem, removeTripPackingItem, updateTripPackingItem, type TripPackingItem } from "@/lib/trip-packing.functions";
@@ -23,7 +23,7 @@ function fmtDate(d: string) {
   return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null };
+type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null };
 
 export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: string }) {
   const { user } = useAuth();
@@ -54,6 +54,12 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [wardrobeLoading, setWardrobeLoading] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
+  // Manual editing of a single activity's outfit — each trip plan is its
+  // own row keyed on trip_activity_id, so these never touch neighbours.
+  const [editingPlan, setEditingPlan] = useState<OutfitPlan | null>(null);
+  const [editItemIds, setEditItemIds] = useState<string[]>([]);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
   const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
   const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
@@ -249,6 +255,55 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
       setGenerating(false);
     }
   };
+
+  /** Regenerates just this activity's look — the wardrobe pool is read
+   *  live server-side, so a piece added today is immediately eligible. */
+  const regenerateActivity = async (activityId: string) => {
+    if (!trip || regeneratingId) return;
+    setRegeneratingId(activityId);
+    try {
+      const res = await generateTripCapsule({ data: { tripId: trip.id, activityIds: [activityId] } });
+      if (res.generated > 0) toast.success("Outfit regenerated");
+      else toast.error(res.failed[0]?.reason ?? "Couldn't compose a look for this activity");
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't regenerate outfit");
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  const startEditPlan = (plan: OutfitPlan) => {
+    setEditingPlan(plan);
+    setEditItemIds(plan.item_ids);
+  };
+
+  const saveEditPlan = async () => {
+    if (!editingPlan || savingPlan) return;
+    if (!editItemIds.length) { toast.error("Pick at least one piece"); return; }
+    setSavingPlan(true);
+    try {
+      await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
+      setOutfitPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? { ...p, item_ids: editItemIds } : p)));
+      setEditingPlan(null);
+      toast.success("Outfit updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update outfit");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const removePlan = async (planId: string) => {
+    setOutfitPlans((prev) => prev.filter((p) => p.id !== planId));
+    try {
+      await deleteTripOutfitPlan({ data: { planId } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't delete outfit");
+      load();
+    }
+  };
+
 
   if (loading) {
     return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
