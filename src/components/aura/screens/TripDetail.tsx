@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil } from "lucide-react";
+import { PiecePicker } from "../PiecePicker";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
-import { getTrip, deleteTrip, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
+import { getTrip, deleteTrip, updateTripOutfitPlanItems, deleteTripOutfitPlan, type Trip, type TripDestination, type TripType, type DaySegment } from "@/lib/trips.functions";
 import { addTripEssential, removeTripEssential, updateTripEssential, type TripEssential } from "@/lib/essentials.functions";
 import { addTripActivity, removeTripActivity, type TripActivity } from "@/lib/trip-activities.functions";
 import { addTripPackingItem, removeTripPackingItem, updateTripPackingItem, type TripPackingItem } from "@/lib/trip-packing.functions";
@@ -23,7 +24,7 @@ function fmtDate(d: string) {
   return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null };
+type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null };
 
 export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: string }) {
   const { user } = useAuth();
@@ -54,6 +55,12 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [wardrobeLoading, setWardrobeLoading] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [dismissedNotes, setDismissedNotes] = useState<string[]>([]);
+  // Manual editing of a single activity's outfit — each trip plan is its
+  // own row keyed on trip_activity_id, so these never touch neighbours.
+  const [editingPlan, setEditingPlan] = useState<OutfitPlan | null>(null);
+  const [editItemIds, setEditItemIds] = useState<string[]>([]);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
 
   const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
   const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
@@ -249,6 +256,55 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
       setGenerating(false);
     }
   };
+
+  /** Regenerates just this activity's look — the wardrobe pool is read
+   *  live server-side, so a piece added today is immediately eligible. */
+  const regenerateActivity = async (activityId: string) => {
+    if (!trip || regeneratingId) return;
+    setRegeneratingId(activityId);
+    try {
+      const res = await generateTripCapsule({ data: { tripId: trip.id, activityIds: [activityId] } });
+      if (res.generated > 0) toast.success("Outfit regenerated");
+      else toast.error(res.failed[0]?.reason ?? "Couldn't compose a look for this activity");
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't regenerate outfit");
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  const startEditPlan = (plan: OutfitPlan) => {
+    setEditingPlan(plan);
+    setEditItemIds(plan.item_ids);
+  };
+
+  const saveEditPlan = async () => {
+    if (!editingPlan || savingPlan) return;
+    if (!editItemIds.length) { toast.error("Pick at least one piece"); return; }
+    setSavingPlan(true);
+    try {
+      await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
+      setOutfitPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? { ...p, item_ids: editItemIds } : p)));
+      setEditingPlan(null);
+      toast.success("Outfit updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update outfit");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const removePlan = async (planId: string) => {
+    setOutfitPlans((prev) => prev.filter((p) => p.id !== planId));
+    try {
+      await deleteTripOutfitPlan({ data: { planId } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't delete outfit");
+      load();
+    }
+  };
+
 
   if (loading) {
     return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
@@ -463,6 +519,39 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         </div>
       )}
 
+      {editingPlan && (
+        <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Edit outfit</p>
+              <p className="font-serif text-xl italic truncate">
+                {activities.find((a) => a.id === editingPlan.trip_activity_id)?.activity_type ?? editingPlan.occasion ?? fmtDate(editingPlan.date)}
+              </p>
+            </div>
+            <button onClick={() => setEditingPlan(null)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center shrink-0"><X size={16} /></button>
+          </div>
+          <PiecePicker
+            className="flex-1 overflow-y-auto no-scrollbar px-5 py-4"
+            items={wardrobeItems}
+            signed={wardrobeSigned}
+            selectedIds={editItemIds}
+            onToggle={(id) => setEditItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+            loading={wardrobeLoading}
+            emptyHint="No pieces in your wardrobe yet."
+          />
+          <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
+            <button
+              onClick={() => void saveEditPlan()}
+              disabled={savingPlan}
+              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              {savingPlan ? <Loader2 size={14} className="animate-spin" /> : null}
+              Save {editItemIds.length} piece{editItemIds.length === 1 ? "" : "s"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <section className="px-6 mt-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-serif text-xl italic flex items-center gap-1.5"><CalendarDays size={16} /> Activities</h2>
@@ -591,31 +680,63 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         )}
 
 
-        {outfitPlans.length > 0 && (
+        {activities.length > 0 && (
           <div className="space-y-3 mb-3">
-            {[...outfitPlans].sort((a, b) => a.date.localeCompare(b.date)).map((op) => (
-              <div key={op.id} className="rounded-2xl bg-secondary/40 p-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  {op.day_segment === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
-                  <p className="text-[11px] text-muted-foreground">
-                    {fmtDate(op.date)}{op.occasion ? ` · ${op.occasion}` : ""}
-                  </p>
-                </div>
-                <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                  {op.item_ids.map((id) => {
-                    const it = wardrobeItems.find((w) => w.id === id);
-                    const src = it ? thumbSrc(it, wardrobeSigned) : "";
-                    return (
-                      <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
-                        {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
+            {[...activities]
+              .sort((a, b) => a.activity_date.localeCompare(b.activity_date) || (a.day_segment ?? "day").localeCompare(b.day_segment ?? "day"))
+              .map((a) => {
+                const op = outfitPlans.find((p) => p.trip_activity_id === a.id);
+                return (
+                  <div key={a.id} className="rounded-2xl bg-secondary/40 p-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      {(a.day_segment ?? "day") === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
+                      <p className="text-[11px] text-muted-foreground flex-1 min-w-0 truncate">
+                        {fmtDate(a.activity_date)} · {a.activity_type}{a.dress_code ? ` · ${a.dress_code}` : ""}
+                      </p>
+                      <button
+                        onClick={() => void regenerateActivity(a.id)}
+                        disabled={regeneratingId === a.id}
+                        aria-label={`Regenerate outfit for ${a.activity_type}`}
+                        className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90 disabled:opacity-40"
+                      >
+                        {regeneratingId === a.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      </button>
+                      {op && (
+                        <>
+                          <button
+                            onClick={() => startEditPlan(op)}
+                            aria-label={`Edit outfit for ${a.activity_type}`}
+                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+                          ><Pencil size={12} /></button>
+                          <button
+                            onClick={() => void removePlan(op.id)}
+                            aria-label={`Delete outfit for ${a.activity_type}`}
+                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+                          ><Trash2 size={12} /></button>
+                        </>
+                      )}
+                    </div>
+                    {op ? (
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                        {op.item_ids.map((id) => {
+                          const it = wardrobeItems.find((w) => w.id === id);
+                          const src = it ? thumbSrc(it, wardrobeSigned) : "";
+                          return (
+                            <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+                              {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">No outfit yet — generate one for this activity.</p>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         )}
+
 
         {genResult && (genResult.failed.length > 0 || genResult.unclassifiedExcluded > 0) && (
           <div className="mb-3 rounded-2xl bg-secondary/40 p-3 space-y-1.5">

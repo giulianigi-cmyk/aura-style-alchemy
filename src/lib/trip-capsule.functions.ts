@@ -3,9 +3,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
 import { dressPreferencesToPrompt, type DressPreferences } from "./dress-preferences";
+import { resolvePlanSlot } from "./outfit-plan-slot";
 
 const InputSchema = z.object({
   tripId: z.string().uuid(),
+  /** When present, only these activities are (re)generated, and an
+   *  existing plan for them is replaced instead of skipped. */
+  activityIds: z.array(z.string().uuid()).optional(),
 });
 
 // ============================================================================
@@ -122,6 +126,7 @@ type PoolItem = {
 };
 
 type Requirement = {
+  activityId: string;
   date: string;
   daySegment: "day" | "evening";
   dressCode: string | null;
@@ -231,7 +236,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         (supabase.from("profiles" as never) as any).select("dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle(),
         (supabase.from("trip_source_locations" as never) as any).select("location_id").eq("trip_id", data.tripId),
         (supabase.from("trip_day_activities" as never) as any).select("*").eq("trip_id", data.tripId).order("activity_date"),
-        (supabase.from("outfit_plans" as never) as any).select("date, day_segment").eq("trip_id", data.tripId),
+        (supabase.from("outfit_plans" as never) as any).select("trip_activity_id").eq("trip_id", data.tripId),
         supabase.from("wardrobe_items").select("*").eq("user_id", userId).eq("archived", false),
       ]);
 
@@ -239,41 +244,40 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const dressRules = dressPreferencesToPrompt(profile?.dress_preferences ?? null);
     const sourceLocationIds = ((sourceLocRows ?? []) as { location_id: string }[]).map((r) => r.location_id);
 
-    // --- Build requirements from logged activities. Two activities on
-    // the same date+segment collide on the DB's own unique constraint
-    // (outfit_plans_one_per_trip_segment), so they're merged here first:
-    // the more demanding dress code wins, since one outfit has to serve
-    // both. A date with zero logged activities gets no requirement at
-    // all — this run only acts on what's actually been logged. ---
+    // --- One requirement per logged activity: since outfit_plans is now
+    // keyed on trip_activity_id (partial UNIQUE), two activities in the
+    // same afternoon each get their own look instead of being merged
+    // into a single "A + B" plan. A date with zero logged activities
+    // still gets no requirement at all. ---
     const activities = (activityRows ?? []) as {
-      activity_date: string; activity_type: string; day_segment: string | null; dress_code: string | null;
+      id: string; activity_date: string; activity_type: string; day_segment: string | null; dress_code: string | null;
     }[];
-    const reqMap = new Map<string, Requirement>();
-    for (const a of activities) {
-      const seg: "day" | "evening" = a.day_segment === "evening" ? "evening" : "day";
-      const key = `${a.activity_date}|${seg}`;
-      const existing = reqMap.get(key);
-      if (!existing) {
-        reqMap.set(key, { date: a.activity_date, daySegment: seg, dressCode: a.dress_code, label: a.activity_type });
-      } else {
-        const existingMax = existing.dressCode ? (FORMALITY_RANGE[existing.dressCode] ?? DEFAULT_FORMALITY_RANGE)[1] : 0;
-        const candidateMax = a.dress_code ? (FORMALITY_RANGE[a.dress_code] ?? DEFAULT_FORMALITY_RANGE)[1] : 0;
-        if (candidateMax > existingMax) existing.dressCode = a.dress_code;
-        existing.label = `${existing.label} + ${a.activity_type}`;
-      }
-    }
+    const targeted = data.activityIds?.length ? new Set(data.activityIds) : null;
+    const allRequirements: Requirement[] = activities
+      .filter((a) => !targeted || targeted.has(a.id))
+      .map((a) => ({
+        activityId: a.id,
+        date: a.activity_date,
+        daySegment: a.day_segment === "evening" ? "evening" : "day",
+        dressCode: a.dress_code,
+        label: a.activity_type,
+      }));
 
-    const existingKeys = new Set(
-      ((existingPlans ?? []) as { date: string; day_segment: string | null }[])
-        .map((p) => `${p.date}|${p.day_segment ?? "day"}`),
+    // Targeted runs mean "regenerate this one" — the existing plan is
+    // overwritten by the upsert rather than skipped.
+    const plannedActivityIds = new Set(
+      ((existingPlans ?? []) as { trip_activity_id: string | null }[])
+        .map((p) => p.trip_activity_id)
+        .filter((id): id is string => !!id),
     );
-    const allRequirements = Array.from(reqMap.values());
-    const requirements = allRequirements.filter((r) => !existingKeys.has(`${r.date}|${r.daySegment}`));
+    const requirements = targeted
+      ? allRequirements
+      : allRequirements.filter((r) => !plannedActivityIds.has(r.activityId));
     const skippedExisting = allRequirements.length - requirements.length;
 
     // Credit- and cost-conscious cap — a trip logging more than 30
-    // day/evening slots in one go is not the common case, and this keeps
-    // a single run from firing an unbounded number of AI calls.
+    // activities in one go is not the common case, and this keeps a
+    // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
     if (capped.length === 0) {
@@ -374,13 +378,14 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       const { error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
         trip_id: data.tripId,
+        trip_activity_id: req.activityId,
         date: req.date,
         day_segment: req.daySegment,
         item_ids: result.item_ids,
-        occasion: req.dressCode ?? req.label ?? null,
+        occasion: req.label ?? req.dressCode ?? null,
         notes: result.explanation || null,
         status: "planned",
-      } as never, { onConflict: "trip_id,date,day_segment" });
+      } as never, { onConflict: resolvePlanSlot({ tripActivityId: req.activityId }).onConflict });
 
       if (insErr) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: insErr.message });

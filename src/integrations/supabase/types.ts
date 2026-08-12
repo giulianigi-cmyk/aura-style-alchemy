@@ -463,6 +463,7 @@ export type Database = {
           notes: string | null
           occasion: string | null
           status: string
+          trip_activity_id: string | null
           trip_id: string | null
           user_id: string
           weather_condition: string | null
@@ -479,6 +480,7 @@ export type Database = {
           notes?: string | null
           occasion?: string | null
           status?: string
+          trip_activity_id?: string | null
           trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
@@ -495,6 +497,7 @@ export type Database = {
           notes?: string | null
           occasion?: string | null
           status?: string
+          trip_activity_id?: string | null
           trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
@@ -506,6 +509,13 @@ export type Database = {
             columns: ["calendar_event_id"]
             isOneToOne: true
             referencedRelation: "calendar_events_cache"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outfit_plans_trip_activity_id_fkey"
+            columns: ["trip_activity_id"]
+            isOneToOne: false
+            referencedRelation: "trip_day_activities"
             referencedColumns: ["id"]
           },
           {
