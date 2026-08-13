@@ -711,6 +711,7 @@ export type Database = {
           profile_image: string | null
           season: string | null
           setup_complete: boolean
+          share_wardrobe_to_library: boolean
           sizes: Json | null
           style_boldness: string | null
           style_preferences: string[] | null
@@ -745,6 +746,7 @@ export type Database = {
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
+          share_wardrobe_to_library?: boolean
           sizes?: Json | null
           style_boldness?: string | null
           style_preferences?: string[] | null
@@ -779,6 +781,7 @@ export type Database = {
           profile_image?: string | null
           season?: string | null
           setup_complete?: boolean
+          share_wardrobe_to_library?: boolean
           sizes?: Json | null
           style_boldness?: string | null
           style_preferences?: string[] | null
@@ -955,6 +958,116 @@ export type Database = {
             columns: ["scan_id"]
             isOneToOne: false
             referencedRelation: "batch_scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shared_library_items: {
+        Row: {
+          brand: string | null
+          category: string | null
+          closure: string | null
+          color: string | null
+          colors: string[]
+          created_at: string
+          currency: string | null
+          day_evening: string | null
+          fit: string | null
+          formality: number | null
+          gender: string | null
+          heel_height: string | null
+          id: string
+          image_url: string
+          length: string | null
+          material: string[]
+          occasion: string | null
+          owner_hash: string
+          price: number | null
+          product_id: string | null
+          season: string | null
+          size: string | null
+          sleeve_length: string | null
+          source_image_path: string | null
+          source_item_id: string
+          style: string | null
+          style_tags: string[]
+          subcategory: string | null
+          thumbnail_path: string | null
+          toe_shape: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          closure?: string | null
+          color?: string | null
+          colors?: string[]
+          created_at?: string
+          currency?: string | null
+          day_evening?: string | null
+          fit?: string | null
+          formality?: number | null
+          gender?: string | null
+          heel_height?: string | null
+          id?: string
+          image_url: string
+          length?: string | null
+          material?: string[]
+          occasion?: string | null
+          owner_hash: string
+          price?: number | null
+          product_id?: string | null
+          season?: string | null
+          size?: string | null
+          sleeve_length?: string | null
+          source_image_path?: string | null
+          source_item_id: string
+          style?: string | null
+          style_tags?: string[]
+          subcategory?: string | null
+          thumbnail_path?: string | null
+          toe_shape?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          closure?: string | null
+          color?: string | null
+          colors?: string[]
+          created_at?: string
+          currency?: string | null
+          day_evening?: string | null
+          fit?: string | null
+          formality?: number | null
+          gender?: string | null
+          heel_height?: string | null
+          id?: string
+          image_url?: string
+          length?: string | null
+          material?: string[]
+          occasion?: string | null
+          owner_hash?: string
+          price?: number | null
+          product_id?: string | null
+          season?: string | null
+          size?: string | null
+          sleeve_length?: string | null
+          source_image_path?: string | null
+          source_item_id?: string
+          style?: string | null
+          style_tags?: string[]
+          subcategory?: string | null
+          thumbnail_path?: string | null
+          toe_shape?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_library_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1699,6 +1812,7 @@ export type Database = {
           username: string
         }[]
       }
+      shared_library_owner_hash: { Args: { _user_id: string }; Returns: string }
       unfriend: { Args: { _other: string }; Returns: undefined }
       upsert_style_memory: {
         Args: {

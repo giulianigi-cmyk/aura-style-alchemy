@@ -14,6 +14,8 @@ import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.fu
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
+import { searchSharedLibrary, syncMySharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
+
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
 import { trimFileMargins } from "@/lib/auto-crop";
@@ -194,7 +196,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [importReferer, setImportReferer] = useState<string>("");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryResults, setLibraryResults] = useState<ProductLibraryItem[]>([]);
+  const [sharedResults, setSharedResults] = useState<SharedLibraryItem[]>([]);
   const [librarySearching, setLibrarySearching] = useState(false);
+
   const [libraryLoadingId, setLibraryLoadingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
@@ -384,17 +388,56 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     }
   };
 
+  /** Importa un capo dalla libreria condivisa: crea una riga INDIPENDENTE nel
+   *  guardaroba dell'importatore. Copia solo i campi prodotto; i campi
+   *  personali (worn_count, last_worn, purchase_date, location_id) restano ai
+   *  default. Price/size arrivano pre-compilati ma restano editabili. */
+  const handleSelectShared = async (s: SharedLibraryItem) => {
+    if (libraryLoadingId) return;
+    if (!s.signed_url) { toast.error("This entry has no photo available."); return; }
+    setLibraryLoadingId(s.id);
+    try {
+      const res = await downloadImage({ data: { url: s.signed_url } });
+      if (!res.ok) { toast.error(res.error); return; }
+      const rawF = await dataUrlToFile(res.imageDataUrl, `shared-${Date.now()}.jpg`);
+      const f = await normalizeForPipeline(rawF);
+      await runPipeline(f, {
+        brand: s.brand || undefined,
+        source: "library",
+        category: s.category || undefined,
+        subcategory: s.subcategory || undefined,
+        colors: s.colors?.length ? s.colors : (s.color ? [s.color] : undefined),
+        season: s.season || undefined,
+        materials: s.material?.length ? s.material : undefined,
+        price: s.price != null ? String(s.price) : undefined,
+        currency: s.currency || undefined,
+      });
+      if (s.size) setSize(s.size);
+      toast.message("Loaded from the shared library", { description: "Details are yours to edit before saving." });
+    } catch (e) {
+      console.error("[AURA shared-library] select failed", e);
+      toast.error("Could not load that piece");
+    } finally {
+      setLibraryLoadingId(null);
+    }
+  };
+
   const runLibrarySearch = async () => {
     const q = libraryQuery.trim();
-    if (!q) { setLibraryResults([]); return; }
+    if (!q) { setLibraryResults([]); setSharedResults([]); return; }
     setLibrarySearching(true);
     try {
-      const results = await searchProductLibrary(q);
-      setLibraryResults(results);
+      const [products, shared] = await Promise.all([
+        searchProductLibrary(q),
+        searchSharedLibrary({ data: { q } }).catch(() => [] as SharedLibraryItem[]),
+      ]);
+      setLibraryResults(products);
+      setSharedResults(shared);
     } finally {
       setLibrarySearching(false);
     }
   };
+
 
   const useAltImage = async (url: string) => {
     if (altLoading) return;
@@ -518,6 +561,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (insErr) throw insErr;
 
       toast.success("Added to your closet");
+      void syncMySharedLibrary().catch(() => {});
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
@@ -642,13 +686,51 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             Back
           </button>
 
-          {!librarySearching && libraryQuery.trim() && libraryResults.length === 0 && (
+          {!librarySearching && libraryQuery.trim() && libraryResults.length === 0 && sharedResults.length === 0 && (
             <p className="mt-6 text-xs text-muted-foreground text-center">
               No match yet — add it manually and it'll enrich the Library for next time.
             </p>
           )}
 
-          <div className="mt-6 space-y-2">
+          {sharedResults.length > 0 && (
+            <>
+              <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                Shared closet · anonymous
+              </p>
+              <div className="mt-3 space-y-2">
+                {sharedResults.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSelectShared(s)}
+                    disabled={libraryLoadingId !== null}
+                    className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left active:scale-[0.98] transition disabled:opacity-60"
+                  >
+                    <div className="h-16 w-14 shrink-0 rounded-xl overflow-hidden bg-secondary/40">
+                      {s.signed_url && (
+                        <img src={s.signed_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">
+                        {[s.brand, s.category].filter(Boolean).join(" — ") || "Shared piece"}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {[s.subcategory, s.colors?.[0] ?? s.color, s.size, s.price != null ? `${s.price} ${s.currency ?? ""}`.trim() : null]
+                          .filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    {libraryLoadingId === s.id && <Loader2 size={14} className="animate-spin shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {libraryResults.length > 0 && (
+            <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">AURA Library</p>
+          )}
+          <div className="mt-3 space-y-2">
+
             {libraryResults.map((p) => (
               <button
                 key={p.id}
