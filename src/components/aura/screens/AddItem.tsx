@@ -605,7 +605,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               className="rounded-2xl border border-border bg-card py-4 flex flex-col items-center gap-1.5 active:scale-95 transition"
             >
               <LinkIcon size={16} />
-              <span className="text-[10px] uppercase tracking-widest">From URL</span>
+              <span className="text-[10px] uppercase tracking-widest">Paste product link</span>
             </button>
           </div>
         </div>

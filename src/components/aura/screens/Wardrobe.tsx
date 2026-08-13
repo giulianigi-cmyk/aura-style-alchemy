@@ -4,7 +4,9 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2, Archive, ArchiveRestore, Check } from "lucide-react";
+import { AddSourceSheet } from "@/components/aura/AddSourceSheet";
+
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Wand2, Archive, ArchiveRestore, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
@@ -48,7 +50,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
     const [items, setItems] = useState<WardrobeItem[]>([]);
-  const [scanMenuOpen, setScanMenuOpen] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState("All");
@@ -590,20 +592,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           </button>
 
           <button
-            onClick={() => setScanMenuOpen(true)}
-            aria-label="Scan photos"
-            className="h-12 px-4 rounded-full border border-border flex items-center gap-1.5 active:scale-90 transition"
-          >
-            <Camera size={16} />
-            <span className="text-[10px] uppercase tracking-widest">Scan</span>
-          </button>
-
-          <button
-            onClick={() => go("add")}
+            onClick={() => setAddSheetOpen(true)}
+            aria-label="Add pieces"
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
           >
             <Plus size={20} />
           </button>
+
         </div>
       </header>
 
@@ -629,39 +624,12 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         </button>
       </div>
 
-      {scanMenuOpen && (
-        <div
-          className="fixed inset-0 z-[60] bg-background/80 backdrop-blur flex items-end"
-          onClick={() => setScanMenuOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-2"
-          >
-            <p className="font-serif italic text-lg mb-1">Scan photos</p>
-            <button
-              onClick={() => { setScanMenuOpen(false); go("outfit-scan"); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
-            >
-              <Camera size={18} />
-              <div>
-                <p className="text-sm font-medium">Scan one outfit</p>
-                <p className="text-xs text-muted-foreground">One photo, multiple items detected at once</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setScanMenuOpen(false); go("batch-scan"); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
-            >
-              <Images size={18} />
-              <div>
-                <p className="text-sm font-medium">Batch scan photos</p>
-                <p className="text-xs text-muted-foreground">Up to 150 photos at once, processed in the background</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
+      <AddSourceSheet
+        open={addSheetOpen}
+        onClose={() => setAddSheetOpen(false)}
+        onChoose={(choice) => { setAddSheetOpen(false); go(choice); }}
+      />
+
 
 
       {/* Weather / season banner */}
