@@ -14,6 +14,8 @@ import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.fu
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
+import { searchSharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
+
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
 import { trimFileMargins } from "@/lib/auto-crop";
