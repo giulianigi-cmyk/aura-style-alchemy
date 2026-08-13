@@ -48,7 +48,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
     const [items, setItems] = useState<WardrobeItem[]>([]);
-  const [scanMenuOpen, setScanMenuOpen] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState("All");
