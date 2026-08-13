@@ -176,6 +176,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       setDetail(updated);
       setEditing(false);
       toast.success("Item updated");
+      void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] update", e);
       toast.error(e instanceof Error ? e.message : "Update failed");
@@ -260,6 +261,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       }
 
       toast.success("Background removed");
+      void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] bg removal failed", e);
       toast.error(e instanceof Error ? e.message : "Background removal failed");
@@ -307,6 +309,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       }
 
       toast.success("Crop updated");
+      void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] manual crop save failed", e);
       toast.error(e instanceof Error ? e.message : "Couldn't save that crop");
@@ -377,6 +380,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       }
       setItems((prev) => prev.filter((it) => it.id !== detail.id));
       toast.success("Item deleted");
+      void syncMySharedLibrary().catch(() => {});
       setConfirmDelete(false);
       setDetail(null);
     } catch (e) {
@@ -392,6 +396,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     if (error) { toast.error(error.message); return; }
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, archived } as WardrobeItem : it)));
     setDetail((d) => (d && d.id === item.id ? ({ ...d, archived } as WardrobeItem) : d));
+    void syncMySharedLibrary().catch(() => {});
     toast.success(archived ? "Archived — hidden from styling suggestions until you restore it" : "Restored to your active closet");
   };
 
