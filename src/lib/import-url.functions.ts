@@ -20,6 +20,8 @@ const SIGNIN_FOR_FALLBACK_MSG =
   "Sign in to use enhanced import on this site.";
 const FIRECRAWL_FAILED_MSG =
   "Enhanced import couldn't read this site right now. Try again in a minute or add the item manually.";
+const UNSCRAPABLE_MSG =
+  "This site's protection is too strong for automatic import — add this piece's photo and details manually.";
 
 const TRACKING_PARAM_RE =
   /^(utm_|gclid$|gbraid$|wbraid$|gad_|fbclid$|msclkid$|mc_|dplink$|chn$|cmp$|slink_id$|src$|tarea$|tar$|ag$|ptyp$|feed_num$)/i;
@@ -378,8 +380,15 @@ function pickBestImage(candidates: string[], productTokens: string[]): string | 
   return scored[0]?.u ?? null;
 }
 
-type FallbackResult = { html: string | null; errored: boolean; debug?: string };
+type FallbackResult = { html: string | null; errored: boolean; debug?: string; pageBlocked?: boolean };
 type FallbackScraper = (url: string) => Promise<FallbackResult>;
+
+// A real product page is typically tens to hundreds of KB. A page this
+// short returned alongside a 401/403/429/503 status is almost always an
+// anti-bot challenge or "access denied" page, not real content — no
+// amount of extraction (pattern-based or AI) can find a product in a
+// page that was never actually served.
+const SUSPICIOUSLY_SHORT_HTML = 15000;
 
 const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
@@ -405,7 +414,7 @@ const firecrawlScrape: FallbackScraper = async (url) => {
     if (!r.ok) {
       const body = await r.text().catch(() => "");
       console.warn("[AURA import-url] firecrawl non-ok", r.status, body.slice(0, 300));
-      return { html: null, errored: true, debug: `http-${r.status}:${body.slice(0, 150)}` };
+      return { html: null, errored: true, debug: `http-${r.status}:${body.slice(0, 150)}`, pageBlocked: RETRY_STATUSES.has(r.status) };
     }
     const data = await r.json() as {
       success?: boolean;
@@ -413,12 +422,14 @@ const firecrawlScrape: FallbackScraper = async (url) => {
       data?: { rawHtml?: string; html?: string; metadata?: { statusCode?: number } };
     };
     const html = data.data?.rawHtml || data.data?.html || null;
-    const debug = `success=${data.success} error=${data.error ?? "none"} pageStatus=${data.data?.metadata?.statusCode ?? "n/a"} htmlLen=${html?.length ?? 0}`;
+    const pageStatus = data.data?.metadata?.statusCode;
+    const pageBlocked = (pageStatus != null && RETRY_STATUSES.has(pageStatus)) || (html != null && html.length < SUSPICIOUSLY_SHORT_HTML);
+    const debug = `success=${data.success} error=${data.error ?? "none"} pageStatus=${pageStatus ?? "n/a"} htmlLen=${html?.length ?? 0}`;
     console.log("[AURA import-url] firecrawl response", debug);
     if (data.success === false) {
-      return { html: null, errored: true, debug };
+      return { html: null, errored: true, debug, pageBlocked };
     }
-    return { html, errored: false, debug };
+    return { html, errored: false, debug, pageBlocked };
   } catch (e) {
     const debug = `exception:${String(e).slice(0, 150)}`;
     console.warn("[AURA import-url] firecrawl failed", e);
@@ -734,6 +745,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   let html: string | null = null;
   let blocked = false;
   let usedFallback = false;
+  let pageBlocked = false;
 
   if (forceFallback) {
     if (!hasFallback) return { ok: false, error: FIRECRAWL_MISSING_MSG };
@@ -745,6 +757,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     if (fb.errored && !fb.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
     html = fb.html;
     usedFallback = true;
+    pageBlocked = Boolean(fb.pageBlocked);
   } else {
     const direct = await directFetch(target);
     html = direct.html;
@@ -765,6 +778,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     const fc = await fallbackScraper(target.toString());
     if (fc.errored && !fc.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
     if (fc.html) extracted = extractFromHtml(fc.html, target);
+    pageBlocked = Boolean(fc.pageBlocked);
   }
 
     if (!extracted.imageUrl && html) {
@@ -781,7 +795,9 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     }
   }
 
-  if (!extracted.imageUrl) return { ok: false, error: "No product image found on that page." };
+  if (!extracted.imageUrl) {
+    return { ok: false, error: pageBlocked ? UNSCRAPABLE_MSG : "No product image found on that page." };
+  }
   const imageUrl = new URL(extracted.imageUrl, target).toString();
   const candidates = Array.from(new Set([
     imageUrl,
@@ -803,6 +819,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     let blocked = false;
     let usedFallback = false;
     let fbDebugMsg: string | undefined; // TEMP diagnostica — rimuovere una volta trovata la causa
+    let pageBlocked = false;
 
     if (forceFallback) {
       if (!hasFallback) return { ok: false as const, error: FIRECRAWL_MISSING_MSG };
@@ -821,6 +838,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       html = fb.html;
       usedFallback = true;
       fbDebugMsg = fb.debug;
+      pageBlocked = Boolean(fb.pageBlocked);
     } else {
       const direct = await directFetch(target);
       html = direct.html;
@@ -857,6 +875,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
         extracted = extractFromHtml(fc.html, target);
       }
       fbDebugMsg = fc.debug;
+      pageBlocked = Boolean(fc.pageBlocked);
     }
 
         let aiMeta: { brand: string; title: string; priceValue: number | null; priceCurrency: string | null } | null = null;
@@ -879,8 +898,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     if (!extracted.imageUrl) {
       return {
         ok: false as const,
-        error: blocked
-          ? `This site blocks automated imports. Try a different URL or add the item manually. [DEBUG: ${fbDebugMsg ?? "n/a"}]`
+        error: pageBlocked
+          ? UNSCRAPABLE_MSG
           : `No product image found on that page. [DEBUG: ${fbDebugMsg ?? "n/a"}]`,
       };
     }
@@ -927,4 +946,3 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       usedFallback,
     };
   });
-
