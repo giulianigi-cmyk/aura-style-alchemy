@@ -218,6 +218,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [filterBrand, setFilterBrand] = useState("");
   const [filterSeason, setFilterSeason] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
@@ -449,7 +450,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       ]);
       setLibraryResults(products);
       setSharedResults(shared);
-      setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand("");
+      setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand(""); setFilterSeason("");
     } finally {
       setLibrarySearching(false);
     }
@@ -469,7 +470,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       const mat = materialOf(it);
       if (mat) mats.add(mat);
       const br = (it as any).brand as string | null;
-     if (br) brands.add(br);
+      if (br) brands.add(br);
       const se = (it as any).season as string | null;
       if (se) seasonsSet.add(se);
     }
@@ -612,7 +613,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           .from("wardrobe_items").insert(payload as never).select("*").single());
       }
       if (insErr) throw insErr;
-
       toast.success("Added to your closet");
       void syncMySharedLibrary().catch(() => {});
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
