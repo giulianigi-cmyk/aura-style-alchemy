@@ -79,4 +79,3 @@ export const searchSharedLibrary = createServerFn({ method: "POST" })
     const map = new Map((signed ?? []).map((s) => [s.path ?? "", s.signedUrl]));
     return list.map((r) => ({ ...r, signed_url: map.get(r.image_url) ?? null }));
   });
-  });
