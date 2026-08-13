@@ -1,9 +1,11 @@
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
+import { generateText } from "ai";
 import { z } from "zod";
 import { getBrandFromUrl } from "./brand-domains";
 import { fetchImageAsDataUrl } from "./fetch-image";
 import { checkPublicUrl, safeFetch } from "./safe-url";
+import { parseAiJson } from "./ai-json";
 
 const InputSchema = z.object({
   url: z.string().url().refine((v) => checkPublicUrl(v) === null, "That address is not allowed."),
@@ -638,6 +640,74 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
 
   return { brand, title, price, priceValue, priceCurrency, ...extractMaterials(html, extracted.productNode) };
 }
+const AiExtractionSchema = z.object({
+  imageUrl: z.string(),
+  brand: z.string(),
+  title: z.string(),
+  priceValue: z.number().nullable(),
+  priceCurrency: z.string().nullable(),
+});
+
+/**
+ * Strips a page down to the parts an AI extraction actually needs —
+ * image URLs, meta tags and visible text — dropping scripts, styles and
+ * inline SVGs, which are pure token cost with zero extraction value.
+ * Keeps the request cheap and predictable regardless of page size.
+ */
+function reduceHtmlForAi(html: string): string {
+  const stripped = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+  return stripped.slice(0, 60000);
+}
+
+/**
+ * Last-resort extraction step: only runs when the fixed JSON-LD / og-image
+ * / DOM-heuristic extraction above already failed on a page we DID manage
+ * to fetch (directly or via Firecrawl). Instead of hand-writing yet
+ * another site-specific pattern, this asks a model to read the page like
+ * a person would — which generalizes to any site's markup, not just the
+ * one that happened to fail today. Cheap (page text in, a few fields out)
+ * and only runs on the failure path, never on a normal successful import.
+ */
+async function extractViaAi(
+  html: string,
+  target: URL,
+): Promise<{ imageUrl: string; brand: string; title: string; priceValue: number | null; priceCurrency: string | null } | null> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return null;
+  try {
+    const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
+    const gateway = createLovableAiGatewayProvider(key);
+    const model = gateway("google/gemini-2.5-flash");
+
+    const reduced = reduceHtmlForAi(html);
+    const prompt = [
+      `This is the HTML of a fashion e-commerce product page (${target.toString()}). Find the single MAIN product photo — not a related/recommended item, not a logo, not an icon. Prefer a large, high-resolution image over a thumbnail.`,
+      "Also extract, if present on the page: brand name, product title, and price (as a plain number, plus its ISO currency code, e.g. EUR/USD/GBP).",
+      "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
+      '{"imageUrl": "", "brand": "", "title": "", "priceValue": null, "priceCurrency": null}',
+      "imageUrl must be copied verbatim from an actual src/srcset/data-src attribute in the HTML below — never invent or guess a URL. If genuinely no product image can be found, return an empty string for imageUrl.",
+      "",
+      "HTML:",
+      reduced,
+    ].join("\n");
+
+    const { text } = await generateText({
+      model,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const parsed = parseAiJson(text, AiExtractionSchema);
+    if (!parsed.imageUrl) return null;
+    return parsed;
+  } catch (e) {
+    console.warn("[AURA import-url] AI extraction fallback failed", e);
+    return null;
+  }
+}
+
 
 export type ResolvedProductImage =
   | ({ ok: true; imageUrl: string; candidates: string[] } & ReturnType<typeof extractProductMeta>)
@@ -695,6 +765,20 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     const fc = await fallbackScraper(target.toString());
     if (fc.errored && !fc.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
     if (fc.html) extracted = extractFromHtml(fc.html, target);
+  }
+
+    if (!extracted.imageUrl && html) {
+    const ai = await extractViaAi(html, target);
+    if (ai?.imageUrl) {
+      extracted = {
+        imageUrl: ai.imageUrl,
+        method: "none",
+        confidence: "medium",
+        productNode: null,
+        ogTitle: ai.title,
+        candidates: [ai.imageUrl],
+      };
+    }
   }
 
   if (!extracted.imageUrl) return { ok: false, error: "No product image found on that page." };
@@ -775,11 +859,28 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       fbDebugMsg = fc.debug;
     }
 
+        let aiMeta: { brand: string; title: string; priceValue: number | null; priceCurrency: string | null } | null = null;
+
+    if (!extracted.imageUrl && html) {
+      const ai = await extractViaAi(html, target);
+      if (ai?.imageUrl) {
+        extracted = {
+          imageUrl: ai.imageUrl,
+          method: "none",
+          confidence: "medium",
+          productNode: null,
+          ogTitle: ai.title,
+          candidates: [ai.imageUrl],
+        };
+        aiMeta = { brand: ai.brand, title: ai.title, priceValue: ai.priceValue, priceCurrency: ai.priceCurrency };
+      }
+    }
+
     if (!extracted.imageUrl) {
       return {
         ok: false as const,
         error: blocked
-          ? "This site blocks automated imports. Try a different URL or add the item manually."
+          ? `This site blocks automated imports. Try a different URL or add the item manually. [DEBUG: ${fbDebugMsg ?? "n/a"}]`
           : `No product image found on that page. [DEBUG: ${fbDebugMsg ?? "n/a"}]`,
       };
     }
@@ -789,7 +890,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       "[AURA import-url] extraction",
       JSON.stringify({
         domain,
-        method: extracted.method,
+        method: aiMeta ? "ai-fallback" : extracted.method,
         fallback: usedFallback,
         picked: imageUrl,
       }),
@@ -803,21 +904,27 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     const imageDataUrl = dl.dataUrl;
 
     const meta = extractProductMeta(html, target, extracted);
+    const brand = aiMeta?.brand || meta.brand;
+    const title = aiMeta?.title || meta.title;
+    const priceValue = meta.priceValue ?? aiMeta?.priceValue ?? null;
+    const priceCurrency = meta.priceCurrency ?? aiMeta?.priceCurrency ?? null;
+    const price = priceValue != null ? (priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue)) : meta.price;
 
     return {
       ok: true as const,
       imageDataUrl,
-      brand: meta.brand,
-      title: meta.title,
-      price: meta.price,
-      priceValue: meta.priceValue,
-      priceCurrency: meta.priceCurrency,
+      brand,
+      title,
+      price,
+      priceValue,
+      priceCurrency,
       sourceUrl: target.toString(),
-      extractionMethod: extracted.method,
-      confidence: extracted.confidence,
+      extractionMethod: aiMeta ? "ai-fallback" : extracted.method,
+      confidence: aiMeta ? "medium" as const : extracted.confidence,
       imageCandidates: extracted.candidates,
       materials: meta.materials,
       composition: meta.composition,
       usedFallback,
     };
   });
+
