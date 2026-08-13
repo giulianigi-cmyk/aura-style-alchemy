@@ -590,20 +590,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           </button>
 
           <button
-            onClick={() => setScanMenuOpen(true)}
-            aria-label="Scan photos"
-            className="h-12 px-4 rounded-full border border-border flex items-center gap-1.5 active:scale-90 transition"
-          >
-            <Camera size={16} />
-            <span className="text-[10px] uppercase tracking-widest">Scan</span>
-          </button>
-
-          <button
-            onClick={() => go("add")}
+            onClick={() => setAddSheetOpen(true)}
+            aria-label="Add pieces"
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
           >
             <Plus size={20} />
           </button>
+
         </div>
       </header>
 
