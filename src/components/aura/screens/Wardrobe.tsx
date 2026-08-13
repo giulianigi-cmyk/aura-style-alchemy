@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
-import { removeBackground } from "@/lib/ai-bgremove.functions";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { trimWhiteMargins } from "@/lib/auto-crop";
@@ -72,7 +72,6 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const [tidying, setTidying] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const migrateLegacy = useServerFn(migrateLegacyTaxonomy);
-  const removeBg = useServerFn(removeBackground);
   const fetchLocations = useServerFn(listLocations);
   const moveItems = useServerFn(moveItemsToLocation);
   const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
@@ -202,11 +201,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     setRemovingBg(true);
     try {
       const dataUrl = await toDataUrl(src);
-      let bg = await removeBg({ data: { imageDataUrl: dataUrl } });
+      let bg = await removeBackgroundClient(dataUrl);
       let attempt = 1;
       while (!bg.ok && attempt < 3) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
-        bg = await removeBg({ data: { imageDataUrl: dataUrl } });
+        bg = await removeBackgroundClient(dataUrl);
         attempt++;
       }
       if (!bg.ok) {
