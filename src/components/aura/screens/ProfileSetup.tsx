@@ -29,6 +29,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [gender, setGender] = useState<string>("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
+  const [shareLibrary, setShareLibrary] = useState(false);
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
@@ -76,6 +77,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
       gender: gender || null,
       style_preferences: styles,
       favorite_brands: brands,
+      share_wardrobe_to_library: shareLibrary,
       setup_complete: true,
     };
     const { error } = await update(patch);
