@@ -216,8 +216,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [filterColor, setFilterColor] = useState("");
   const [filterMaterial, setFilterMaterial] = useState("");
   const [filterBrand, setFilterBrand] = useState("");
+  const [filterSeason, setFilterSeason] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-
   const [brand, setBrand] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
@@ -460,6 +460,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     const cols = new Set<string>();
     const mats = new Set<string>();
     const brands = new Set<string>();
+    const seasonsSet = new Set<string>();
     for (const it of [...sharedResults, ...libraryResults]) {
       const cat = (it as any).category as string | null;
       if (cat) cats.add(cat);
@@ -468,13 +469,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       const mat = materialOf(it);
       if (mat) mats.add(mat);
       const br = (it as any).brand as string | null;
-      if (br) brands.add(br);
+     if (br) brands.add(br);
+      const se = (it as any).season as string | null;
+      if (se) seasonsSet.add(se);
     }
     return {
       categories: Array.from(cats).sort(),
       colors: Array.from(cols).sort(),
       materials: Array.from(mats).sort(),
       brands: Array.from(brands).sort(),
+      seasons: Array.from(seasonsSet).sort(),
     };
   }, [sharedResults, libraryResults]);
 
@@ -483,6 +487,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (filterColor && colorOf(it) !== filterColor) return false;
     if (filterMaterial && materialOf(it) !== filterMaterial) return false;
     if (filterBrand && (it as any).brand !== filterBrand) return false;
+    if (filterSeason && (it as any).season !== filterSeason) return false;
     return true;
   };
   const filteredShared = sharedResults.filter(matchesFilters);
@@ -747,7 +752,27 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           )}
 
           {(sharedResults.length > 0 || libraryResults.length > 0) && (
-            <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Refine</p>
+              <div className="shrink-0 flex items-center gap-1 rounded-full border border-border p-0.5">
+                <button
+                  onClick={() => setLibraryColumns(2)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] ${libraryColumns === 2 ? "bg-foreground text-background" : "text-muted-foreground"}`}
+                >
+                  2
+                </button>
+                <button
+                  onClick={() => setLibraryColumns(3)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] ${libraryColumns === 3 ? "bg-foreground text-background" : "text-muted-foreground"}`}
+                >
+                  3
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(sharedResults.length > 0 || libraryResults.length > 0) && (
+            <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
@@ -788,27 +813,80 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
-              {(filterCategory || filterColor || filterMaterial || filterBrand) && (
+              <select
+                value={filterSeason}
+                onChange={(e) => setFilterSeason(e.target.value)}
+                className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
+              >
+                <option value="">Season</option>
+                {filterOptions.seasons.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              {(filterCategory || filterColor || filterMaterial || filterBrand || filterSeason) && (
                 <button
-                  onClick={() => { setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand(""); }}
+                  onClick={() => { setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand(""); setFilterSeason(""); }}
                   className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11px] text-muted-foreground"
                 >
                   Clear
                 </button>
               )}
-              <div className="ml-auto shrink-0 flex items-center gap-1 rounded-full border border-border p-0.5">
-                <button
-                  onClick={() => setLibraryColumns(2)}
-                  className={`rounded-full px-2 py-1 text-[10px] ${libraryColumns === 2 ? "bg-foreground text-background" : "text-muted-foreground"}`}
-                >
-                  2
-                </button>
-                <button
-                  onClick={() => setLibraryColumns(3)}
-                  className={`rounded-full px-2 py-1 text-[10px] ${libraryColumns === 3 ? "bg-foreground text-background" : "text-muted-foreground"}`}
-                >
-                  3
-                </button>
+            </div>
+          )}
+
+          {filteredShared.length > 0 && (
+            <>
+              <p className="mt-5 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                Shared closet · anonymous
+              </p>
+              <div className={`mt-2 grid gap-1.5 ${libraryColumns === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+                {filteredShared.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSelectShared(s)}
+                    disabled={libraryLoadingId !== null}
+                    className="rounded-xl border border-border bg-card overflow-hidden active:scale-[0.98] transition disabled:opacity-60"
+                  >
+                    <div className="aspect-square w-full bg-secondary/40 relative">
+                      {s.signed_url && (
+                        <img src={s.signed_url} alt="" loading="lazy" className="h-full w-full object-contain" />
+                      )}
+                      {libraryLoadingId === s.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <Loader2 size={14} className="animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {filteredProducts.length > 0 && (
+            <p className="mt-5 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">AURA Library</p>
+          )}
+          <div className={`mt-2 grid gap-1.5 ${libraryColumns === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {filteredProducts.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleSelectProduct(p)}
+                disabled={libraryLoadingId !== null}
+                className="rounded-xl border border-border bg-card overflow-hidden active:scale-[0.98] transition disabled:opacity-60"
+              >
+                <div className="aspect-square w-full bg-secondary/40 relative">
+                  {p.canonical_image_url && (
+                    <img src={p.canonical_image_url} alt="" loading="lazy" className="h-full w-full object-contain" />
+                  )}
+                  {libraryLoadingId === p.id && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                      <Loader2 size={14} className="animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
               </div>
             </div>
           )}
