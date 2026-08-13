@@ -42,8 +42,14 @@ const HARD_BLOCK_DOMAINS = new Set([
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
   "louisvuitton.com", "dior.com", "chanel.com", "ssense.com", "matchesfashion.com",
   "revolve.com", "shopbop.com", "nordstrom.com", "victoriabeckham.com",
-  "sezane.com","luisaviaroma.com",
+  "sezane.com", "luisaviaroma.com",
 ]);
+
+// This seed list is intentionally small — it exists only to skip a known-wasted
+// first attempt for domains we've already confirmed are protected (perf, not
+// correctness). Everything else is caught by looksLikeBlockedPage() below and
+// self-learned into `scrape_domain_hints`, so this array never needs to be
+// "complete".
 
 const RETRY_STATUSES = new Set([401, 403, 429, 503]);
 
@@ -314,13 +320,19 @@ const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup
 const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumbnail|swatch|badge|banner|arrow|chevron|pixel\.gif|tracking)/i;
 const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|editorial|carousel|thumbnail|swatch)/i;
 
-function collectDomImages(html: string, base: URL): string[] {
-  const set = new Set<string>();
-  const push = (v?: string | null) => {
+function collectDomImages(html: string, base: URL): Array<{ url: string; alt: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ url: string; alt: string }> = [];
+  const push = (v: string | null | undefined, alt: string) => {
     if (!v) return;
     const t = decodeHtml(v.trim());
     if (!t || t.startsWith("data:")) return;
-    try { set.add(new URL(t, base).toString()); } catch { /* ignore */ }
+    try {
+      const abs = new URL(t, base).toString();
+      if (seen.has(abs)) return;
+      seen.add(abs);
+      out.push({ url: abs, alt });
+    } catch { /* ignore */ }
   };
   const imgRe = /<img[^>]+>/gi;
   let m: RegExpExecArray | null;
@@ -330,11 +342,16 @@ function collectDomImages(html: string, base: URL): string[] {
       const re = new RegExp(`\\s${name}=["']([^"']+)["']`, "i");
       return tag.match(re)?.[1] ?? null;
     };
-    push(attr("src"));
-    push(attr("data-src"));
-    push(attr("data-lazy-src"));
-    push(attr("data-original"));
-    push(attr("data-zoom-image"));
+    // Many CDNs (Zara/Inditex included) serve purely numeric image URLs with
+    // no descriptive words at all — the alt text is often the only place a
+    // "front"/"back"/"detail"/"model" style hint survives, so we carry it
+    // alongside every URL variant instead of scoring the URL alone.
+    const alt = decodeHtml(attr("alt") ?? "");
+    push(attr("src"), alt);
+    push(attr("data-src"), alt);
+    push(attr("data-lazy-src"), alt);
+    push(attr("data-original"), alt);
+    push(attr("data-zoom-image"), alt);
     const srcset = attr("srcset") ?? attr("data-srcset");
     if (srcset) {
       const parts = srcset.split(",").map((s) => s.trim()).filter(Boolean);
@@ -345,22 +362,24 @@ function collectDomImages(html: string, base: URL): string[] {
         const width = w?.endsWith("w") ? parseInt(w) : 0;
         if (width > bestW) { bestW = width; bestUrl = u; }
       }
-      push(bestUrl);
+      push(bestUrl, alt);
     }
   }
-  return Array.from(set);
+  return out;
 }
 
-function scoreImage(url: string, productTokens: string[]): number {
+function scoreImage(url: string, alt: string, productTokens: string[]): number {
   const u = url.toLowerCase();
+  const a = alt.toLowerCase();
+  const combined = `${u} ${a}`;
   let s = 0;
-  if (JUNK_KEYWORDS.test(u)) s -= 30;
-  if (RELATED_URL_KEYWORDS.test(u)) s -= 15;
-  if (PRODUCT_KEYWORDS.test(u)) s += 8;
-  if (MODEL_KEYWORDS.test(u)) s -= 12;
+  if (JUNK_KEYWORDS.test(combined)) s -= 30;
+  if (RELATED_URL_KEYWORDS.test(combined)) s -= 15;
+  if (PRODUCT_KEYWORDS.test(combined)) s += 8;
+  if (MODEL_KEYWORDS.test(combined)) s -= 12;
   if (/\.(png|jpe?g|webp)(\?|$)/i.test(u)) s += 1;
   for (const tok of productTokens) {
-    if (tok.length >= 4 && u.includes(tok)) { s += 4; break; }
+    if (tok.length >= 4 && combined.includes(tok)) { s += 4; break; }
   }
   const wMatch = u.match(/[_?&](?:w|width)[=_]?(\d{3,4})/);
   if (wMatch) {
@@ -371,10 +390,10 @@ function scoreImage(url: string, productTokens: string[]): number {
   return s;
 }
 
-function pickBestImage(candidates: string[], productTokens: string[]): string | null {
+function pickBestImage(candidates: Array<{ url: string; alt: string }>, productTokens: string[]): string | null {
   if (!candidates.length) return null;
   const scored = candidates
-    .map((u, i) => ({ u, s: scoreImage(u, productTokens), i }))
+    .map((c, i) => ({ u: c.url, s: scoreImage(c.url, c.alt, productTokens), i }))
     .filter((x) => x.s > -20)
     .sort((a, b) => (b.s - a.s) || (a.i === 0 ? 1 : b.i === 0 ? -1 : a.i - b.i));
   return scored[0]?.u ?? null;
@@ -389,6 +408,71 @@ type FallbackScraper = (url: string) => Promise<FallbackResult>;
 // amount of extraction (pattern-based or AI) can find a product in a
 // page that was never actually served.
 const SUSPICIOUSLY_SHORT_HTML = 15000;
+
+// Domain-agnostic signatures of common anti-bot challenge pages (Akamai,
+// PerimeterX/HUMAN, Cloudflare, DataDome, Imperva Incapsula, Distil). We
+// don't try to maintain a list of every protected retailer — we detect the
+// symptom instead, on whatever page actually comes back.
+const CHALLENGE_SIGNATURES: RegExp[] = [
+  /pardon our interruption/i,
+  /access denied/i,
+  /attention required/i,
+  /just a moment\.\.\./i,
+  /verify you are human/i,
+  /checking your browser/i,
+  /enable javascript and cookies to continue/i,
+  /cf-chl/i,
+  /px-captcha/i,
+  /_incapsula_resource/i,
+  /distil_r_captcha/i,
+  /geo\.captcha-delivery\.com/i,
+  /perimeterx/i,
+];
+
+/** Applied to whatever HTML actually comes back from a fetch (direct or
+ *  Firecrawl) to decide whether it's a real product page or an anti-bot
+ *  challenge — independent of which domain served it. */
+function looksLikeBlockedPage(html: string): { blocked: boolean; signal?: string } {
+  for (const re of CHALLENGE_SIGNATURES) {
+    if (re.test(html)) return { blocked: true, signal: re.source };
+  }
+  if (html.length < SUSPICIOUSLY_SHORT_HTML) {
+    const hasProductSignal = /application\/ld\+json/i.test(html) || /<meta[^>]+property=["']og:image["']/i.test(html);
+    if (!hasProductSignal) return { blocked: true, signal: "short-no-product-markers" };
+  }
+  return { blocked: false };
+}
+
+/** Self-learned list of domains that need the Firecrawl fallback, built from
+ *  looksLikeBlockedPage() detections instead of a hand-maintained array.
+ *  Read-only lookup; never throws — a lookup failure just means we try the
+ *  (cheap) direct fetch first, same as an unknown domain. */
+async function getDomainHint(domain: string): Promise<boolean> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
+      .from("scrape_domain_hints")
+      .select("needs_fallback")
+      .eq("domain", domain)
+      .maybeSingle();
+    return Boolean(data?.needs_fallback);
+  } catch (err) {
+    console.warn("[AURA import-url] domain hint lookup failed", err);
+    return false;
+  }
+}
+
+/** Records (or reinforces) that a domain needed the fallback scraper. Never
+ *  throws — this is a self-learning side effect, not something that should
+ *  ever fail the actual import. */
+async function recordDomainHint(domain: string, signal: string): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.rpc("record_scrape_domain_hint", { p_domain: domain, p_signal: signal });
+  } catch (err) {
+    console.warn("[AURA import-url] could not record domain hint", err);
+  }
+}
 
 const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
@@ -485,7 +569,7 @@ const fallbackScraperAvailable = () => {
   return Boolean(key);
 };
 
-async function directFetch(target: URL): Promise<{ html: string | null; blocked: boolean }> {
+async function directFetch(target: URL): Promise<{ html: string | null; blocked: boolean; signal?: string }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
@@ -500,12 +584,21 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
         "Accept-Language": "en-US,en;q=0.9",
       },
     });
-    if (resp.ok) return { html: await resp.text(), blocked: false };
-    if (RETRY_STATUSES.has(resp.status)) return { html: null, blocked: true };
+    if (resp.ok) {
+      const rawHtml = await resp.text();
+      // A 200 status doesn't mean a real page — anti-bot challenges often
+      // return 200 with a fake/short body. Treat a detected challenge the
+      // same as a hard block: no html, so the caller falls through to
+      // Firecrawl instead of extracting an image from a fake page.
+      const check = looksLikeBlockedPage(rawHtml);
+      if (check.blocked) return { html: null, blocked: true, signal: check.signal };
+      return { html: rawHtml, blocked: false };
+    }
+    if (RETRY_STATUSES.has(resp.status)) return { html: null, blocked: true, signal: `http-${resp.status}` };
     return { html: null, blocked: false };
   } catch (err) {
     console.warn("[AURA import-url] fetch failed", err);
-    return { html: null, blocked: true };
+    return { html: null, blocked: true, signal: "fetch-error" };
   } finally {
     clearTimeout(timer);
   }
@@ -522,7 +615,10 @@ type Extracted = {
   candidates: string[];
 };
 
-const MAX_CANDIDATES = 6;
+// Was 6 — too aggressive a cut when a gallery alternates model/still shots
+// and the still images happen to sit later in page order; a wider pool
+// gives the "wrong photo? pick another" picker a real chance to include them.
+const MAX_CANDIDATES = 12;
 
 function extractFromHtml(html: string, target: URL): Extracted {
   const tokens = urlSlugTokens(target);
@@ -536,17 +632,18 @@ function extractFromHtml(html: string, target: URL): Extracted {
         .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
         .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()))
     : [];
+  const ldImgsScored = ldImgs.map((url) => ({ url, alt: "" }));
 
   const domImgs = collectDomImages(stripExcludedSections(html), target)
-    .filter((u) => !JUNK_KEYWORDS.test(u.toLowerCase()));
-  const rankDom = (arr: string[]) =>
-    arr.map((u, i) => ({ u, s: scoreImage(u, tokens), i }))
+    .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`));
+  const rankDom = (arr: Array<{ url: string; alt: string }>) =>
+    arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
        .map((x) => x.u);
   const candidates = Array.from(new Set([...ldImgs, ...rankDom(domImgs)])).slice(0, MAX_CANDIDATES);
 
   if (ldImgs.length) {
-    const best = pickBestImage(ldImgs, tokens) ?? ldImgs[0];
+    const best = pickBestImage(ldImgsScored, tokens) ?? ldImgs[0];
     return { imageUrl: best, method: "json-ld", confidence: "high", productNode, ogTitle, candidates };
   }
 
@@ -740,7 +837,8 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   }
   const domain = rootDomain(target);
   const hasFallback = fallbackScraperAvailable();
-  const forceFallback = HARD_BLOCK_DOMAINS.has(domain);
+  const hardBlocked = HARD_BLOCK_DOMAINS.has(domain);
+  const forceFallback = hardBlocked || (!hardBlocked && (await getDomainHint(domain)));
 
   let html: string | null = null;
   let blocked = false;
@@ -762,6 +860,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     const direct = await directFetch(target);
     html = direct.html;
     blocked = direct.blocked;
+    if (blocked) void recordDomainHint(domain, direct.signal ?? "unknown");
   }
 
   let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
@@ -802,7 +901,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   const candidates = Array.from(new Set([
     imageUrl,
     ...extracted.candidates.map((c) => { try { return new URL(c, target).toString(); } catch { return null; } }).filter((c): c is string => c !== null),
-  ])).slice(0, 6);
+  ])).slice(0, MAX_CANDIDATES);
   return { ok: true, imageUrl, candidates, ...extractProductMeta(html, target, extracted) };
 }
 
@@ -813,7 +912,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     const target = stripTrackingParams(new URL(data.url));
     const domain = rootDomain(target);
     const hasFallback = fallbackScraperAvailable();
-    const forceFallback = HARD_BLOCK_DOMAINS.has(domain);
+    const hardBlocked = HARD_BLOCK_DOMAINS.has(domain);
+    const forceFallback = hardBlocked || (!hardBlocked && (await getDomainHint(domain)));
 
     let html: string | null = null;
     let blocked = false;
@@ -843,6 +943,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       const direct = await directFetch(target);
       html = direct.html;
       blocked = direct.blocked;
+      if (blocked) void recordDomainHint(domain, direct.signal ?? "unknown");
     }
 
     let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
@@ -915,10 +1016,24 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       }),
     );
 
-    const dl = await fetchImageAsDataUrl(imageUrl, target.origin);
-    if (!dl.ok) {
-      console.warn("[AURA import-url] image download failed:", dl.error);
-      return { ok: false as const, error: dl.error };
+    // The top-ranked candidate can occasionally 404 (e.g. an ephemeral asset
+    // picked up from a challenge/interstitial page) even when extraction
+    // otherwise looked confident. Fall through to the remaining ranked
+    // candidates before giving up, instead of failing on the first miss.
+    const downloadOrder = Array.from(new Set([imageUrl, ...extracted.candidates.map((c) => {
+      try { return new URL(c, target).toString(); } catch { return null; }
+    }).filter((c): c is string => c !== null)]));
+
+    let dl: Awaited<ReturnType<typeof fetchImageAsDataUrl>> | null = null;
+    let lastError = "No product image found on that page.";
+    for (const candidateUrl of downloadOrder) {
+      const attempt = await fetchImageAsDataUrl(candidateUrl, target.origin);
+      if (attempt.ok) { dl = attempt; break; }
+      lastError = attempt.error;
+      console.warn("[AURA import-url] candidate image download failed:", candidateUrl, attempt.error);
+    }
+    if (!dl) {
+      return { ok: false as const, error: lastError };
     }
     const imageDataUrl = dl.dataUrl;
 
