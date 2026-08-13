@@ -987,6 +987,7 @@ export type Database = {
           season: string | null
           size: string | null
           sleeve_length: string | null
+          source_image_path: string | null
           source_item_id: string
           style: string | null
           style_tags: string[]
@@ -1019,6 +1020,7 @@ export type Database = {
           season?: string | null
           size?: string | null
           sleeve_length?: string | null
+          source_image_path?: string | null
           source_item_id: string
           style?: string | null
           style_tags?: string[]
@@ -1051,6 +1053,7 @@ export type Database = {
           season?: string | null
           size?: string | null
           sleeve_length?: string | null
+          source_image_path?: string | null
           source_item_id?: string
           style?: string | null
           style_tags?: string[]
