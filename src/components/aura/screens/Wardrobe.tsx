@@ -18,6 +18,7 @@ import { trimWhiteMargins } from "@/lib/auto-crop";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
+import { syncMySharedLibrary } from "@/lib/shared-library.functions";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";

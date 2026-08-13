@@ -14,7 +14,7 @@ import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.fu
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
-import { searchSharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
+import { searchSharedLibrary, syncMySharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
 
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
@@ -561,6 +561,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (insErr) throw insErr;
 
       toast.success("Added to your closet");
+      void syncMySharedLibrary().catch(() => {});
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
