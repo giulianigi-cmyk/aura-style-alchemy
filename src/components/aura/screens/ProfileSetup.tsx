@@ -223,8 +223,30 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                 <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Tap to upload</p>
               </label>
               <p className="mt-6 text-xs text-muted-foreground max-w-[260px]">Optional — but a portrait helps personalize your color analysis later.</p>
+
+              {/* Consenso libreria condivisa: checkbox VUOTA, opt-in esplicito. */}
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={shareLibrary}
+                onClick={() => setShareLibrary(v => !v)}
+                className="mt-8 w-full flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left active:scale-[0.99] transition"
+              >
+                <span className={`mt-0.5 h-5 w-5 shrink-0 rounded-md border flex items-center justify-center transition ${shareLibrary ? "bg-foreground border-foreground text-background" : "border-border"}`}>
+                  {shareLibrary && <Check size={12} />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm">Share my wardrobe in the common library</span>
+                  <span className="block text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    Your pieces — brand, price, tags and photo — become visible and reusable by other members, anonymously: nobody will know they came from you.
+                    Personal data (your name, how often you wear things, where you keep them) is never shared. You can turn this off at any time in your profile;
+                    pieces others already imported stay in their own closet.
+                  </span>
+                </span>
+              </button>
             </div>
           )}
+
         </div>
 
         {err && <p className="mt-4 text-xs text-red-700">{err}</p>}
