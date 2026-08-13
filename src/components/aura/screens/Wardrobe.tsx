@@ -4,6 +4,8 @@ import { COLOR_PALETTE } from "@/lib/color-palette";
 import { getHarmonies, hexToHsl, nearestWheelName } from "@/lib/itten-wheel";
 import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
+import { AddSourceSheet } from "@/components/aura/AddSourceSheet";
+
 import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Camera, Images, Wand2, Archive, ArchiveRestore, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
