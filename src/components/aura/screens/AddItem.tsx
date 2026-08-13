@@ -196,7 +196,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [importReferer, setImportReferer] = useState<string>("");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryResults, setLibraryResults] = useState<ProductLibraryItem[]>([]);
+  const [sharedResults, setSharedResults] = useState<SharedLibraryItem[]>([]);
   const [librarySearching, setLibrarySearching] = useState(false);
+
   const [libraryLoadingId, setLibraryLoadingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
