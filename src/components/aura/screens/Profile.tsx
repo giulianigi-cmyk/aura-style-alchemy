@@ -9,6 +9,7 @@ import { CalendarConnectionSection, AppleCalendarConnectionSection, OutlookCalen
 import { MyBrands } from "../MyBrands";
 import { WardrobeLocationsSection } from "../WardrobeLocationsSection";
 import { supabase } from "@/integrations/supabase/client";
+import { syncMySharedLibrary } from "@/lib/shared-library.functions";
 import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
 import { DressPreferencesSection } from "../DressPreferencesSection";
@@ -73,6 +74,12 @@ const STYLE_DEFINITIONS: { term: string; description: string }[] = [
 ];
 
 
+const SHARING_DEFINITIONS = [
+  { term: "What is shared", description: "Only the product side of each piece: brand, category, colours, materials, tags, size, price and an anonymous copy of the photo." },
+  { term: "What is never shared", description: "Your name, account, city, how often you wear something, when you bought it and where you keep it. The link between a piece and you is replaced by an irreversible code held on the server." },
+  { term: "Turning it off", description: "Your pieces disappear from future searches and the anonymous photo copies are deleted. Pieces other members already imported remain in their closet as independent copies — they are not removed." },
+];
+
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
   const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
@@ -90,10 +97,11 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const [workStartTime, setWorkStartTime] = useState("09:00");
   const [workEndTime, setWorkEndTime] = useState("18:00");
 
-  const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | null>(null);
+  const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | "sharing" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
     const [styles, setStyles] = useState<string[]>([]);
+  const [shareLibrary, setShareLibrary] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -115,6 +123,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
         setStyles(profile.style_preferences ?? []);
+    setShareLibrary(Boolean((profile as unknown as { share_wardrobe_to_library?: boolean }).share_wardrobe_to_library));
   }, [profile]);
 
   const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
@@ -137,10 +146,13 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       profession: profession.trim() || null,
       bio: bio.trim() || null,
             style_preferences: styles,
+      share_wardrobe_to_library: shareLibrary,
       setup_complete: true,
     } as never);
     setSaving(false);
     if (error) { setErr(error); toast.error("Couldn't save profile"); return; }
+    // Il consenso può essere appena cambiato: riallinea (o svuota) la libreria condivisa.
+    void syncMySharedLibrary().catch(() => {});
     toast.success("Profile updated");
     setEditing(false);
   };
@@ -389,6 +401,32 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
             </p>
           </div>
 
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Shared library</p>
+              <button onClick={() => setInfoPopup("sharing")} aria-label="How does the shared library work?" className="text-muted-foreground active:scale-90">
+                <Info size={12} />
+              </button>
+            </div>
+            <button
+              role="switch"
+              aria-checked={shareLibrary}
+              onClick={() => setShareLibrary((v) => !v)}
+              className="mt-2 w-full flex items-start gap-3 rounded-2xl border border-border bg-background p-3 text-left active:scale-[0.99] transition"
+            >
+              <span className={`mt-0.5 h-5 w-9 shrink-0 rounded-full transition ${shareLibrary ? "bg-foreground" : "bg-border"}`}>
+                <span className={`block h-4 w-4 mt-0.5 rounded-full bg-background transition-transform ${shareLibrary ? "translate-x-[1.15rem]" : "translate-x-0.5"}`} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm">Share my wardrobe in the common library</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">
+                  Your pieces (brand, price, tags, photo) become searchable by other members, anonymously — nobody can see they are yours.
+                  Turning it off removes them from future searches, but pieces others already imported stay in their own closet.
+                </span>
+              </span>
+            </button>
+          </div>
+
           {infoPopup && (
             <div
 
@@ -401,7 +439,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               >
                 <div className="flex items-center justify-between">
                   <p className="font-serif text-lg italic">
-                    {infoPopup === "work" ? "Dress code terms" : infoPopup === "formality" ? "Formality terms" : "Style terms"}
+                    {infoPopup === "work" ? "Dress code terms" : infoPopup === "formality" ? "Formality terms" : infoPopup === "sharing" ? "Shared library" : "Style terms"}
                   </p>
                   <button
                     onClick={() => setInfoPopup(null)}
@@ -410,7 +448,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
                   ><X size={14} /></button>
                 </div>
                 <div className="mt-4 space-y-3">
-                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : infoPopup === "formality" ? FORMALITY_DEFINITIONS : STYLE_DEFINITIONS).map((d) => (
+                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : infoPopup === "formality" ? FORMALITY_DEFINITIONS : infoPopup === "sharing" ? SHARING_DEFINITIONS : STYLE_DEFINITIONS).map((d) => (
                     <div key={d.term}>
                       <p className="text-sm font-medium">{d.term}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
