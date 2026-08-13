@@ -685,13 +685,51 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             Back
           </button>
 
-          {!librarySearching && libraryQuery.trim() && libraryResults.length === 0 && (
+          {!librarySearching && libraryQuery.trim() && libraryResults.length === 0 && sharedResults.length === 0 && (
             <p className="mt-6 text-xs text-muted-foreground text-center">
               No match yet — add it manually and it'll enrich the Library for next time.
             </p>
           )}
 
-          <div className="mt-6 space-y-2">
+          {sharedResults.length > 0 && (
+            <>
+              <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                Shared closet · anonymous
+              </p>
+              <div className="mt-3 space-y-2">
+                {sharedResults.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSelectShared(s)}
+                    disabled={libraryLoadingId !== null}
+                    className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left active:scale-[0.98] transition disabled:opacity-60"
+                  >
+                    <div className="h-16 w-14 shrink-0 rounded-xl overflow-hidden bg-secondary/40">
+                      {s.signed_url && (
+                        <img src={s.signed_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">
+                        {[s.brand, s.category].filter(Boolean).join(" — ") || "Shared piece"}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {[s.subcategory, s.colors?.[0] ?? s.color, s.size, s.price != null ? `${s.price} ${s.currency ?? ""}`.trim() : null]
+                          .filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    {libraryLoadingId === s.id && <Loader2 size={14} className="animate-spin shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {libraryResults.length > 0 && (
+            <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">AURA Library</p>
+          )}
+          <div className="mt-3 space-y-2">
+
             {libraryResults.map((p) => (
               <button
                 key={p.id}
