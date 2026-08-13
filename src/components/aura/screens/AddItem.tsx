@@ -184,6 +184,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  // Background removal is the slow, paid step. When multiple photo
+  // candidates exist (import-from-URL), we delay it until the photo choice
+  // settles instead of running it once per candidate the person taps —
+  // same principle as the explicit "remove background" step in batch
+  // review, just automated with a short grace window instead of a button.
+  const bgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bgRunIdRef = useRef(0);
+  const clearPendingBgRemoval = () => {
+    if (bgTimerRef.current) {
+      clearTimeout(bgTimerRef.current);
+      bgTimerRef.current = null;
+    }
+  };
+  useEffect(() => () => clearPendingBgRemoval(), []);
 
   useEffect(() => {
     fetchLocations()
@@ -257,6 +271,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     brand?: string; source?: "photo" | "url" | "library"; price?: string; currency?: string;
     materials?: string[]; composition?: CompositionEntry[]; productId?: string;
     category?: string; subcategory?: string; colors?: string[]; season?: string;
+    deferBgRemoval?: boolean;
   }) => {
 
     const compressedFile = await compressImageForUpload(initialFile);
@@ -303,32 +318,50 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       })
       .catch(e => console.warn("[AURA] AI analysis failed", e));
 
-    setStage("bgremove");
-    try {
-      let bg = await removeBackgroundClient(dataUrl);
-      let attempt = 1;
-      while (!bg.ok && attempt < 3) {
-        await new Promise((r) => setTimeout(r, 800 * attempt));
-        bg = await removeBackgroundClient(dataUrl);
-        attempt++;
+    const applyBgRemoval = async (targetDataUrl: string) => {
+      setStage("bgremove");
+      try {
+        let bg = await removeBackgroundClient(targetDataUrl);
+        let attempt = 1;
+        while (!bg.ok && attempt < 3) {
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+          bg = await removeBackgroundClient(targetDataUrl);
+          attempt++;
+        }
+        if (!bg.ok) toast.message("Background not removed", { description: bg.error });
+        if (bg.ok) {
+          const { file: cleanFile, isTransparent } = await ensureTransparentPng(
+            bg.imageDataUrl,
+            `item-${Date.now()}.png`,
+          );
+          setFile(cleanFile);
+          setPreview(URL.createObjectURL(cleanFile));
+          setTransparent(isTransparent);
+        }
+      } catch (e) {
+        console.warn("[AURA] bg removal failed", e);
+      } finally {
+        setStage((s) => (s === "bgremove" ? "idle" : s));
       }
-      if (!bg.ok) toast.message("Background not removed", { description: bg.error });
-      if (bg.ok) {
+    };
 
-        const { file: cleanFile, isTransparent } = await ensureTransparentPng(
-          bg.imageDataUrl,
-          `item-${Date.now()}.png`,
-        );
-        setFile(cleanFile);
-        setPreview(URL.createObjectURL(cleanFile));
-        setTransparent(isTransparent);
-      }
-    } catch (e) {
-      console.warn("[AURA] bg removal failed", e);
+    clearPendingBgRemoval();
+    if (opts?.deferBgRemoval) {
+      // There's a photo picker in play ("Wrong photo? Pick another") — wait
+      // for the choice to settle instead of removing the background on the
+      // default pick and then again on whatever gets tapped a moment later.
+      const runId = ++bgRunIdRef.current;
+      bgTimerRef.current = setTimeout(() => {
+        bgTimerRef.current = null;
+        if (bgRunIdRef.current !== runId) return; // superseded by a newer pick
+        void applyBgRemoval(dataUrl);
+      }, 1200);
+    } else {
+      await applyBgRemoval(dataUrl);
     }
 
     await analysisPromise;
-    setStage("idle");
+    setStage((s) => (s === "analyze" ? "idle" : s));
   };
 
   const onPick = async (f: File | null) => {
@@ -355,6 +388,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setImportReferer(parsed.origin);
       const raw = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
       const file = await normalizeForPipeline(raw);
+      const hasAlternatives = (result.imageCandidates?.length ?? 0) > 1;
       await runPipeline(file, {
         brand: result.brand || undefined,
         source: "url",
@@ -362,6 +396,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency: result.priceCurrency || undefined,
         materials: result.materials?.length ? result.materials : undefined,
         composition: result.composition?.length ? result.composition : undefined,
+        deferBgRemoval: hasAlternatives,
       });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
       if (result.confidence === "low") {
@@ -510,6 +545,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency,
         materials: materials.length ? materials : undefined,
         composition: composition.length ? composition : undefined,
+        deferBgRemoval: altImages.length > 1,
       });
     } catch (e) {
       console.error("[AURA import-alt]", e);
