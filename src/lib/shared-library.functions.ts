@@ -65,9 +65,18 @@ export const searchSharedLibrary = createServerFn({ method: "POST" })
     const list = (rows ?? []) as SharedLibraryItem[];
     if (!list.length) return [];
 
-    const { data: signed } = await context.supabase.storage
+    const { data: signed, error: signError } = await context.supabase.storage
       .from("shared-library")
       .createSignedUrls(list.map((r) => r.image_url), 60 * 60);
+    if (signError) {
+      console.error("[AURA shared-library] createSignedUrls failed", signError);
+    }
+    (signed ?? []).forEach((s) => {
+      if (s.error) {
+        console.error("[AURA shared-library] signing failed for", s.path, s.error);
+      }
+    });
     const map = new Map((signed ?? []).map((s) => [s.path ?? "", s.signedUrl]));
     return list.map((r) => ({ ...r, signed_url: map.get(r.image_url) ?? null }));
+  });
   });
