@@ -42,22 +42,29 @@ export type SharedLibraryItem = {
   signed_url: string | null;
 };
 
-/** Ricerca nella libreria condivisa anonima; restituisce URL firmati temporanei. */
+/** Ricerca nella libreria condivisa anonima; restituisce URL firmati temporanei.
+ *  Stessa logica di searchProductLibrary: ogni parola della query deve
+ *  comparire in qualche colonna, tutte le parole devono essere soddisfatte. */
 export const searchSharedLibrary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { q: string }) => ({ q: String(input?.q ?? "").trim().slice(0, 80) }))
   .handler(async ({ data, context }): Promise<SharedLibraryItem[]> => {
     if (!data.q) return [];
-    const like = `%${data.q.replace(/[%,]/g, "")}%`;
-    const { data: rows, error } = await (context.supabase as any)
+    const tokens = data.q.split(/\s+/).filter(Boolean).slice(0, 6);
+
+    let builder = (context.supabase as any)
       .from("shared_library_items")
       .select(
         "id, brand, category, subcategory, color, colors, material, season, style, occasion, style_tags, size, price, currency, gender, length, sleeve_length, fit, heel_height, toe_shape, closure, formality, day_evening, image_url",
-      )
-      .or(
+      );
+    for (const token of tokens) {
+      const like = `%${token.replace(/[%,]/g, "")}%`;
+      builder = builder.or(
         `brand.ilike.${like},category.ilike.${like},subcategory.ilike.${like},style.ilike.${like},color.ilike.${like}`,
-      )
-      .limit(30);
+      );
+    }
+
+    const { data: rows, error } = await builder.limit(30);
     if (error) {
       console.error("[AURA shared-library] search", error);
       return [];
