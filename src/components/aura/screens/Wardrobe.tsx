@@ -622,39 +622,12 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         </button>
       </div>
 
-      {scanMenuOpen && (
-        <div
-          className="fixed inset-0 z-[60] bg-background/80 backdrop-blur flex items-end"
-          onClick={() => setScanMenuOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-2"
-          >
-            <p className="font-serif italic text-lg mb-1">Scan photos</p>
-            <button
-              onClick={() => { setScanMenuOpen(false); go("outfit-scan"); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
-            >
-              <Camera size={18} />
-              <div>
-                <p className="text-sm font-medium">Scan one outfit</p>
-                <p className="text-xs text-muted-foreground">One photo, multiple items detected at once</p>
-              </div>
-            </button>
-            <button
-              onClick={() => { setScanMenuOpen(false); go("batch-scan"); }}
-              className="w-full flex items-center gap-3 rounded-2xl border border-border p-4 text-left active:scale-[0.98] transition"
-            >
-              <Images size={18} />
-              <div>
-                <p className="text-sm font-medium">Batch scan photos</p>
-                <p className="text-xs text-muted-foreground">Up to 150 photos at once, processed in the background</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
+      <AddSourceSheet
+        open={addSheetOpen}
+        onClose={() => setAddSheetOpen(false)}
+        onChoose={(choice) => { setAddSheetOpen(false); go(choice); }}
+      />
+
 
 
       {/* Weather / season banner */}
