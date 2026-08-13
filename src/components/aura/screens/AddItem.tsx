@@ -384,17 +384,56 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     }
   };
 
+  /** Importa un capo dalla libreria condivisa: crea una riga INDIPENDENTE nel
+   *  guardaroba dell'importatore. Copia solo i campi prodotto; i campi
+   *  personali (worn_count, last_worn, purchase_date, location_id) restano ai
+   *  default. Price/size arrivano pre-compilati ma restano editabili. */
+  const handleSelectShared = async (s: SharedLibraryItem) => {
+    if (libraryLoadingId) return;
+    if (!s.signed_url) { toast.error("This entry has no photo available."); return; }
+    setLibraryLoadingId(s.id);
+    try {
+      const res = await downloadImage({ data: { url: s.signed_url } });
+      if (!res.ok) { toast.error(res.error); return; }
+      const rawF = await dataUrlToFile(res.imageDataUrl, `shared-${Date.now()}.jpg`);
+      const f = await normalizeForPipeline(rawF);
+      await runPipeline(f, {
+        brand: s.brand || undefined,
+        source: "library",
+        category: s.category || undefined,
+        subcategory: s.subcategory || undefined,
+        colors: s.colors?.length ? s.colors : (s.color ? [s.color] : undefined),
+        season: s.season || undefined,
+        materials: s.material?.length ? s.material : undefined,
+        price: s.price != null ? String(s.price) : undefined,
+        currency: s.currency || undefined,
+      });
+      if (s.size) setSize(s.size);
+      toast.message("Loaded from the shared library", { description: "Details are yours to edit before saving." });
+    } catch (e) {
+      console.error("[AURA shared-library] select failed", e);
+      toast.error("Could not load that piece");
+    } finally {
+      setLibraryLoadingId(null);
+    }
+  };
+
   const runLibrarySearch = async () => {
     const q = libraryQuery.trim();
-    if (!q) { setLibraryResults([]); return; }
+    if (!q) { setLibraryResults([]); setSharedResults([]); return; }
     setLibrarySearching(true);
     try {
-      const results = await searchProductLibrary(q);
-      setLibraryResults(results);
+      const [products, shared] = await Promise.all([
+        searchProductLibrary(q),
+        searchSharedLibrary({ data: { q } }).catch(() => [] as SharedLibraryItem[]),
+      ]);
+      setLibraryResults(products);
+      setSharedResults(shared);
     } finally {
       setLibrarySearching(false);
     }
   };
+
 
   const useAltImage = async (url: string) => {
     if (altLoading) return;
