@@ -42,7 +42,7 @@ const HARD_BLOCK_DOMAINS = new Set([
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
   "louisvuitton.com", "dior.com", "chanel.com", "ssense.com", "matchesfashion.com",
   "revolve.com", "shopbop.com", "nordstrom.com", "victoriabeckham.com",
-  "sezane.com",
+  "sezane.com","luisaviaroma.com",
 ]);
 
 const RETRY_STATUSES = new Set([401, 403, 429, 503]);
