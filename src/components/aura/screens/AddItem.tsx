@@ -1,6 +1,6 @@
 import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search } from "lucide-react";
 import type { DragEvent } from "react";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -163,6 +163,17 @@ async function normalizeForPipeline(f: File): Promise<File> {
 
 type Stage = "idle" | "bgremove" | "analyze";
 
+function colorOf(it: ProductLibraryItem | SharedLibraryItem): string | null {
+  const s = it as SharedLibraryItem;
+  if (s.colors && s.colors.length) return s.colors[0];
+  return (it as any).color ?? null;
+}
+function materialOf(it: ProductLibraryItem | SharedLibraryItem): string | null {
+  const m = (it as any).material;
+  if (Array.isArray(m)) return m[0] ?? null;
+  return m ?? null;
+}
+
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
@@ -200,6 +211,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [librarySearching, setLibrarySearching] = useState(false);
 
   const [libraryLoadingId, setLibraryLoadingId] = useState<string | null>(null);
+  const [libraryColumns, setLibraryColumns] = useState<2 | 3>(3);
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterColor, setFilterColor] = useState("");
+  const [filterMaterial, setFilterMaterial] = useState("");
+  const [filterBrand, setFilterBrand] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   const [brand, setBrand] = useState("");
@@ -433,10 +449,44 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       ]);
       setLibraryResults(products);
       setSharedResults(shared);
+      setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand("");
     } finally {
       setLibrarySearching(false);
     }
   };
+
+  const filterOptions = useMemo(() => {
+    const cats = new Set<string>();
+    const cols = new Set<string>();
+    const mats = new Set<string>();
+    const brands = new Set<string>();
+    for (const it of [...sharedResults, ...libraryResults]) {
+      const cat = (it as any).category as string | null;
+      if (cat) cats.add(cat);
+      const col = colorOf(it);
+      if (col) cols.add(col);
+      const mat = materialOf(it);
+      if (mat) mats.add(mat);
+      const br = (it as any).brand as string | null;
+      if (br) brands.add(br);
+    }
+    return {
+      categories: Array.from(cats).sort(),
+      colors: Array.from(cols).sort(),
+      materials: Array.from(mats).sort(),
+      brands: Array.from(brands).sort(),
+    };
+  }, [sharedResults, libraryResults]);
+
+  const matchesFilters = (it: ProductLibraryItem | SharedLibraryItem) => {
+    if (filterCategory && (it as any).category !== filterCategory) return false;
+    if (filterColor && colorOf(it) !== filterColor) return false;
+    if (filterMaterial && materialOf(it) !== filterMaterial) return false;
+    if (filterBrand && (it as any).brand !== filterBrand) return false;
+    return true;
+  };
+  const filteredShared = sharedResults.filter(matchesFilters);
+  const filteredProducts = libraryResults.filter(matchesFilters);
 
 
   const useAltImage = async (url: string) => {
@@ -549,8 +599,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                location_id: activeLocationId,
         product_id: selectedProductId,
       } as unknown as TablesInsert<"wardrobe_items">;
-
-
       let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
       if (insErr && /column .* does not exist|composition/i.test(String(insErr.message))) {
@@ -692,64 +740,143 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             </p>
           )}
 
-          {sharedResults.length > 0 && (
+          {!librarySearching && (libraryResults.length > 0 || sharedResults.length > 0) && filteredShared.length === 0 && filteredProducts.length === 0 && (
+            <p className="mt-6 text-xs text-muted-foreground text-center">
+              No results match these filters.
+            </p>
+          )}
+
+          {(sharedResults.length > 0 || libraryResults.length > 0) && (
+            <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
+              >
+                <option value="">Category</option>
+                {filterOptions.categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select
+                value={filterColor}
+                onChange={(e) => setFilterColor(e.target.value)}
+                className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
+              >
+                <option value="">Color</option>
+                {filterOptions.colors.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select
+                value={filterMaterial}
+                onChange={(e) => setFilterMaterial(e.target.value)}
+                className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
+              >
+                <option value="">Material</option>
+                {filterOptions.materials.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={filterBrand}
+                onChange={(e) => setFilterBrand(e.target.value)}
+                className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
+              >
+                <option value="">Brand</option>
+                {filterOptions.brands.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              {(filterCategory || filterColor || filterMaterial || filterBrand) && (
+                <button
+                  onClick={() => { setFilterCategory(""); setFilterColor(""); setFilterMaterial(""); setFilterBrand(""); }}
+                  className="shrink-0 rounded-full border border-border px-3 py-1.5 text-[11px] text-muted-foreground"
+                >
+                  Clear
+                </button>
+              )}
+              <div className="ml-auto shrink-0 flex items-center gap-1 rounded-full border border-border p-0.5">
+                <button
+                  onClick={() => setLibraryColumns(2)}
+                  className={`rounded-full px-2 py-1 text-[10px] ${libraryColumns === 2 ? "bg-foreground text-background" : "text-muted-foreground"}`}
+                >
+                  2
+                </button>
+                <button
+                  onClick={() => setLibraryColumns(3)}
+                  className={`rounded-full px-2 py-1 text-[10px] ${libraryColumns === 3 ? "bg-foreground text-background" : "text-muted-foreground"}`}
+                >
+                  3
+                </button>
+              </div>
+            </div>
+          )}
+
+          {filteredShared.length > 0 && (
             <>
               <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
                 Shared closet · anonymous
               </p>
-              <div className="mt-3 space-y-2">
-                {sharedResults.map((s) => (
+              <div className={`mt-3 grid gap-2 ${libraryColumns === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+                {filteredShared.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => handleSelectShared(s)}
                     disabled={libraryLoadingId !== null}
-                    className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left active:scale-[0.98] transition disabled:opacity-60"
+                    className="rounded-2xl border border-border bg-card overflow-hidden text-left active:scale-[0.98] transition disabled:opacity-60"
                   >
-                    <div className="h-16 w-14 shrink-0 rounded-xl overflow-hidden bg-secondary/40">
+                    <div className="aspect-square w-full bg-secondary/40 relative">
                       {s.signed_url && (
                         <img src={s.signed_url} alt="" loading="lazy" className="h-full w-full object-cover" />
                       )}
+                      {libraryLoadingId === s.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <Loader2 size={14} className="animate-spin" />
+                        </div>
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
+                    <div className="p-2">
+                      <p className="text-[11px] font-medium truncate">
                         {[s.brand, s.category].filter(Boolean).join(" — ") || "Shared piece"}
                       </p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {[s.subcategory, s.colors?.[0] ?? s.color, s.size, s.price != null ? `${s.price} ${s.currency ?? ""}`.trim() : null]
-                          .filter(Boolean).join(" · ")}
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {[s.subcategory, s.colors?.[0] ?? s.color, s.size].filter(Boolean).join(" · ")}
                       </p>
                     </div>
-                    {libraryLoadingId === s.id && <Loader2 size={14} className="animate-spin shrink-0" />}
                   </button>
                 ))}
               </div>
             </>
           )}
 
-          {libraryResults.length > 0 && (
+          {filteredProducts.length > 0 && (
             <p className="mt-6 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">AURA Library</p>
           )}
-          <div className="mt-3 space-y-2">
-
-            {libraryResults.map((p) => (
+          <div className={`mt-3 grid gap-2 ${libraryColumns === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {filteredProducts.map((p) => (
               <button
                 key={p.id}
                 onClick={() => handleSelectProduct(p)}
                 disabled={libraryLoadingId !== null}
-                className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left active:scale-[0.98] transition disabled:opacity-60"
+                className="rounded-2xl border border-border bg-card overflow-hidden text-left active:scale-[0.98] transition disabled:opacity-60"
               >
-                <div className="h-16 w-14 shrink-0 rounded-xl overflow-hidden bg-secondary/40">
+                <div className="aspect-square w-full bg-secondary/40 relative">
                   {p.canonical_image_url && (
                     <img src={p.canonical_image_url} alt="" loading="lazy" className="h-full w-full object-cover" />
                   )}
+                  {libraryLoadingId === p.id && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                      <Loader2 size={14} className="animate-spin" />
+                    </div>
+                  )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{[p.brand, p.category].filter(Boolean).join(" — ") || "Untitled product"}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
+                <div className="p-2">
+                  <p className="text-[11px] font-medium truncate">{[p.brand, p.category].filter(Boolean).join(" — ") || "Untitled product"}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">
                     {[p.subcategory, p.color, p.material].filter(Boolean).join(" · ") || p.description || ""}
                   </p>
                 </div>
-                {libraryLoadingId === p.id && <Loader2 size={14} className="animate-spin shrink-0" />}
               </button>
             ))}
           </div>
