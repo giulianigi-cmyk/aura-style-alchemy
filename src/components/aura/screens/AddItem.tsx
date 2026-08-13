@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { analyzeWardrobeImage } from "@/lib/ai-analyze.functions";
-import { removeBackground } from "@/lib/ai-bgremove.functions";
+import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
@@ -164,7 +164,6 @@ type Stage = "idle" | "bgremove" | "analyze";
 export function AddItem({ onClose }: { onClose: () => void }) {
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
-  const removeBg = useServerFn(removeBackground);
   const fetchLocations = useServerFn(listLocations);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   
@@ -285,11 +284,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     setStage("bgremove");
     try {
-      let bg = await removeBg({ data: { imageDataUrl: dataUrl } });
+      let bg = await removeBackgroundClient(dataUrl);
       let attempt = 1;
       while (!bg.ok && attempt < 3) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
-        bg = await removeBg({ data: { imageDataUrl: dataUrl } });
+        bg = await removeBackgroundClient(dataUrl);
         attempt++;
       }
       if (!bg.ok) toast.message("Background not removed", { description: bg.error });
