@@ -1093,7 +1093,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
 
     let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
-            if (fc.html) extracted = await extractFromHtml(fc.html, target);
+    if (html) extracted = await extractFromHtml(html, target);
 
     if (!extracted.imageUrl && !usedFallback) {
       if (!hasFallback) {
