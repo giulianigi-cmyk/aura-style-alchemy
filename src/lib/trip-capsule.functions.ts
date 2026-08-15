@@ -226,10 +226,10 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: tripRow } = await (supabase.from("trips" as never) as any)
-      .select("id, laundry_available").eq("id", data.tripId).eq("user_id", userId).maybeSingle();
+        const { data: tripRow } = await (supabase.from("trips" as never) as any)
+      .select("id, laundry_available, start_date, end_date").eq("id", data.tripId).eq("user_id", userId).maybeSingle();
     if (!tripRow) throw new Error("Trip not found");
-    const trip = tripRow as { id: string; laundry_available: boolean };
+    const trip = tripRow as { id: string; laundry_available: boolean; start_date: string | null; end_date: string | null };
 
     const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }] =
       await Promise.all([
@@ -244,14 +244,51 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const dressRules = dressPreferencesToPrompt(profile?.dress_preferences ?? null);
     const sourceLocationIds = ((sourceLocRows ?? []) as { location_id: string }[]).map((r) => r.location_id);
 
-    // --- One requirement per logged activity: since outfit_plans is now
+        // --- One requirement per logged activity: since outfit_plans is now
     // keyed on trip_activity_id (partial UNIQUE), two activities in the
     // same afternoon each get their own look instead of being merged
     // into a single "A + B" plan. A date with zero logged activities
     // still gets no requirement at all. ---
-    const activities = (activityRows ?? []) as {
+    let activities = (activityRows ?? []) as {
       id: string; activity_date: string; activity_type: string; day_segment: string | null; dress_code: string | null;
     }[];
+
+    // A trip with no itinerary at all shouldn't produce nothing — per the
+    // roadmap doc, packing should work even for a "figure it out when I
+    // get there" trip. Scaffold a generic day + evening slot for every
+    // date in the trip that has no logged activity in that segment yet;
+    // any date that already has a real activity is left exactly as the
+    // person entered it. Only runs on a full-trip generate — a targeted
+    // regenerate of specific activities has no business inventing new ones.
+    if (!data.activityIds?.length && trip.start_date && trip.end_date) {
+      const covered = new Set(
+        activities.map((a) => `${a.activity_date}|${a.day_segment === "evening" ? "evening" : "day"}`),
+      );
+      const tripDates: string[] = [];
+      for (let d = new Date(`${trip.start_date}T00:00:00`); d <= new Date(`${trip.end_date}T00:00:00`); d.setDate(d.getDate() + 1)) {
+        tripDates.push(d.toISOString().slice(0, 10));
+      }
+      const toInsert = tripDates.flatMap((date) =>
+        (["day", "evening"] as const)
+          .filter((segment) => !covered.has(`${date}|${segment}`))
+          .map((segment) => ({
+            trip_id: data.tripId,
+            activity_date: date,
+            activity_type: segment === "day" ? "Day" : "Evening",
+            day_segment: segment,
+            destination_id: null,
+            dress_code: null,
+            notes: null,
+          })),
+      );
+      if (toInsert.length) {
+        const { data: inserted, error: scaffoldErr } = await (supabase.from("trip_day_activities" as never) as any)
+          .insert(toInsert)
+          .select("id, activity_date, activity_type, day_segment, dress_code");
+        if (!scaffoldErr && inserted) activities = [...activities, ...(inserted as typeof activities)];
+      }
+    }
+
     const targeted = data.activityIds?.length ? new Set(data.activityIds) : null;
     const allRequirements: Requirement[] = activities
       .filter((a) => !targeted || targeted.has(a.id))
@@ -262,6 +299,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         dressCode: a.dress_code,
         label: a.activity_type,
       }));
+
 
     // Targeted runs mean "regenerate this one" — the existing plan is
     // overwritten by the upsert rather than skipped.
