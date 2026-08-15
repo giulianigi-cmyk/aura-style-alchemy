@@ -1,6 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { z } from "zod";
 import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
 import { dressPreferencesToPrompt, type DressPreferences } from "./dress-preferences";
 import { resolvePlanSlot } from "./outfit-plan-slot";
@@ -10,13 +7,6 @@ import { describeWeather } from "./weather";
 function daysBetween(a: string, b: string): number {
   return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
 }
-
-const InputSchema = z.object({
-  tripId: z.string().uuid(),
-  /** When present, only these activities are (re)generated, and an
-   *  existing plan for them is replaced instead of skipped. */
-  activityIds: z.array(z.string().uuid()).optional(),
-});
 
 // ============================================================================
 // Static, deterministic constants — never AI-derived. See
@@ -330,10 +320,10 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
   return capsule;
 }
 
-export const generateTripCapsule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data, context }) => {
+export async function generateTripCapsuleCore({ data, context }: {
+  data: { tripId: string; activityIds?: string[] };
+  context: { supabase: any; userId: string };
+}) {
     const { supabase, userId } = context;
 
     const { data: tripRow } = await (supabase.from("trips" as never) as any)
@@ -686,4 +676,4 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       unclassifiedExcluded,
       packingItemsAdded,
     };
-  });
+}
