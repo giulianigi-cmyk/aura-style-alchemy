@@ -54,6 +54,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const [photoStates, setPhotoStates] = useState<PhotoState[]>([]);
   const [urlCandidates, setUrlCandidates] = useState<UrlCandidateResult[] | null>(null);
   const [chosenIndex, setChosenIndex] = useState<Record<string, number>>({});
+  const [brokenCandidates, setBrokenCandidates] = useState<Record<string, boolean>>({});
 
     const refresh = async () => {
     try {
@@ -380,15 +381,31 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                   ) : (
                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
                       {r.candidates.map((c, idx) => {
+                        const key = `${r.url}::${c}`;
+                        const broken = brokenCandidates[key];
                         const selected = (chosenIndex[r.url] ?? 0) === idx;
                         return (
                           <button
                             key={c}
+                            disabled={broken}
                             onClick={() => setChosenIndex((prev) => ({ ...prev, [r.url]: idx }))}
-                            className={`shrink-0 h-20 w-20 rounded-xl overflow-hidden border-2 ${selected ? "border-foreground" : "border-transparent"}`}
+                            className={`shrink-0 h-20 w-20 rounded-xl overflow-hidden border-2 flex items-center justify-center ${selected && !broken ? "border-foreground" : "border-transparent"} ${broken ? "opacity-40" : ""}`}
                             style={{ background: "#FFFFFF" }}
                           >
-                            <img src={c} alt="" className="h-full w-full object-contain p-1" loading="lazy" />
+                            {broken ? (
+                              <span className="text-[9px] text-muted-foreground px-1 text-center leading-tight">Unavailable</span>
+                            ) : (
+                              <img
+                                src={c}
+                                alt=""
+                                className="h-full w-full object-contain p-1"
+                                loading="lazy"
+                                onError={() => {
+                                  setBrokenCandidates((prev) => ({ ...prev, [key]: true }));
+                                  setChosenIndex((prev) => (prev[r.url] === idx ? { ...prev, [r.url]: 0 } : prev));
+                                }}
+                              />
+                            )}
                           </button>
                         );
                       })}
