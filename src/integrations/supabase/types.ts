@@ -467,6 +467,7 @@ export type Database = {
           trip_id: string | null
           user_id: string
           weather_condition: string | null
+          weather_estimated: boolean | null
           weather_temp: number | null
         }
         Insert: {
@@ -484,6 +485,7 @@ export type Database = {
           trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
+          weather_estimated?: boolean | null
           weather_temp?: number | null
         }
         Update: {
@@ -501,6 +503,7 @@ export type Database = {
           trip_id?: string | null
           user_id?: string
           weather_condition?: string | null
+          weather_estimated?: boolean | null
           weather_temp?: number | null
         }
         Relationships: [
