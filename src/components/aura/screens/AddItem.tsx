@@ -841,7 +841,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               </select>
               <select
                 value={filterMaterial}
-                value={filterMaterial}
                 onChange={(e) => setFilterMaterial(e.target.value)}
                 className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
               >
