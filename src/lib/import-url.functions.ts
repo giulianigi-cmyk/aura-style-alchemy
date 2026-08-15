@@ -635,7 +635,47 @@ type Extracted = {
 // gives the "wrong photo? pick another" picker a real chance to include them.
 const MAX_CANDIDATES = 12;
 
-function extractFromHtml(html: string, target: URL): Extracted {
+const SHOPIFY_SIGNATURE_RE = /cdn\.shopify\.com|shopify-checkout-api-token|\/cdn\/shop\/|Shopify\.shop\s*=/i;
+
+/**
+ * Shopify's lazy-load themes (Bluebella included) only put a placeholder
+ * in the HTML gallery — the real images exist, but only get swapped in by
+ * client-side JS we never run. Rather than chase every theme's specific
+ * placeholder trick, Shopify stores all expose a stable public JSON
+ * endpoint (`/products/<handle>.json`) with the complete, already-resolved
+ * image list — no lazy-load, no JS required. When a page is detected as
+ * Shopify, this supersedes whatever the DOM scraper found.
+ */
+async function fetchShopifyProductImages(target: URL): Promise<Array<{ url: string; alt: string }>> {
+  try {
+    const path = target.pathname.replace(/\/$/, "");
+    if (!/\/products\//i.test(path)) return [];
+    const jsonUrl = new URL(`${path}.json`, target.origin).toString();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await safeFetch(jsonUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as { product?: { images?: Array<{ src?: string; alt?: string | null }> } };
+      const images = data.product?.images ?? [];
+      return images
+        .map((img) => ({ url: img.src ?? "", alt: img.alt ?? "" }))
+        .filter((img) => img.url && !SVG_URL_RE.test(img.url) && !LQIP_PLACEHOLDER_RE.test(img.url) && !JUNK_KEYWORDS.test(img.url.toLowerCase()));
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return [];
+  }
+}
+
+async function extractFromHtml(html: string, target: URL): Promise<Extracted> {
   const tokens = urlSlugTokens(target);
   const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
 
@@ -645,14 +685,23 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const ldImgs = productNode
     ? jsonLdImages(productNode)
         .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
-                .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()) && !SVG_URL_RE.test(u) && !LQIP_PLACEHOLDER_RE.test(u))
+        .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()) && !SVG_URL_RE.test(u) && !LQIP_PLACEHOLDER_RE.test(u))
     : [];
   const ldImgsScored = ldImgs.map((url) => ({ url, alt: "" }));
 
-  const domImgs = collectDomImages(stripExcludedSections(html), target)
+  let domImgs = collectDomImages(stripExcludedSections(html), target)
     .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`) && !SVG_URL_RE.test(img.url) && !LQIP_PLACEHOLDER_RE.test(img.url));
 
+  if (SHOPIFY_SIGNATURE_RE.test(html)) {
+    const shopifyImgs = await fetchShopifyProductImages(target);
+    // Canonical and complete — replaces the scraped DOM gallery outright
+    // rather than merging with it, since a lazy-load theme's DOM images
+    // are placeholders we've already had to filter down to nothing useful.
+    if (shopifyImgs.length) domImgs = shopifyImgs;
+  }
+
   const rankDom = (arr: Array<{ url: string; alt: string }>) =>
+
     arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
        .map((x) => x.u);
@@ -1044,7 +1093,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
 
     let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
-    if (html) extracted = extractFromHtml(html, target);
+            if (fc.html) extracted = await extractFromHtml(fc.html, target);
 
     if (!extracted.imageUrl && !usedFallback) {
       if (!hasFallback) {
@@ -1070,7 +1119,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       if (fc.html) {
         html = fc.html;
         usedFallback = true;
-        extracted = extractFromHtml(fc.html, target);
+                extracted = await extractFromHtml(fc.html, target);
       }
       fbDebugMsg = fc.debug;
       pageBlocked = Boolean(fc.pageBlocked);
