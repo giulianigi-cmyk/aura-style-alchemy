@@ -478,6 +478,70 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         ><Plus size={13} /> Add from wardrobe</button>
       </section>
 
+      {(() => {
+        const UNDERWEAR_GROUPS: { label: string; subcats: string[] }[] = [
+          { label: "Bras", subcats: ["Bra", "Sports Bra"] },
+          { label: "Underwear", subcats: ["Briefs", "Panties", "Boxers"] },
+          { label: "Socks", subcats: ["Socks", "Tights"] },
+          { label: "Sleepwear", subcats: ["Sleepwear"] },
+          { label: "Shapewear", subcats: ["Shapewear"] },
+        ];
+        const underwearPacking = packingItems.filter((p) => {
+          const it = wardrobeItems.find((w) => w.id === p.item_id);
+          return it?.category === "Underwear";
+        });
+        if (!underwearPacking.length) return null;
+        const groups = UNDERWEAR_GROUPS.map((g) => ({
+          ...g,
+          rows: underwearPacking.filter((p) => {
+            const it = wardrobeItems.find((w) => w.id === p.item_id);
+            return it?.subcategory && g.subcats.includes(it.subcategory);
+          }),
+        })).filter((g) => g.rows.length > 0);
+        if (!groups.length) return null;
+
+        return (
+          <section className="px-6 mt-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-serif text-xl italic">Underwear</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {underwearPacking.filter((p) => p.status === "packed").length}/{underwearPacking.length} packed
+              </p>
+            </div>
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <div key={g.label}>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">{g.label} · {g.rows.length}</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {g.rows.map((p) => {
+                      const it = wardrobeItems.find((w) => w.id === p.item_id);
+                      const src = it ? thumbSrc(it, wardrobeSigned) : "";
+                      return (
+                        <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
+                          <button onClick={() => void togglePackedStatus(p)} className="h-full w-full">
+                            {src ? <img src={src} className={`h-full w-full object-contain p-1.5 ${p.status === "packed" ? "opacity-40" : ""}`} alt="" loading="lazy" /> : null}
+                          </button>
+                          {p.status === "packed" && (
+                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center"><Check size={13} /></span>
+                            </span>
+                          )}
+                          <button
+                            onClick={() => void togglePackingItem(p.item_id)}
+                            aria-label="Remove from packing list"
+                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
+                          ><X size={11} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
+
       {pickerOpen && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
@@ -673,12 +737,11 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
           {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{outfitPlans.length} generated</p>}
         </div>
 
-                {outfitPlans.length === 0 && (
+        {outfitPlans.length === 0 && (
           <p className="text-sm text-muted-foreground mb-3">
             Builds a packing capsule and a look for each day of the trip — using the activities logged above where you've added them, and a generic day + evening look everywhere else.
           </p>
         )}
-
 
 
         {activities.length > 0 && (
@@ -756,7 +819,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
           </div>
         )}
 
-             <button
+        <button
           onClick={() => void generateCapsule()}
           disabled={generating}
           className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
@@ -767,7 +830,6 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
         {activities.length === 0 && (
           <p className="mt-2 text-[11px] text-muted-foreground text-center">No activities logged — AURA will build a generic day + evening capsule for the whole trip. Log activities above for specific looks instead.</p>
         )}
-
       </section>
 
       {confirmDelete && (
