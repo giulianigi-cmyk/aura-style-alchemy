@@ -1016,7 +1016,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     }
     const fc = await fallbackScraper(target.toString());
     if (fc.errored && !fc.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
-    if (fc.html) extracted = extractFromHtml(fc.html, target);
+    if (fc.html) extracted = await extractFromHtml(fc.html, target);
     pageBlocked = Boolean(fc.pageBlocked);
   }
 
