@@ -216,8 +216,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
-  const [altImages, setAltImages] = useState<string[]>([]);
+    const [altImages, setAltImages] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState<string | null>(null);
+  const [brokenAltImages, setBrokenAltImages] = useState<Record<string, boolean>>({});
   const [importReferer, setImportReferer] = useState<string>("");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryResults, setLibraryResults] = useState<ProductLibraryItem[]>([]);
@@ -977,26 +978,38 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             )}
           </div>
 
-          {altImages.length > 1 && (
+                    {altImages.length > 1 && (
             <div className="mt-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Wrong photo? Pick another</p>
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                {altImages.map((u) => (
-                  <button
-                    key={u}
-                    onClick={() => void useAltImage(u)}
-                    disabled={altLoading !== null}
-                    className="relative h-20 w-16 shrink-0 rounded-xl overflow-hidden border border-border bg-secondary/40 active:scale-95 transition"
-                    aria-label="Use this photo"
-                  >
-                    <img src={u} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    {altLoading === u && (
-                      <span className="absolute inset-0 flex items-center justify-center bg-background/60">
-                        <Loader2 size={14} className="animate-spin" />
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {altImages.map((u) => {
+                  const broken = brokenAltImages[u];
+                  if (broken) return null;
+                  return (
+                    <button
+                      key={u}
+                      onClick={() => void useAltImage(u)}
+                      disabled={altLoading !== null}
+                      className="relative h-20 w-16 shrink-0 rounded-xl overflow-hidden border border-border bg-secondary/40 active:scale-95 transition"
+                      aria-label="Use this photo"
+                    >
+                      <img
+                        src={u}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                        onError={() => setBrokenAltImages((prev) => ({ ...prev, [u]: true }))}
+                      />
+                      {altLoading === u && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-background/60">
+                          <Loader2 size={14} className="animate-spin" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
               </div>
             </div>
           )}
