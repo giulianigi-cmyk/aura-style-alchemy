@@ -4,6 +4,7 @@ import { z } from "zod";
 import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
 import { dressPreferencesToPrompt, type DressPreferences } from "./dress-preferences";
 import { resolvePlanSlot, validateEventSlot } from "./outfit-plan-slot";
+import { describeWeather } from "./weather";
 
 const DailyWeatherSchema = z.object({
   date: z.string(),
@@ -169,7 +170,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       const result = await suggestOutfitCore({
         supabase, userId,
         temperature: w ? (w.tempMin + w.tempMax) / 2 : null,
-        condition: null,
+        condition: w ? describeWeather(w.weatherCode).label : null,
         occasion: occasionHint,
         dressRules,
         gender,
