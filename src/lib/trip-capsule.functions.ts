@@ -226,10 +226,19 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-        const { data: tripRow } = await (supabase.from("trips" as never) as any)
-      .select("id, laundry_available, start_date, end_date").eq("id", data.tripId).eq("user_id", userId).maybeSingle();
+            const { data: tripRow } = await (supabase.from("trips" as never) as any)
+      .select("id, laundry_available").eq("id", data.tripId).eq("user_id", userId).maybeSingle();
     if (!tripRow) throw new Error("Trip not found");
-    const trip = tripRow as { id: string; laundry_available: boolean; start_date: string | null; end_date: string | null };
+    const trip = tripRow as { id: string; laundry_available: boolean };
+
+    // A trip's date range is the union of its destinations' ranges — trips
+    // itself carries no dates (a trip can have several destinations, each
+    // with its own start/end).
+    const { data: destRows } = await (supabase.from("trip_destinations" as never) as any)
+      .select("start_date, end_date").eq("trip_id", data.tripId);
+    const destinations = (destRows ?? []) as { start_date: string; end_date: string }[];
+    const tripStartDate = destinations.length ? destinations.map((d) => d.start_date).sort()[0] : null;
+    const tripEndDate = destinations.length ? destinations.map((d) => d.end_date).sort().slice(-1)[0] : null;
 
     const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }] =
       await Promise.all([
