@@ -189,10 +189,6 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
               aria-label="Trips"
               className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-95"
             ><Luggage size={26} /></button>
-            <button
-              onClick={() => setAnchor(startOfDay(new Date()))}
-              className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
-            >Today</button>
           </div>
         </div>
       </header>
@@ -229,7 +225,7 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
       )}
       {city && latitude != null && (
         <p className="mx-6 mt-3 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-          {city} · forecast next 7 days
+          {city} · forecast next {weather?.daily.length ?? 7} days
         </p>
       )}
 
