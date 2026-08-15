@@ -37,6 +37,22 @@ const REWEARABILITY: Record<string, number> = {
   Underwear: 1,
 };
 
+/** A material tagged "Winter" on the piece doesn't mean much once real
+ *  weather is known for the day — a cashmere sweater is wrong for 30°C
+ *  regardless of what season it was classified under. Real temperature
+ *  wins over the season tag when the two conflict. Applied where the
+ *  day's actual weather is available (see the main generation loop);
+ *  capsule building itself still uses season, since it has no per-day
+ *  temperature to work with. */
+const HEAVY_MATERIALS = ["cashmere", "wool", "mohair", "alpaca", "shearling", "down"];
+const HEAVY_MATERIAL_TEMP_THRESHOLD = 23;
+
+/** Free-text signal for "this trip has a real reason to need an elegant
+ *  shoe" — a resort dinner or a wedding guest activity, not just any
+ *  logged activity. Deliberately narrow: owning a heel doesn't mean one
+ *  has to be packed, only that there's a genuine occasion for it. */
+const ELEGANT_KEYWORDS = ["dinner", "cena", "restaurant", "ristorante", "gala", "wedding", "matrimonio", "cocktail", "resort", "exclusive", "esclusiv", "fine dining", "black tie"];
+
 const NEUTRAL_COLORS = ["black", "white", "grey", "gray", "navy", "beige", "brown", "cream", "ivory", "tan"];
 
 /** Formality range [min, max] each dress code maps to — same labels as
@@ -84,6 +100,19 @@ function activityKind(req: Requirement): ActivityKind {
   if (SWIM_KEYWORDS.some((k) => text.includes(k))) return "swim";
   if (SPORT_KEYWORDS.some((k) => text.includes(k)) || req.dressCode === "Sport") return "sport";
   return null;
+}
+
+/** True only when this specific requirement gives a genuine reason to
+ *  need an elegant piece — an explicit high-formality dress code, or the
+ *  activity's own wording (a resort dinner, a wedding). Owning a heel
+ *  doesn't create the need; a requirement like this does. */
+function hasEleganceSignal(req: Requirement): boolean {
+  if (req.dressCode) {
+    const [, max] = FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE;
+    if (max >= 4) return true;
+  }
+  const text = `${req.label ?? ""} ${req.dressCode ?? ""}`.toLowerCase();
+  return ELEGANT_KEYWORDS.some((k) => text.includes(k));
 }
 
 /** The activity name must survive into the AI prompt even when a dress
@@ -164,6 +193,13 @@ function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolIt
   const purposeRole = kind === "swim" ? SWIM_ROLE : kind === "sport" ? ACTIVE_ROLE : null;
   return pool.filter((it) => {
     const isPurpose = purposeRole?.has(it.category ?? "") ?? false;
+    // A bag belonging to another day's capsule was still passing this
+    // filter on a swim/sport day (season is the only real check now) and
+    // showing up in the AI's catalog with nothing telling it not to pick
+    // one. Hard-excluded here regardless of season or capsule membership
+    // — a gym bag or beach tote isn't the same category and isn't
+    // classified as "Bags", so this doesn't touch those.
+    if ((kind === "swim" || kind === "sport") && BAG_ROLE.has(it.category ?? "")) return false;
     // Formality range and exact day/evening match used to be hard
     // exclusions here, combined with season in one AND — three narrow
     // filters stacked together could crush the eligible pool down to a
@@ -251,15 +287,43 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
 
 
     for (const role of missingRoles) {
+      // Was a pure deterministic sort (versatility, then rewearability) —
+      // with the same wardrobe and the same day, that always picked the
+      // exact same top-N pieces, every single regenerate. Deleting a plan
+      // and regenerating looked like it "remembered" the old pieces, but
+      // it was actually just recomputing the identical answer from
+      // scratch. A small random jitter on top of the real score means a
+      // strong match still wins most of the time, but not always —
+      // regenerating now has a real chance of surfacing something else.
       const candidates = eligible
         .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id))
-        .sort((a, b) => versatility(b, req) - versatility(a, req) || REWEARABILITY[b.category ?? ""] - REWEARABILITY[a.category ?? ""]);
+        .map((it) => ({ it, score: versatility(it, req) + REWEARABILITY[it.category ?? ""] * 0.3 + Math.random() * 2.5 }))
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.it);
       // Add up to perRoleTarget per missing role, not a flat 2 — a single
       // top or single pair of shoes for the whole trip is technically
       // minimal but leaves zero room for Level 6 (variety) later. Shoes
       // and bags use their own lower targets (see above).
       const target = role === SHOE_ROLE ? shoeTarget : role === BAG_ROLE ? bagTarget : role === TOP_ROLE ? topTarget : perRoleTarget;
       candidates.slice(0, target).forEach((it) => capsule.add(it.id));
+    }
+  }
+
+  // A formal-enough shoe protected against being crowded out by the
+  // shoe cap above — only when this trip actually has a reason to need
+  // one (see hasEleganceSignal). Owning a heel never forces it in;
+  // an activity like a resort dinner does. Deliberately outside the
+  // normal target/cap logic: this is a reserved slot, not a ranked pick.
+  if (requirements.some(hasEleganceSignal)) {
+    const alreadyHasElegantShoe = Array.from(capsule).some((id) => {
+      const it = pool.find((p) => p.id === id);
+      return it?.category === "Shoes" && it.formality >= 4;
+    });
+    if (!alreadyHasElegantShoe) {
+      const bestElegantShoe = pool
+        .filter((it) => it.category === "Shoes" && it.formality >= 4 && !capsule.has(it.id))
+        .sort((a, b) => versatility(b) - versatility(a))[0];
+      if (bestElegantShoe) capsule.add(bestElegantShoe.id);
     }
   }
 
@@ -460,22 +524,34 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         continue;
       }
 
-      const items: SuggestOutfitItem[] = candidatePool.map((it) => ({
-        id: it.id, category: it.category, subcategory: it.subcategory, colors: it.colors,
-        style: it.style, season: it.season, brand: it.brand, material: it.material, locationId: it.locationId,
-      }));
-
       // Real forecast within ~15 days, a 5-year historical average beyond
       // that — see trip-weather.server.ts. Missing coordinates (no
       // destination lat/lon saved) falls back to null exactly as before,
-      // rather than guessing a temperature. Season already filtered the
-      // pool above; weather refines within it via suggestOutfitCore's
-      // existing prompt handling, same as the Home/Today flow.
+      // rather than guessing a temperature.
       const dest = destinationForDate(req.date);
       const wKey = dest?.latitude != null && dest?.longitude != null ? weatherKey(dest.latitude, dest.longitude, req.date) : null;
       const dayWeather = wKey ? weatherMap.get(wKey) ?? null : null;
       const temperature = dayWeather ? (req.daySegment === "evening" ? dayWeather.tempMin : dayWeather.tempMax) : null;
       const condition = dayWeather ? describeWeather(dayWeather.weatherCode).label : null;
+
+      // The season tag is a soft signal (matchesSeasonLoose above); real
+      // temperature for the day, when known, overrides it outright for
+      // heavy materials — a cashmere sweater tagged "Winter" is still
+      // wrong for a 30°C day in a warm-climate destination in February.
+      // Only excludes when temperature is actually known; unknown stays
+      // exactly as season-filtered as before.
+      const isHot = temperature != null && temperature >= HEAVY_MATERIAL_TEMP_THRESHOLD;
+      const weatherFiltered = isHot
+        ? candidatePool.filter((it) => !(it.material ?? []).some((m) => HEAVY_MATERIALS.includes(m.toLowerCase())))
+        : candidatePool;
+      // Never let the weather filter empty the pool outright — falls
+      // back to the unfiltered candidates rather than failing the day.
+      const finalPool = weatherFiltered.length > 0 ? weatherFiltered : candidatePool;
+
+      const items: SuggestOutfitItem[] = finalPool.map((it) => ({
+        id: it.id, category: it.category, subcategory: it.subcategory, colors: it.colors,
+        style: it.style, season: it.season, brand: it.brand, material: it.material, locationId: it.locationId,
+      }));
 
       // Variety (Level 6) is sought only within what reuse (Level 4)
       // already allows — never the other way round. The window is
@@ -610,4 +686,222 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       unclassifiedExcluded,
       packingItemsAdded,
     };
+  });
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { createServerFn } from "@tanstack/react-start";
+import { generateText } from "ai";
+import { z } from "zod";
+import { parseAiJson } from "./ai-json";
+import { isItemAtLocation } from "./wardrobe-location";
+
+const ItemSchema = z.object({
+  id: z.string(),
+  category: z.string().nullable().optional(),
+  subcategory: z.string().nullable().optional(),
+  colors: z.array(z.string()).nullable().optional(),
+  style: z.array(z.string()).nullable().optional(),
+  season: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
+  material: z.array(z.string()).nullable().optional(),
+  locationId: z.string().nullable().optional(),
+});
+
+const InputSchema = z.object({
+  temperature: z.number().nullable().optional(),
+  condition: z.string().nullable().optional(),
+  occasion: z.string().nullable().optional(),
+  dressRules: z.string().nullable().optional(),
+  items: z.array(ItemSchema).min(1),
+  avoidItemIds: z.array(z.string()).optional(),
+});
+
+const OutputSchema = z.object({
+  item_ids: z.array(z.string()),
+  explanation: z.string(),
+});
+
+export type SuggestOutfitItem = z.infer<typeof ItemSchema>;
+
+export async function suggestOutfitCore(params: {
+  supabase: any;
+  userId: string;
+  temperature: number | null;
+  condition: string | null;
+  occasion: string | null;
+  dressRules: string | null;
+  gender?: string | null;
+  styleBoldness?: string | null;
+  items: SuggestOutfitItem[];
+  avoidItemIds?: string[];
+  locationIdOverride?: string | null;
+}): Promise<{ ok: true; item_ids: string[]; explanation: string } | { ok: false; error: string }> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("Missing LOVABLE_API_KEY");
+  const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
+  const gateway = createLovableAiGatewayProvider(key);
+  const model = gateway("google/gemini-2.5-flash");
+
+  // A caller (like the weekly generator) can explicitly choose which
+  // location to build from for this run, rather than always defaulting
+  // to whatever's currently active — useful when generating outfits for
+  // a period spent somewhere other than the active location.
+  let locationId = params.locationIdOverride;
+  if (locationId === undefined) {
+    const { data: profileRow } = await (params.supabase.from("profiles" as never) as any)
+      .select("active_location_id").eq("id", params.userId).maybeSingle();
+    locationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
+  }
+  let activeLocation: { id: string; is_primary: boolean } | null = null;
+  if (locationId) {
+    const { data: locRow } = await (params.supabase.from("wardrobe_locations" as never) as any)
+      .select("id, is_primary").eq("id", locationId).eq("user_id", params.userId).maybeSingle();
+    if (locRow) activeLocation = locRow as { id: string; is_primary: boolean };
+  }
+  let eligibleItems = params.items.filter((it) =>
+    isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
+
+  // Excluding items already used earlier in a multi-day batch is how
+  // repeats get avoided across a generated week — done per category so a
+  // shortage in one (e.g. only one or two bags owned) doesn't force
+  // avoidance to relax for every other category too. A top only comes
+  // back into rotation when tops specifically run out, not because bags
+  // ran out first.
+  if (params.avoidItemIds?.length) {
+    const avoidSet = new Set(params.avoidItemIds);
+    const byCategory = new Map<string, SuggestOutfitItem[]>();
+    for (const it of eligibleItems) {
+      const cat = it.category ?? "";
+      const arr = byCategory.get(cat) ?? [];
+      arr.push(it);
+      byCategory.set(cat, arr);
+    }
+    const filtered: SuggestOutfitItem[] = [];
+    for (const catItems of byCategory.values()) {
+      const withoutRecent = catItems.filter((it) => !avoidSet.has(it.id));
+      filtered.push(...(withoutRecent.length > 0 ? withoutRecent : catItems));
+    }
+    eligibleItems = filtered;
+  }
+
+  const wx = params.temperature != null
+    ? `Weather: ${Math.round(params.temperature)}°C, ${params.condition ?? "unknown"}.`
+    : "Weather: unknown.";
+  const occ = params.occasion ? `Occasion: ${params.occasion}.` : "Occasion: everyday.";
+
+  const catalog = eligibleItems.slice(0, 200).map((it) => ({
+    id: it.id,
+    category: it.category ?? "",
+    subcategory: it.subcategory ?? "",
+    colors: it.colors ?? [],
+    style: it.style ?? [],
+    season: it.season ?? "",
+    brand: it.brand ?? "",
+    material: it.material ?? [],
+  }));
+
+  const genderLine = params.gender === "Man"
+    ? "This wardrobe belongs to a man: compose top + bottom (or a single one-piece garment) + shoes, and only add a bag if it genuinely fits the look — a bag is not a standard component for a men's outfit the way it is for women's. An accessory (belt, watch, scarf) is welcome when it adds something."
+    : params.gender === "Woman"
+    ? "This wardrobe belongs to a woman: a bag is a standard component of a complete outfit alongside top + bottom (or a dress) + shoes — include one whenever a suitable bag is available, plus an accessory when it adds something. Exception: never include a bag for a Sport occasion or a pool/beach/swim occasion — a handbag has no place at the gym or in the water."
+    : null;
+
+  const boldnessLine = params.styleBoldness === "Bold" || params.styleBoldness === "Creative"
+    ? "This person likes to experiment: within every constraint above, lean into color and pattern — mixed prints, a strong color pairing, or a statement piece are welcome rather than defaulting to the safest neutral combination."
+    : params.styleBoldness === "Classic"
+    ? "This person prefers a classic wardrobe: favor neutral, coordinated colors and minimal pattern-mixing over bold color or print combinations, even when a bolder pairing would technically also work."
+    : null;
+
+  const system = [
+    ...(params.dressRules ? [params.dressRules, ""] : []),
+    "You are a personal stylist. Compose ONE coherent outfit from the user's wardrobe.",
+    "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
+    ...(genderLine ? [genderLine] : []),
+    "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
+    "Never combine black and navy/dark blue in the same outfit — two near-identical dark neutrals read as a styling mistake, not a deliberate choice, even though each looks fine on its own. Pick one dark neutral for the outfit, not both.",
+    "Above ~25°C, prefer a top that hasn't already been worn earlier in this batch over one that has, even if it scores slightly lower on style — a fresh piece matters more in hot weather (sweat, hygiene) than in cooler seasons, where repeating a top once or twice is completely normal.",
+    ...(boldnessLine ? [boldnessLine] : []),
+    "NEVER pick more than one outerwear/layering piece in the same outfit — a blazer and a cardigan (or any two of blazer/cardigan/jacket/coat) are never worn together. Pick at most one.",
+    "Weather overrides everything else for outerwear: above ~26°C, do not include a blazer, jacket, cardigan, or coat at all, regardless of occasion — a lightweight top alone is correct. Only add outerwear when the temperature genuinely calls for it.",
+    // The occasion string carries the real activity name (e.g. "Yoga at
+    // sunset (Sport)"), not just a dress-code label, so these rules can
+    // key off what the day actually is.
+    "If the occasion mentions a pool, swimming, the beach or the sea (pool, piscina, swim, beach, spiaggia, mare, snorkeling): the outfit MUST be built around a Swimwear item — a one-piece swimsuit, or a bikini top AND bikini bottom together — instead of the usual top + bottom. Add a cover-up, a light top/shorts or a dress only as a layer over it, plus sandals/flats and sunglasses if available — never a bag. Never return a city outfit for a swim occasion, and never pair a bikini top with trousers or a skirt.",
+    "If the occasion is Sport or mentions yoga, gym, running, hiking, training, pilates, tennis or cycling: the outfit MUST be built from Activewear pieces (sports bra / training top + leggings, bike shorts or running shorts) with sneakers or the appropriate sport shoe. Exclude denim, tailoring, dresses, heels and anything delicate, and honour the specific activity named — hiking wants covered, sturdy shoes, yoga wants soft stretch pieces.",
+    "If the occasion is Travel (a flight, a transfer, a long drive): prioritise comfort and layers — soft, non-restrictive pieces, closed comfortable shoes (sneakers or flats, no heels), and one light layer that can go on and off.",
+    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, or overtly evening/party-coded (check the material field for sequin/sparkle/lurex/metallic), exclude cocktail or evening dresses, and exclude very short skirts (mini-length) — these read as going-out wear, not workwear, even if the color/formality score looks fine on paper.",
+    "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
+    "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
+    "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
+    "",
+    "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
+    '{"item_ids": ["id1", "id2"], "explanation": "short reason"}',
+  ].join("\n");
+
+  const userContent = `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`;
+  try {
+    let text: string;
+    try {
+      const r1 = await generateText({
+        model,
+        system,
+        messages: [{ role: "user", content: userContent }],
+      });
+      text = r1.text;
+    } catch (err) {
+      console.error("[AURA suggest-outfit] first call failed", err);
+      text = "";
+    }
+
+    let parsed: z.infer<typeof OutputSchema>;
+    try {
+      parsed = parseAiJson(text, OutputSchema);
+    } catch {
+      const r2 = await generateText({
+        model,
+        system,
+        messages: [
+          { role: "user", content: userContent },
+          { role: "assistant", content: text || "(no response)" },
+          {
+            role: "user",
+            content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
+          },
+        ],
+      });
+      parsed = parseAiJson(r2.text, OutputSchema);
+    }
+
+    const validIds = new Set(catalog.map((c) => c.id));
+    const item_ids = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
+    return {
+      ok: true as const,
+      item_ids,
+      explanation: (parsed.explanation ?? "").slice(0, 240),
+    };
+  } catch (err) {
+    console.error("[AURA suggest-outfit] failed", err);
+    return { ok: false as const, error: err instanceof Error ? err.message : "AI failed" };
+  }
+}
+
+export const suggestOutfitAI = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profileRow } = await (context.supabase.from("profiles" as never) as any)
+      .select("gender, style_boldness").eq("id", context.userId).maybeSingle();
+    const profile = profileRow as { gender?: string | null; style_boldness?: string | null } | null;
+
+    return suggestOutfitCore({
+      supabase: context.supabase,
+      userId: context.userId,
+      temperature: data.temperature ?? null,
+      condition: data.condition ?? null,
+      occasion: data.occasion ?? null,
+      dressRules: data.dressRules ?? null,
+      gender: profile?.gender ?? null,
+      styleBoldness: profile?.style_boldness ?? null,
+      items: data.items,
+      avoidItemIds: data.avoidItemIds,
+    });
   });
