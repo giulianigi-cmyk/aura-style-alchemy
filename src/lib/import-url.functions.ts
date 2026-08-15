@@ -319,6 +319,13 @@ const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|
 const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary)/i;
 const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumbnail|swatch|badge|banner|arrow|chevron|pixel\.gif|tracking)/i;
 const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|editorial|carousel|thumbnail|swatch)/i;
+// Lazy-loaded image tags on many sites (Calzedonia included) carry a tiny
+// SVG placeholder in `src` while the real photo sits in data-src/srcset.
+// A product photo is never actually an SVG, so we reject the extension
+// outright — otherwise the placeholder can win by default and break
+// background removal downstream, which only accepts raster formats.
+const SVG_URL_RE = /\.svg(\?|#|$)/i;
+
 
 function collectDomImages(html: string, base: URL): Array<{ url: string; alt: string }> {
   const seen = new Set<string>();
@@ -326,7 +333,7 @@ function collectDomImages(html: string, base: URL): Array<{ url: string; alt: st
   const push = (v: string | null | undefined, alt: string) => {
     if (!v) return;
     const t = decodeHtml(v.trim());
-    if (!t || t.startsWith("data:")) return;
+    if (!t || t.startsWith("data:") || SVG_URL_RE.test(t)) return;
     try {
       const abs = new URL(t, base).toString();
       if (seen.has(abs)) return;
@@ -630,12 +637,12 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const ldImgs = productNode
     ? jsonLdImages(productNode)
         .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
-        .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()))
+        .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()) && !SVG_URL_RE.test(u))
     : [];
   const ldImgsScored = ldImgs.map((url) => ({ url, alt: "" }));
 
   const domImgs = collectDomImages(stripExcludedSections(html), target)
-    .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`));
+    .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`) && !SVG_URL_RE.test(img.url));
   const rankDom = (arr: Array<{ url: string; alt: string }>) =>
     arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
@@ -651,7 +658,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
   if (og) {
     try {
       const abs = new URL(og, target).toString();
-      const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase());
+      const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase()) || SVG_URL_RE.test(abs);
       const looksLikeProduct = productNodes.length > 0 ||
         tokens.some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
       if (!junky && looksLikeProduct) {
@@ -821,6 +828,61 @@ export type ResolvedProductImage =
   | ({ ok: true; imageUrl: string; candidates: string[] } & ReturnType<typeof extractProductMeta>)
   | { ok: false; error: string; rateLimited?: boolean };
 
+const USABLE_IMAGE_CONTENT_TYPE_RE = /^image\/(jpeg|jpg|png|webp|gif|avif)/i;
+const IMAGE_VALIDATION_TIMEOUT_MS = 4000;
+const IMAGE_VALIDATION_CONCURRENCY = 5;
+
+/**
+ * Many fashion sites (Bluebella included) reject bare cross-origin <img>
+ * requests from our own domain — the browser's Referer header gives it
+ * away as hotlinking, so the thumbnail just shows a broken-image icon to
+ * the person picking a photo. We validate each candidate server-side
+ * instead: a plain fetch with no browser-identifying Referer (or one set
+ * to the product page itself, which most sites accept) confirms the URL
+ * actually resolves to a real image before it's ever shown to the user.
+ * This also catches anything that slipped past the SVG filter above.
+ */
+async function isUsableImageUrl(url: string, refererUrl: string): Promise<boolean> {
+  if (SVG_URL_RE.test(url)) return false;
+  if (checkPublicUrl(url)) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_VALIDATION_TIMEOUT_MS);
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    Referer: refererUrl,
+  };
+  try {
+    let res = await safeFetch(url, { method: "HEAD", headers, signal: controller.signal });
+    if (!res.ok) {
+      res = await safeFetch(url, { method: "GET", headers, signal: controller.signal });
+    }
+    const contentType = res.headers.get("content-type") ?? "";
+    try { await res.body?.cancel?.(); } catch { /* ignore */ }
+    return res.ok && USABLE_IMAGE_CONTENT_TYPE_RE.test(contentType);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Runs isUsableImageUrl over the list with bounded concurrency and
+ *  returns only the URLs that passed, preserving original order. */
+async function filterUsableImageUrls(urls: string[], refererUrl: string): Promise<string[]> {
+  const keep = new Array<boolean>(urls.length).fill(false);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < urls.length) {
+      const i = cursor++;
+      keep[i] = await isUsableImageUrl(urls[i], refererUrl);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(IMAGE_VALIDATION_CONCURRENCY, urls.length) }, worker),
+  );
+  return urls.filter((_, i) => keep[i]);
+}
+
 /**
  * Given a product PAGE url (not a direct image link), finds its best
  * product image url AND the same brand/price/material metadata the
@@ -898,11 +960,17 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     return { ok: false, error: pageBlocked ? UNSCRAPABLE_MSG : "No product image found on that page." };
   }
   const imageUrl = new URL(extracted.imageUrl, target).toString();
-  const candidates = Array.from(new Set([
+  const rawCandidates = Array.from(new Set([
     imageUrl,
     ...extracted.candidates.map((c) => { try { return new URL(c, target).toString(); } catch { return null; } }).filter((c): c is string => c !== null),
   ])).slice(0, MAX_CANDIDATES);
-  return { ok: true, imageUrl, candidates, ...extractProductMeta(html, target, extracted) };
+
+  const candidates = await filterUsableImageUrls(rawCandidates, target.toString());
+  if (!candidates.length) {
+    return { ok: false, error: "Found this page but couldn't load its product photo — the site may be blocking image access." };
+  }
+  const primaryImageUrl = candidates.includes(imageUrl) ? imageUrl : candidates[0];
+  return { ok: true, imageUrl: primaryImageUrl, candidates, ...extractProductMeta(html, target, extracted) };
 }
 
 export const importProductFromUrl = createServerFn({ method: "POST" })
