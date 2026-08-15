@@ -269,14 +269,15 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // any date that already has a real activity is left exactly as the
     // person entered it. Only runs on a full-trip generate — a targeted
     // regenerate of specific activities has no business inventing new ones.
-    if (!data.activityIds?.length && trip.start_date && trip.end_date) {
+        if (!data.activityIds?.length && tripStartDate && tripEndDate) {
       const covered = new Set(
         activities.map((a) => `${a.activity_date}|${a.day_segment === "evening" ? "evening" : "day"}`),
       );
       const tripDates: string[] = [];
-      for (let d = new Date(`${trip.start_date}T00:00:00`); d <= new Date(`${trip.end_date}T00:00:00`); d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(`${tripStartDate}T00:00:00`); d <= new Date(`${tripEndDate}T00:00:00`); d.setDate(d.getDate() + 1)) {
         tripDates.push(d.toISOString().slice(0, 10));
       }
+
       const toInsert = tripDates.flatMap((date) =>
         (["day", "evening"] as const)
           .filter((segment) => !covered.has(`${date}|${segment}`))
