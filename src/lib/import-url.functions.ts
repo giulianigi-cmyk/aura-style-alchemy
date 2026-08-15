@@ -1183,12 +1183,18 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
     const imageDataUrl = dl.dataUrl;
 
-    const meta = extractProductMeta(html, target, extracted);
+        const meta = extractProductMeta(html, target, extracted);
     const brand = aiMeta?.brand || meta.brand;
     const title = aiMeta?.title || meta.title;
     const priceValue = meta.priceValue ?? aiMeta?.priceValue ?? null;
     const priceCurrency = meta.priceCurrency ?? aiMeta?.priceCurrency ?? null;
     const price = priceValue != null ? (priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue)) : meta.price;
+
+    // The "wrong photo? pick another" strip renders these as bare <img>
+    // tags with no server-side download step, so an un-validated candidate
+    // shows as a broken thumbnail and 404s if tapped. Same validation the
+    // batch-URL picker already gets, applied here too.
+    const validatedAltCandidates = await filterUsableImageUrls(downloadOrder, target.toString());
 
     return {
       ok: true as const,
@@ -1201,9 +1207,10 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       sourceUrl: target.toString(),
       extractionMethod: aiMeta ? "ai-fallback" : extracted.method,
       confidence: aiMeta ? "medium" as const : extracted.confidence,
-      imageCandidates: extracted.candidates,
+      imageCandidates: validatedAltCandidates.length ? validatedAltCandidates : [imageUrl],
       materials: meta.materials,
       composition: meta.composition,
       usedFallback,
     };
   });
+
