@@ -4,6 +4,13 @@ import { z } from "zod";
 import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
 import { dressPreferencesToPrompt, type DressPreferences } from "./dress-preferences";
 import { resolvePlanSlot } from "./outfit-plan-slot";
+import { getTripWeatherMap, weatherKey } from "./trip-weather.server";
+import { describeWeather } from "./weather";
+
+function daysBetween(a: string, b: string): number {
+  return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
+}
+
 
 const InputSchema = z.object({
   tripId: z.string().uuid(),
@@ -231,14 +238,31 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     if (!tripRow) throw new Error("Trip not found");
     const trip = tripRow as { id: string; laundry_available: boolean };
 
-    // A trip's date range is the union of its destinations' ranges — trips
+        // A trip's date range is the union of its destinations' ranges — trips
     // itself carries no dates (a trip can have several destinations, each
     // with its own start/end).
     const { data: destRows } = await (supabase.from("trip_destinations" as never) as any)
-      .select("start_date, end_date").eq("trip_id", data.tripId);
-    const destinations = (destRows ?? []) as { start_date: string; end_date: string }[];
+      .select("start_date, end_date, latitude, longitude").eq("trip_id", data.tripId);
+    const destinations = (destRows ?? []) as { start_date: string; end_date: string; latitude: number | null; longitude: number | null }[];
     const tripStartDate = destinations.length ? destinations.map((d) => d.start_date).sort()[0] : null;
     const tripEndDate = destinations.length ? destinations.map((d) => d.end_date).sort().slice(-1)[0] : null;
+
+    /** Which destination a given trip date falls under — a multi-stop trip
+     *  needs the right city's weather, not just the first one. Falls back
+     *  to the nearest destination by date when nothing matches exactly
+     *  (e.g. a scaffolded day sitting right on a gap between two legs). */
+    function destinationForDate(date: string): { latitude: number | null; longitude: number | null } | null {
+      const withCoords = destinations.filter((d) => d.latitude != null && d.longitude != null);
+      if (!withCoords.length) return null;
+      const exact = withCoords.find((d) => date >= d.start_date && date <= d.end_date);
+      if (exact) return exact;
+      return withCoords.reduce((closest, d) => {
+        const dist = Math.min(Math.abs(daysBetween(date, d.start_date)), Math.abs(daysBetween(date, d.end_date)));
+        const closestDist = Math.min(Math.abs(daysBetween(date, closest.start_date)), Math.abs(daysBetween(date, closest.end_date)));
+        return dist < closestDist ? d : closest;
+      }, withCoords[0]);
+    }
+
 
     const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }] =
       await Promise.all([
@@ -328,12 +352,25 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
-    if (capped.length === 0) {
+        if (capped.length === 0) {
       return {
         generated: 0, skippedExisting, failed: [] as { date: string; daySegment: string; reason: string }[],
         unclassifiedExcluded: 0, packingItemsAdded: 0,
       };
     }
+
+    // One batched lookup for every unique (destination, date) the capped
+    // requirements actually touch — not one call per requirement, since a
+    // day and evening requirement on the same date share the same weather.
+    const weatherRequests = capped
+      .map((r) => {
+        const dest = destinationForDate(r.date);
+        return dest?.latitude != null && dest?.longitude != null
+          ? { lat: dest.latitude, lon: dest.longitude, date: r.date }
+          : null;
+      })
+      .filter((r): r is { lat: number; lon: number; date: string } => r !== null);
+    const weatherMap = weatherRequests.length ? await getTripWeatherMap(weatherRequests) : new Map();
 
     // --- Wardrobe pool, filtered deterministically before anything else
     // runs — Level 0/1 of the hierarchy. Items missing formality or
@@ -394,10 +431,18 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         style: it.style, season: it.season, brand: it.brand, material: it.material, locationId: it.locationId,
       }));
 
-            // Estimated, not measured: no live forecast is wired in for dates
-      // that may be months out — see docs/roadmap/trip-capsule-packing.md.
-      // suggestOutfitCore gets no temperature at all rather than a
-      // fabricated one; season already filtered the pool above.
+                  // Real forecast within ~15 days, a 5-year historical average beyond
+      // that — see trip-weather.server.ts. Missing coordinates (no
+      // destination lat/lon saved) falls back to null exactly as before,
+      // rather than guessing a temperature. Season already filtered the
+      // pool above; weather refines within it via suggestOutfitCore's
+      // existing prompt handling, same as the Home/Today flow.
+      const dest = destinationForDate(req.date);
+      const wKey = dest?.latitude != null && dest?.longitude != null ? weatherKey(dest.latitude, dest.longitude, req.date) : null;
+      const dayWeather = wKey ? weatherMap.get(wKey) ?? null : null;
+      const temperature = dayWeather ? (req.daySegment === "evening" ? dayWeather.tempMin : dayWeather.tempMax) : null;
+      const condition = dayWeather ? describeWeather(dayWeather.weatherCode).label : null;
+
       // Variety (Level 6) is sought only within what reuse (Level 4)
       // already allows — never the other way round. The window is
       // measured in whole outfits, not a flat item count: an outfit is
@@ -412,8 +457,8 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       const avoidOutfitWindow = trip.laundry_available ? 3 : 2;
       const result = await suggestOutfitCore({
         supabase, userId,
-        temperature: null,
-        condition: null,
+        temperature,
+        condition,
         occasion: occasionText(req),
         dressRules,
         gender: profile?.gender ?? null,
@@ -426,6 +471,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       if (!result.ok || !result.item_ids.length) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: !result.ok ? result.error : "Couldn't compose a valid look from the eligible pieces." });
         continue;
+
       }
 
       usedOutfits.push(result.item_ids);
