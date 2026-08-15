@@ -20,6 +20,12 @@ export function CalendarConnectionSection() {
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  const RECONNECT_MARKER = "RECONNECT_REQUIRED:";
+  const needsReconnect = !!lastSyncError?.startsWith(RECONNECT_MARKER);
+  const displayedSyncError = lastSyncError?.startsWith(RECONNECT_MARKER)
+    ? lastSyncError.slice(RECONNECT_MARKER.length).trim()
+    : lastSyncError;
+
   const load = async () => {
     try {
       const res = await status();
@@ -109,17 +115,27 @@ export function CalendarConnectionSection() {
             Connected
             {lastSyncedAt ? ` · synced ${new Date(lastSyncedAt).toLocaleString("en-US")}` : ""}
           </div>
-          {lastSyncError && (
-            <p className="mt-1 text-[11px] text-red-700">{lastSyncError}</p>
+          {displayedSyncError && (
+            <p className="mt-1 text-[11px] text-red-700">{displayedSyncError}</p>
           )}
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => void runSync()}
-              disabled={syncing}
-              className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              {syncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCcw size={12} />} Sync now
-            </button>
+            {needsReconnect ? (
+              <button
+                onClick={() => void connect()}
+                disabled={connecting}
+                className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {connecting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCcw size={12} />} Reconnect
+              </button>
+            ) : (
+              <button
+                onClick={() => void runSync()}
+                disabled={syncing}
+                className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.25em] flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {syncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCcw size={12} />} Sync now
+              </button>
+            )}
             <button
               onClick={() => void runDisconnect()}
               disabled={disconnecting}
