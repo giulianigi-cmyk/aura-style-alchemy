@@ -41,6 +41,15 @@ import {
   lengthAppliesTo,
 } from "@/lib/wardrobe-options";
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"]);
+// Same 1-5 scale the outfit/trip engine already scores every piece on
+// (see the Outfit Engine spec) — surfaced here so it's visible and
+// correctable, not just something the AI silently assigns.
+const FORMALITY_OPTIONS = ["1 · Very casual", "2 · Casual", "3 · Smart casual", "4 · Elegant", "5 · Formal"];
+const DAY_EVENING_OPTIONS: { value: string; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "evening", label: "Evening" },
+  { value: "both", label: "Both" },
+];
 
 function isImageFile(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -216,7 +225,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
-    const [altImages, setAltImages] = useState<string[]>([]);
+  const [altImages, setAltImages] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState<string | null>(null);
   const [brokenAltImages, setBrokenAltImages] = useState<Record<string, boolean>>({});
   const [importReferer, setImportReferer] = useState<string>("");
@@ -832,6 +841,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               </select>
               <select
                 value={filterMaterial}
+                value={filterMaterial}
                 onChange={(e) => setFilterMaterial(e.target.value)}
                 className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-[11px]"
               >
@@ -978,7 +988,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             )}
           </div>
 
-                    {altImages.length > 1 && (
+          {altImages.length > 1 && (
             <div className="mt-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Wrong photo? Pick another</p>
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
@@ -1011,7 +1021,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           )}
-
 
           <div className="mt-6 flex items-center gap-2 rounded-full bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-3.5 py-2 w-fit">
             {stage !== "idle" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
@@ -1117,6 +1126,39 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                   );
                 })}
 
+              </div>
+            </div>
+
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Formality</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">How dressed-up this piece reads — used to decide which occasions it's eligible for.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {FORMALITY_OPTIONS.map((label, i) => {
+                  const level = i + 1;
+                  const on = formality === level;
+                  return (
+                    <button key={label} onClick={() => setFormality(level)}
+                      className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Day / Evening</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">When it's actually worn — a piece missing this never shows up in outfit or trip suggestions at all.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {DAY_EVENING_OPTIONS.map(({ value, label }) => {
+                  const on = dayEvening === value;
+                  return (
+                    <button key={value} onClick={() => setDayEvening(value)}
+                      className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
