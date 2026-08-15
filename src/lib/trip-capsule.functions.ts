@@ -59,6 +59,7 @@ const BOTTOM_ROLE = new Set(["Bottoms", "Dresses", "Jumpsuits"]);
 const SHOE_ROLE = new Set(["Shoes"]);
 const SWIM_ROLE = new Set(["Swimwear"]);
 const ACTIVE_ROLE = new Set(["Activewear"]);
+const BAG_ROLE = new Set(["Bags"]);
 
 /** Categories whose classification (formality / day_evening) is almost
  *  never filled in, because they're bought for a single obvious purpose.
@@ -139,28 +140,40 @@ type Requirement = {
   label: string | null;
 };
 
-function versatility(it: PoolItem): number {
+function versatility(it: PoolItem, req?: Requirement): number {
   let score = 0;
   const colors = (it.colors ?? []).map((c) => c.toLowerCase());
   if (colors.some((c) => NEUTRAL_COLORS.some((n) => c.includes(n)))) score += 2;
   if (it.formality === 2 || it.formality === 3) score += 2;
   else if (it.formality === 1 || it.formality === 4) score += 1;
   if (it.dayEvening === "both") score += 2;
+  // Formality/day-evening are no longer hard filters in eligibleFor (see
+  // there for why) — this is what keeps a genuinely well-matched piece
+  // ranked above a merely-available one, without excluding the latter
+  // outright when it's all there is.
+  if (req) {
+    const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
+    if (it.formality >= min && it.formality <= max) score += 3;
+    if (it.dayEvening === req.daySegment) score += 2;
+  }
   return score;
 }
 
 function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolItem[] {
-  const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
   const kind = activityKind(req);
   const purposeRole = kind === "swim" ? SWIM_ROLE : kind === "sport" ? ACTIVE_ROLE : null;
   return pool.filter((it) => {
-    // A pool or gym day's defining garment is exempt from the formality
-    // window: it's the right piece by purpose, not by score.
     const isPurpose = purposeRole?.has(it.category ?? "") ?? false;
-    if (!isPurpose && (it.formality < min || it.formality > max)) return false;
-    if (it.dayEvening !== "both" && it.dayEvening !== req.daySegment) return false;
-    // Season is also skipped for the purpose garment: a swimsuit tagged
-    // Summer is still the right piece for a February pool day abroad.
+    // Formality range and exact day/evening match used to be hard
+    // exclusions here, combined with season in one AND — three narrow
+    // filters stacked together could crush the eligible pool down to a
+    // handful of pieces even on a wardrobe with plenty of genuinely
+    // wearable options. Season stays the real filter (already lenient:
+    // untagged or "All Seasons" always passes); formality and day/evening
+    // now only influence ranking (versatility() below, and the AI's own
+    // occasion-aware judgment in suggestOutfitCore) instead of excluding.
+    // The swim/sport purpose exemption is unaffected — that's a genuine
+    // "wrong item for this specific activity" case, not an over-filter.
     if (!isPurpose && !matchesSeasonLoose(it.season, season)) return false;
     return true;
   });
@@ -189,6 +202,22 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
   // rotates 5x each). Scales gently with the number of requirements
   // (~2 per day), capped so it never balloons into "pack everything".
   const perRoleTarget = Math.min(2 + Math.floor(requirements.length / 4), 5);
+  // Shoes don't need the same rotation depth as tops/bottoms — they're
+  // bulky to pack and get reworn far more before anyone notices. Scaling
+  // them the same way as tops turned "add one more top" into "also add a
+  // third pair of sneakers", which is the opposite of what a capsule is for.
+  const shoeTarget = Math.min(perRoleTarget, 2);
+  // Bags were never guaranteed a slot in the capsule at all before — the
+  // AI's gender-aware prompt could suggest one, but only if an eligible
+  // bag happened to already be in the pool by chance. A short trip only
+  // needs one bag total; a week or longer earns a second (day + evening).
+  const approxTripDays = Math.max(1, Math.ceil(requirements.length / 2));
+  const bagTarget = approxTripDays >= 7 ? 2 : 1;
+  // Tops in hot weather want closer to one fresh piece per day (sweat,
+  // not just looking different) — cooler seasons tolerate a top worn
+  // twice comfortably, which perRoleTarget already reflects.
+  const isSummerTrip = requirements.some((r) => seasonByDate.get(r.date) === "Summer");
+  const topTarget = isSummerTrip ? Math.min(approxTripDays, 6) : perRoleTarget;
 
   const withEligibility = requirements.map((req) => ({
     req,
@@ -216,16 +245,21 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
       }
     }
     if (!hasRole(inCapsule, SHOE_ROLE)) missingRoles.push(SHOE_ROLE);
+    // A pool day doesn't want a handbag, but everyday/evening looks do —
+    // added last so it never displaces a top/bottom/shoe pick above.
+    if (kind !== "swim" && kind !== "sport" && !hasRole(inCapsule, BAG_ROLE)) missingRoles.push(BAG_ROLE);
 
 
     for (const role of missingRoles) {
       const candidates = eligible
         .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id))
-        .sort((a, b) => versatility(b) - versatility(a) || REWEARABILITY[b.category ?? ""] - REWEARABILITY[a.category ?? ""]);
+        .sort((a, b) => versatility(b, req) - versatility(a, req) || REWEARABILITY[b.category ?? ""] - REWEARABILITY[a.category ?? ""]);
       // Add up to perRoleTarget per missing role, not a flat 2 — a single
       // top or single pair of shoes for the whole trip is technically
-      // minimal but leaves zero room for Level 6 (variety) later.
-      candidates.slice(0, perRoleTarget).forEach((it) => capsule.add(it.id));
+      // minimal but leaves zero room for Level 6 (variety) later. Shoes
+      // and bags use their own lower targets (see above).
+      const target = role === SHOE_ROLE ? shoeTarget : role === BAG_ROLE ? bagTarget : role === TOP_ROLE ? topTarget : perRoleTarget;
+      candidates.slice(0, target).forEach((it) => capsule.add(it.id));
     }
   }
 
@@ -349,7 +383,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       : allRequirements.filter((r) => !plannedActivityIds.has(r.activityId));
     const skippedExisting = allRequirements.length - requirements.length;
 
-        // Credit- and cost-conscious cap — a trip logging more than 30
+    // Credit- and cost-conscious cap — a trip logging more than 30
     // activities in one go is not the common case, and this keeps a
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
@@ -359,7 +393,6 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // exiting early here used to skip the underwear/packing-list step
     // further down entirely — a second "Generate" press with nothing new
     // to plan would silently never add underwear at all.
-
 
     // One batched lookup for every unique (destination, date) the capped
     // requirements actually touch — not one call per requirement, since a
@@ -487,6 +520,9 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         occasion: req.label ?? req.dressCode ?? null,
         notes: result.explanation || null,
         status: "planned",
+        weather_temp: temperature != null ? Math.round(temperature) : null,
+        weather_condition: condition,
+        weather_estimated: dayWeather?.estimated ?? null,
       } as never, { onConflict: resolvePlanSlot({ tripActivityId: req.activityId }).onConflict });
 
       if (insErr) {
@@ -515,15 +551,18 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const takeUpTo = (items: any[], n: number) => items.slice(0, Math.max(0, n)).map((it) => it.id as string);
     const bottomsSubcats = profile?.gender === "Man" ? ["Boxers", "Briefs"] : profile?.gender === "Woman" ? ["Briefs", "Panties"] : ["Briefs", "Panties", "Boxers"];
     const includeBras = profile?.gender !== "Man";
+    // A pajama set is worn for days, not once — one every 5-7 days of
+    // trip is enough rotation, not a flat 2 regardless of length.
+    const sleepwearTarget = Math.max(1, Math.ceil(totalTripDays / 6));
     takeUpTo(underwearPool.filter((it) => bottomsSubcats.includes(it.subcategory)), totalTripDays)
       .forEach((id) => allChosenItemIds.add(id));
     if (includeBras) {
       takeUpTo(underwearPool.filter((it) => ["Bra", "Sports Bra"].includes(it.subcategory)), Math.ceil(totalTripDays / 3))
         .forEach((id) => allChosenItemIds.add(id));
     }
-        takeUpTo(underwearPool.filter((it) => it.subcategory === "Socks"), totalTripDays)
+    takeUpTo(underwearPool.filter((it) => it.subcategory === "Socks"), totalTripDays)
       .forEach((id) => allChosenItemIds.add(id));
-    takeUpTo(underwearPool.filter((it) => it.subcategory === "Sleepwear"), Math.min(2, totalTripDays))
+    takeUpTo(underwearPool.filter((it) => it.subcategory === "Sleepwear"), sleepwearTarget)
       .forEach((id) => allChosenItemIds.add(id));
 
     // Real owned pieces above cover people who've photographed their
@@ -539,7 +578,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       { name: "Underwear", quantity: totalTripDays },
       ...(includeBras ? [{ name: "Bras", quantity: Math.ceil(totalTripDays / 3) }] : []),
       { name: "Socks", quantity: totalTripDays },
-      { name: "Sleepwear", quantity: Math.min(2, totalTripDays) },
+      { name: "Sleepwear", quantity: sleepwearTarget },
     ];
     const essentialsToInsert = essentialTargets.filter((t) => t.quantity > 0 && !existingEssentialNames.has(t.name));
     if (essentialsToInsert.length) {
@@ -551,7 +590,6 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // --- Packing list: only now, per the sequence in the roadmap doc.
     // Never overwrites a piece the person already marked packed by hand
     // — only fills in what's missing. ---
-
     let packingItemsAdded = 0;
     if (allChosenItemIds.size) {
       const { data: existingPacking } = await (supabase.from("trip_packing_items" as never) as any)
