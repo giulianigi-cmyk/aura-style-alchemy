@@ -72,12 +72,26 @@ export async function suggestOutfitCore(params: {
     isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
 
   // Excluding items already used earlier in a multi-day batch is how
-  // repeats get avoided across a generated week — but if that would
-  // leave too little to compose a real outfit from, allow them back in
-  // rather than fail to produce anything for that day.
+  // repeats get avoided across a generated week — done per category so a
+  // shortage in one (e.g. only one or two bags owned) doesn't force
+  // avoidance to relax for every other category too. A top only comes
+  // back into rotation when tops specifically run out, not because bags
+  // ran out first.
   if (params.avoidItemIds?.length) {
-    const withoutRecent = eligibleItems.filter((it) => !params.avoidItemIds!.includes(it.id));
-    if (withoutRecent.length >= 3) eligibleItems = withoutRecent;
+    const avoidSet = new Set(params.avoidItemIds);
+    const byCategory = new Map<string, SuggestOutfitItem[]>();
+    for (const it of eligibleItems) {
+      const cat = it.category ?? "";
+      const arr = byCategory.get(cat) ?? [];
+      arr.push(it);
+      byCategory.set(cat, arr);
+    }
+    const filtered: SuggestOutfitItem[] = [];
+    for (const catItems of byCategory.values()) {
+      const withoutRecent = catItems.filter((it) => !avoidSet.has(it.id));
+      filtered.push(...(withoutRecent.length > 0 ? withoutRecent : catItems));
+    }
+    eligibleItems = filtered;
   }
 
   const wx = params.temperature != null
@@ -114,6 +128,7 @@ export async function suggestOutfitCore(params: {
     "Pick 3-5 items that work together (typically 1 top + 1 bottom OR 1 dress, + 1 shoes, optionally 1 outerwear and 1 accessory/bag).",
     ...(genderLine ? [genderLine] : []),
     "Match the weather and occasion. Prefer colors that harmonize and consistent style.",
+    "Above ~25°C, prefer a top that hasn't already been worn earlier in this batch over one that has, even if it scores slightly lower on style — a fresh piece matters more in hot weather (sweat, hygiene) than in cooler seasons, where repeating a top once or twice is completely normal.",
     ...(boldnessLine ? [boldnessLine] : []),
     "NEVER pick more than one outerwear/layering piece in the same outfit — a blazer and a cardigan (or any two of blazer/cardigan/jacket/coat) are never worn together. Pick at most one.",
     "Weather overrides everything else for outerwear: above ~26°C, do not include a blazer, jacket, cardigan, or coat at all, regardless of occasion — a lightweight top alone is correct. Only add outerwear when the temperature genuinely calls for it.",
