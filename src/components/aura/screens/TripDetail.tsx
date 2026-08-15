@@ -673,11 +673,12 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
           {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{outfitPlans.length} generated</p>}
         </div>
 
-        {outfitPlans.length === 0 && (
+                {outfitPlans.length === 0 && (
           <p className="text-sm text-muted-foreground mb-3">
-            Builds a packing capsule and a look for each activity logged above — the smallest set of pieces that covers the whole trip.
+            Builds a packing capsule and a look for each day of the trip — using the activities logged above where you've added them, and a generic day + evening look everywhere else.
           </p>
         )}
+
 
 
         {activities.length > 0 && (
@@ -755,17 +756,18 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
           </div>
         )}
 
-        <button
+             <button
           onClick={() => void generateCapsule()}
-          disabled={generating || activities.length === 0}
+          disabled={generating}
           className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
         >
           {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
           {outfitPlans.length > 0 ? "Generate remaining" : "Generate outfits"}
         </button>
         {activities.length === 0 && (
-          <p className="mt-2 text-[11px] text-muted-foreground text-center">Log an activity above first.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground text-center">No activities logged — AURA will build a generic day + evening capsule for the whole trip. Log activities above for specific looks instead.</p>
         )}
+
       </section>
 
       {confirmDelete && (
