@@ -1009,10 +1009,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                   );
                 })}
               </div>
-
-              </div>
             </div>
           )}
+
 
           <div className="mt-6 flex items-center gap-2 rounded-full bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-3.5 py-2 w-fit">
             {stage !== "idle" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
