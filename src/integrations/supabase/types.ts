@@ -962,6 +962,33 @@ export type Database = {
           },
         ]
       }
+      scrape_domain_hints: {
+        Row: {
+          detected_signal: string | null
+          domain: string
+          first_detected_at: string
+          hit_count: number
+          last_seen_at: string
+          needs_fallback: boolean
+        }
+        Insert: {
+          detected_signal?: string | null
+          domain: string
+          first_detected_at?: string
+          hit_count?: number
+          last_seen_at?: string
+          needs_fallback?: boolean
+        }
+        Update: {
+          detected_signal?: string | null
+          domain?: string
+          first_detected_at?: string
+          hit_count?: number
+          last_seen_at?: string
+          needs_fallback?: boolean
+        }
+        Relationships: []
+      }
       shared_library_items: {
         Row: {
           brand: string | null
@@ -1802,6 +1829,10 @@ export type Database = {
           status: string
           username: string
         }[]
+      }
+      record_scrape_domain_hint: {
+        Args: { p_domain: string; p_signal: string }
+        Returns: undefined
       }
       search_profiles: {
         Args: { _q: string }
