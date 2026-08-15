@@ -369,10 +369,11 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
 
     const capsule = buildCapsule(pool, capped, seasonByDate);
 
-    const created: { date: string; daySegment: string }[] = [];
+        const created: { date: string; daySegment: string }[] = [];
     const failed: { date: string; daySegment: string; reason: string }[] = [];
-    const usedRecently: string[] = [];
+    const usedOutfits: string[][] = [];
     const allChosenItemIds = new Set<string>();
+
 
     for (const req of capped) {
       const season = seasonByDate.get(req.date)!;
@@ -393,15 +394,22 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         style: it.style, season: it.season, brand: it.brand, material: it.material, locationId: it.locationId,
       }));
 
-      // Estimated, not measured: no live forecast is wired in for dates
+            // Estimated, not measured: no live forecast is wired in for dates
       // that may be months out — see docs/roadmap/trip-capsule-packing.md.
       // suggestOutfitCore gets no temperature at all rather than a
       // fabricated one; season already filtered the pool above.
       // Variety (Level 6) is sought only within what reuse (Level 4)
-      // already allows — never the other way round. Without laundry the
-      // capsule IS the point, so avoidance stays light (don't fight
-      // reuse); with laundry there's more room to actively vary looks.
-      const avoidWindow = trip.laundry_available ? 8 : 2;
+      // already allows — never the other way round. The window is
+      // measured in whole outfits, not a flat item count: an outfit is
+      // ~3 items, so a count-based window smaller than that let the very
+      // next outfit reuse a piece from the one just generated — visible
+      // as the same top three times in six outfits. Without laundry the
+      // capsule still reuses pieces across the trip on purpose, but not
+      // the literal same piece two outfits in a row; with laundry there's
+      // more room to actively vary looks. suggestOutfitCore already
+      // relaxes this itself if excluding recent items leaves too little
+      // to compose a real outfit from, so widening this is safe.
+      const avoidOutfitWindow = trip.laundry_available ? 3 : 2;
       const result = await suggestOutfitCore({
         supabase, userId,
         temperature: null,
@@ -411,7 +419,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
         items,
-        avoidItemIds: usedRecently.slice(-avoidWindow),
+        avoidItemIds: usedOutfits.slice(-avoidOutfitWindow).flat(),
         locationIdOverride: null,
       });
 
@@ -420,8 +428,9 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         continue;
       }
 
-      usedRecently.push(...result.item_ids);
+      usedOutfits.push(result.item_ids);
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
+
 
       const { error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
