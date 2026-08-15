@@ -24,7 +24,7 @@ function fmtDate(d: string) {
   return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null };
+type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
 
 export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: string }) {
   const { user } = useAuth();
@@ -387,7 +387,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
                       className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${item.status === "packed" ? "bg-foreground border-foreground" : "border-border"}`}
                     >{item.status === "packed" && <Check size={11} className="text-background" />}</button>
                     <span className={`flex-1 text-sm ${item.status === "packed" ? "line-through text-muted-foreground" : ""}`}>
-                      {item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}
+                      {item.name} ×{item.quantity}
                     </span>
                     <button onClick={() => void removeEssential(item.id)} aria-label={`Remove ${item.name}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                       <X size={13} />
@@ -541,7 +541,6 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
           </section>
         );
       })()}
-
       {pickerOpen && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
@@ -780,6 +779,11 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
                         </>
                       )}
                     </div>
+                    {op?.weather_temp != null && (
+                      <p className="text-[10px] text-muted-foreground mb-2 -mt-1">
+                        {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? " · Estimated" : ""}
+                      </p>
+                    )}
                     {op ? (
                       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                         {op.item_ids.map((id) => {
@@ -813,7 +817,7 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
             {genResult.unclassifiedExcluded > 0 && (
               <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
                 <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                {genResult.unclassifiedExcluded} wardrobe piece{genResult.unclassifiedExcluded === 1 ? "" : "s"} skipped — not yet classified. Run "Update wardrobe compatibility" in Wardrobe for fuller coverage.
+                {genResult.unclassifiedExcluded} wardrobe piece{genResult.unclassifiedExcluded === 1 ? "" : "s"} skipped — not yet classified. Tap the wand icon (✨) at the top of Wardrobe to classify them.
               </p>
             )}
           </div>
