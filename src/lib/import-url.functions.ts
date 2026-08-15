@@ -1004,7 +1004,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   }
 
   let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
-  if (html) extracted = extractFromHtml(html, target);
+  if (html) extracted = await extractFromHtml(html, target);
 
   if (!extracted.imageUrl && !usedFallback) {
     if (!hasFallback) {
