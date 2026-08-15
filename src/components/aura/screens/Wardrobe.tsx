@@ -586,21 +586,32 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{items.length} pieces</p>
           <h1 className="font-serif text-4xl mt-1">Your closet</h1>
         </div>
-                <div className="flex gap-2">
-          <button
-            onClick={() => void runLegacyMigration()}
-            disabled={migrating}
-            aria-label="Re-analyze existing pieces with AI (may take a while for large wardrobes)"
-            title="Re-analyze existing pieces with AI (may take a while for large wardrobes)"
-            className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-50"
-          >
-            {migrating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-          </button>
+                        <div className="flex gap-2">
+          {(() => {
+            const unclassifiedCount = items.filter((it) => it.formality == null).length;
+            if (migrating || unclassifiedCount > 0) {
+              return (
+                <button
+                  onClick={() => void runLegacyMigration()}
+                  disabled={migrating}
+                  aria-label="Update wardrobe compatibility — re-analyze existing pieces with AI so outfit and trip generation can use them (may take a while for large wardrobes)"
+                  className="h-12 rounded-full border border-border pl-3.5 pr-4 flex items-center gap-1.5 active:scale-90 transition disabled:opacity-50 shrink-0"
+                >
+                  {migrating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                  <span className="text-[10px] uppercase tracking-[0.2em] whitespace-nowrap">
+                    {migrating ? "Updating…" : `Update ${unclassifiedCount}`}
+                  </span>
+                </button>
+              );
+            }
+            return null;
+          })()}
 
           <button
             onClick={() => setAddSheetOpen(true)}
             aria-label="Add pieces"
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
+
           >
             <Plus size={20} />
           </button>
