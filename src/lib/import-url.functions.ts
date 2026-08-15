@@ -315,8 +315,8 @@ function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | nul
   return matched ?? nodes[0];
 }
 
-const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook)/i;
-const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary)/i;
+const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook|-(?:fi|bi|m|dt\d*w?)\.(?:jpe?g|png|webp)(?:\?|$))/i;
+const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary|-[fb]\.(?:jpe?g|png|webp)(?:\?|$))/i;
 const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumbnail|swatch|badge|banner|arrow|chevron|pixel\.gif|tracking)/i;
 const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|editorial|carousel|thumbnail|swatch)/i;
 // Lazy-loaded image tags on many sites (Calzedonia included) carry a tiny
@@ -325,6 +325,13 @@ const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|edito
 // outright — otherwise the placeholder can win by default and break
 // background removal downstream, which only accepts raster formats.
 const SVG_URL_RE = /\.svg(\?|#|$)/i;
+// A second, sneakier version of the same trick (Shopify themes, Bluebella
+// included): the placeholder is a REAL raster file, just a 1x1-pixel one,
+// swapped for the real photo by client-side JS we never execute. It passes
+// both the SVG filter and a content-type check, since it genuinely is a
+// valid JPEG — only its filename gives it away.
+const LQIP_PLACEHOLDER_RE = /(^|[_-])1x1([_.-]|$)|_lqip|blank\.(?:jpe?g|png|gif)(?:\?|$)|transparent\.(?:jpe?g|png|gif)(?:\?|$)|spacer\.(?:jpe?g|png|gif)(?:\?|$)/i;
+
 
 
 function collectDomImages(html: string, base: URL): Array<{ url: string; alt: string }> {
@@ -333,7 +340,8 @@ function collectDomImages(html: string, base: URL): Array<{ url: string; alt: st
   const push = (v: string | null | undefined, alt: string) => {
     if (!v) return;
     const t = decodeHtml(v.trim());
-    if (!t || t.startsWith("data:") || SVG_URL_RE.test(t)) return;
+        if (!t || t.startsWith("data:") || SVG_URL_RE.test(t) || LQIP_PLACEHOLDER_RE.test(t)) return;
+
     try {
       const abs = new URL(t, base).toString();
       if (seen.has(abs)) return;
@@ -637,12 +645,13 @@ function extractFromHtml(html: string, target: URL): Extracted {
   const ldImgs = productNode
     ? jsonLdImages(productNode)
         .map((u) => { try { return new URL(u, target).toString(); } catch { return null; } })
-        .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()) && !SVG_URL_RE.test(u))
+                .filter((u): u is string => u !== null && !JUNK_KEYWORDS.test(u.toLowerCase()) && !SVG_URL_RE.test(u) && !LQIP_PLACEHOLDER_RE.test(u))
     : [];
   const ldImgsScored = ldImgs.map((url) => ({ url, alt: "" }));
 
   const domImgs = collectDomImages(stripExcludedSections(html), target)
-    .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`) && !SVG_URL_RE.test(img.url));
+    .filter((img) => !JUNK_KEYWORDS.test(`${img.url.toLowerCase()} ${img.alt.toLowerCase()}`) && !SVG_URL_RE.test(img.url) && !LQIP_PLACEHOLDER_RE.test(img.url));
+
   const rankDom = (arr: Array<{ url: string; alt: string }>) =>
     arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
@@ -658,7 +667,7 @@ function extractFromHtml(html: string, target: URL): Extracted {
   if (og) {
     try {
       const abs = new URL(og, target).toString();
-      const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase()) || SVG_URL_RE.test(abs);
+            const junky = JUNK_KEYWORDS.test(abs.toLowerCase()) || RELATED_URL_KEYWORDS.test(abs.toLowerCase()) || SVG_URL_RE.test(abs) || LQIP_PLACEHOLDER_RE.test(abs);
       const looksLikeProduct = productNodes.length > 0 ||
         tokens.some((t) => t.length >= 4 && abs.toLowerCase().includes(t));
       if (!junky && looksLikeProduct) {
@@ -831,6 +840,10 @@ export type ResolvedProductImage =
 const USABLE_IMAGE_CONTENT_TYPE_RE = /^image\/(jpeg|jpg|png|webp|gif|avif)/i;
 const IMAGE_VALIDATION_TIMEOUT_MS = 4000;
 const IMAGE_VALIDATION_CONCURRENCY = 5;
+// A real product photo is never this small — this is sized to comfortably
+// clear a 1x1-pixel lazy-load placeholder (typically a few hundred bytes)
+// while never rejecting a legitimate, if heavily compressed, product shot.
+const MIN_USABLE_IMAGE_BYTES = 3000;
 
 /**
  * Many fashion sites (Bluebella included) reject bare cross-origin <img>
@@ -843,7 +856,7 @@ const IMAGE_VALIDATION_CONCURRENCY = 5;
  * This also catches anything that slipped past the SVG filter above.
  */
 async function isUsableImageUrl(url: string, refererUrl: string): Promise<boolean> {
-  if (SVG_URL_RE.test(url)) return false;
+  if (SVG_URL_RE.test(url) || LQIP_PLACEHOLDER_RE.test(url)) return false;
   if (checkPublicUrl(url)) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), IMAGE_VALIDATION_TIMEOUT_MS);
@@ -852,19 +865,35 @@ async function isUsableImageUrl(url: string, refererUrl: string): Promise<boolea
     Referer: refererUrl,
   };
   try {
-    let res = await safeFetch(url, { method: "HEAD", headers, signal: controller.signal });
-    if (!res.ok) {
-      res = await safeFetch(url, { method: "GET", headers, signal: controller.signal });
+    const head = await safeFetch(url, { method: "HEAD", headers, signal: controller.signal });
+    const headContentType = head.headers.get("content-type") ?? "";
+    const headLen = Number(head.headers.get("content-length") ?? "");
+    if (head.ok && Number.isFinite(headLen) && headLen > 0) {
+      // A 1x1-pixel "lazy load" placeholder (Bluebella's trick, and others
+      // like it) is a genuinely valid image file — same content-type, same
+      // 200 status — just a few hundred bytes because there's almost
+      // nothing to encode. A real product photo is always tens of KB at
+      // minimum, so file size catches this even when the filename doesn't
+      // give it away.
+      return USABLE_IMAGE_CONTENT_TYPE_RE.test(headContentType) && headLen >= MIN_USABLE_IMAGE_BYTES;
     }
+    // No usable Content-Length from HEAD (some CDNs omit it, or reject
+    // HEAD outright) — fall back to a real GET and measure the bytes.
+    const res = await safeFetch(url, { method: "GET", headers, signal: controller.signal });
     const contentType = res.headers.get("content-type") ?? "";
-    try { await res.body?.cancel?.(); } catch { /* ignore */ }
-    return res.ok && USABLE_IMAGE_CONTENT_TYPE_RE.test(contentType);
+    if (!res.ok || !USABLE_IMAGE_CONTENT_TYPE_RE.test(contentType)) {
+      try { await res.body?.cancel?.(); } catch { /* ignore */ }
+      return false;
+    }
+    const bytes = await res.arrayBuffer();
+    return bytes.byteLength >= MIN_USABLE_IMAGE_BYTES;
   } catch {
     return false;
   } finally {
     clearTimeout(timer);
   }
 }
+
 
 /** Runs isUsableImageUrl over the list with bounded concurrency and
  *  returns only the URLs that passed, preserving original order. */
