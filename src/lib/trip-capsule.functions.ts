@@ -349,17 +349,17 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       : allRequirements.filter((r) => !plannedActivityIds.has(r.activityId));
     const skippedExisting = allRequirements.length - requirements.length;
 
-    // Credit- and cost-conscious cap — a trip logging more than 30
+        // Credit- and cost-conscious cap — a trip logging more than 30
     // activities in one go is not the common case, and this keeps a
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
-    if (capped.length === 0) {
-      return {
-        generated: 0, skippedExisting, failed: [] as { date: string; daySegment: string; reason: string }[],
-        unclassifiedExcluded: 0, packingItemsAdded: 0,
-      };
-    }
+    // No early-return when capped is empty (e.g. everything's already
+    // generated): the for-loop below is a no-op on an empty array, and
+    // exiting early here used to skip the underwear/packing-list step
+    // further down entirely — a second "Generate" press with nothing new
+    // to plan would silently never add underwear at all.
+
 
     // One batched lookup for every unique (destination, date) the capped
     // requirements actually touch — not one call per requirement, since a
@@ -521,14 +521,37 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       takeUpTo(underwearPool.filter((it) => ["Bra", "Sports Bra"].includes(it.subcategory)), Math.ceil(totalTripDays / 3))
         .forEach((id) => allChosenItemIds.add(id));
     }
-    takeUpTo(underwearPool.filter((it) => it.subcategory === "Socks"), totalTripDays)
+        takeUpTo(underwearPool.filter((it) => it.subcategory === "Socks"), totalTripDays)
       .forEach((id) => allChosenItemIds.add(id));
     takeUpTo(underwearPool.filter((it) => it.subcategory === "Sleepwear"), Math.min(2, totalTripDays))
       .forEach((id) => allChosenItemIds.add(id));
 
+    // Real owned pieces above cover people who've photographed their
+    // underwear; most people haven't. This adds the same quantities as a
+    // plain Essentials checklist entry (no photo needed) so the suggestion
+    // still shows up either way — "you need 3 pairs, 1 bra" rather than
+    // nothing at all. Only inserted if not already there, same
+    // never-overwrite rule as the photographed packing list above.
+    const { data: existingEssentials } = await (supabase.from("trip_essentials" as never) as any)
+      .select("name").eq("trip_id", data.tripId).eq("category", "Underwear");
+    const existingEssentialNames = new Set(((existingEssentials ?? []) as { name: string }[]).map((e) => e.name));
+    const essentialTargets: { name: string; quantity: number }[] = [
+      { name: "Underwear", quantity: totalTripDays },
+      ...(includeBras ? [{ name: "Bras", quantity: Math.ceil(totalTripDays / 3) }] : []),
+      { name: "Socks", quantity: totalTripDays },
+      { name: "Sleepwear", quantity: Math.min(2, totalTripDays) },
+    ];
+    const essentialsToInsert = essentialTargets.filter((t) => t.quantity > 0 && !existingEssentialNames.has(t.name));
+    if (essentialsToInsert.length) {
+      await (supabase.from("trip_essentials" as never) as any).insert(
+        essentialsToInsert.map((t) => ({ trip_id: data.tripId, category: "Underwear", name: t.name, quantity: t.quantity, status: "to_pack" })),
+      );
+    }
+
     // --- Packing list: only now, per the sequence in the roadmap doc.
     // Never overwrites a piece the person already marked packed by hand
     // — only fills in what's missing. ---
+
     let packingItemsAdded = 0;
     if (allChosenItemIds.size) {
       const { data: existingPacking } = await (supabase.from("trip_packing_items" as never) as any)
