@@ -90,8 +90,9 @@ export async function syncUserCalendar(userId: string): Promise<{ ok: boolean; e
 
   if (expiresAt && expiresAt.getTime() < Date.now() + 60_000) {
     if (!conn.refresh_token) {
+      const msg = "RECONNECT_REQUIRED: No refresh token on file — please reconnect your calendar.";
       await (supabaseAdmin.from("calendar_connections" as never) as any)
-        .update({ last_sync_error: "Token expired, no refresh token — reconnect required." }).eq("id", conn.id);
+        .update({ last_sync_error: msg }).eq("id", conn.id);
       return { ok: false, error: "Token expired — please reconnect your calendar." };
     }
     try {
@@ -102,7 +103,14 @@ export async function syncUserCalendar(userId: string): Promise<{ ok: boolean; e
         token_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
       }).eq("id", conn.id);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Token refresh failed";
+      const raw = e instanceof Error ? e.message : "Token refresh failed";
+      // Google returns invalid_grant when the refresh token itself is
+      // expired or was revoked — the only fix is a fresh OAuth consent,
+      // "Sync now" retrying the same refresh token will never succeed.
+      const friendly = /invalid_grant/i.test(raw)
+        ? "Google Calendar access has expired or was revoked. Please reconnect."
+        : raw;
+      const msg = `RECONNECT_REQUIRED: ${friendly}`;
       await (supabaseAdmin.from("calendar_connections" as never) as any).update({ last_sync_error: msg }).eq("id", conn.id);
       return { ok: false, error: "Token refresh failed — please reconnect your calendar." };
     }
