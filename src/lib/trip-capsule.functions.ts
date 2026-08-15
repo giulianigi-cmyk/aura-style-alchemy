@@ -11,7 +11,6 @@ function daysBetween(a: string, b: string): number {
   return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
 }
 
-
 const InputSchema = z.object({
   tripId: z.string().uuid(),
   /** When present, only these activities are (re)generated, and an
@@ -185,6 +184,12 @@ function hasRole(items: PoolItem[], role: Set<string>): boolean {
 function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDate: Map<string, string>): Set<string> {
   const capsule = new Set<string>();
 
+  // 2 per role was a flat floor regardless of trip length — fine for a
+  // weekend, thin for anything longer (a 10-day trip with only 2 tops
+  // rotates 5x each). Scales gently with the number of requirements
+  // (~2 per day), capped so it never balloons into "pack everything".
+  const perRoleTarget = Math.min(2 + Math.floor(requirements.length / 4), 5);
+
   const withEligibility = requirements.map((req) => ({
     req,
     eligible: eligibleFor(pool, req, seasonByDate.get(req.date)!),
@@ -217,10 +222,10 @@ function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDat
       const candidates = eligible
         .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id))
         .sort((a, b) => versatility(b) - versatility(a) || REWEARABILITY[b.category ?? ""] - REWEARABILITY[a.category ?? ""]);
-      // Add up to 2 per missing role, not just 1 — a single top or single
-      // pair of shoes for the whole trip is technically minimal but
-      // leaves zero room for Level 6 (variety) later.
-      candidates.slice(0, 2).forEach((it) => capsule.add(it.id));
+      // Add up to perRoleTarget per missing role, not a flat 2 — a single
+      // top or single pair of shoes for the whole trip is technically
+      // minimal but leaves zero room for Level 6 (variety) later.
+      candidates.slice(0, perRoleTarget).forEach((it) => capsule.add(it.id));
     }
   }
 
@@ -233,12 +238,12 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-            const { data: tripRow } = await (supabase.from("trips" as never) as any)
+    const { data: tripRow } = await (supabase.from("trips" as never) as any)
       .select("id, laundry_available").eq("id", data.tripId).eq("user_id", userId).maybeSingle();
     if (!tripRow) throw new Error("Trip not found");
     const trip = tripRow as { id: string; laundry_available: boolean };
 
-        // A trip's date range is the union of its destinations' ranges — trips
+    // A trip's date range is the union of its destinations' ranges — trips
     // itself carries no dates (a trip can have several destinations, each
     // with its own start/end).
     const { data: destRows } = await (supabase.from("trip_destinations" as never) as any)
@@ -263,7 +268,6 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       }, withCoords[0]);
     }
 
-
     const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }] =
       await Promise.all([
         (supabase.from("profiles" as never) as any).select("dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle(),
@@ -277,7 +281,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     const dressRules = dressPreferencesToPrompt(profile?.dress_preferences ?? null);
     const sourceLocationIds = ((sourceLocRows ?? []) as { location_id: string }[]).map((r) => r.location_id);
 
-        // --- One requirement per logged activity: since outfit_plans is now
+    // --- One requirement per logged activity: since outfit_plans is now
     // keyed on trip_activity_id (partial UNIQUE), two activities in the
     // same afternoon each get their own look instead of being merged
     // into a single "A + B" plan. A date with zero logged activities
@@ -293,7 +297,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // any date that already has a real activity is left exactly as the
     // person entered it. Only runs on a full-trip generate — a targeted
     // regenerate of specific activities has no business inventing new ones.
-        if (!data.activityIds?.length && tripStartDate && tripEndDate) {
+    if (!data.activityIds?.length && tripStartDate && tripEndDate) {
       const covered = new Set(
         activities.map((a) => `${a.activity_date}|${a.day_segment === "evening" ? "evening" : "day"}`),
       );
@@ -301,7 +305,6 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       for (let d = new Date(`${tripStartDate}T00:00:00`); d <= new Date(`${tripEndDate}T00:00:00`); d.setDate(d.getDate() + 1)) {
         tripDates.push(d.toISOString().slice(0, 10));
       }
-
       const toInsert = tripDates.flatMap((date) =>
         (["day", "evening"] as const)
           .filter((segment) => !covered.has(`${date}|${segment}`))
@@ -334,7 +337,6 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         label: a.activity_type,
       }));
 
-
     // Targeted runs mean "regenerate this one" — the existing plan is
     // overwritten by the upsert rather than skipped.
     const plannedActivityIds = new Set(
@@ -352,7 +354,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
-        if (capped.length === 0) {
+    if (capped.length === 0) {
       return {
         generated: 0, skippedExisting, failed: [] as { date: string; daySegment: string; reason: string }[],
         unclassifiedExcluded: 0, packingItemsAdded: 0,
@@ -406,11 +408,10 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
 
     const capsule = buildCapsule(pool, capped, seasonByDate);
 
-        const created: { date: string; daySegment: string }[] = [];
+    const created: { date: string; daySegment: string }[] = [];
     const failed: { date: string; daySegment: string; reason: string }[] = [];
     const usedOutfits: string[][] = [];
     const allChosenItemIds = new Set<string>();
-
 
     for (const req of capped) {
       const season = seasonByDate.get(req.date)!;
@@ -431,7 +432,7 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
         style: it.style, season: it.season, brand: it.brand, material: it.material, locationId: it.locationId,
       }));
 
-                  // Real forecast within ~15 days, a 5-year historical average beyond
+      // Real forecast within ~15 days, a 5-year historical average beyond
       // that — see trip-weather.server.ts. Missing coordinates (no
       // destination lat/lon saved) falls back to null exactly as before,
       // rather than guessing a temperature. Season already filtered the
@@ -471,12 +472,10 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       if (!result.ok || !result.item_ids.length) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: !result.ok ? result.error : "Couldn't compose a valid look from the eligible pieces." });
         continue;
-
       }
 
       usedOutfits.push(result.item_ids);
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
-
 
       const { error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
@@ -496,6 +495,36 @@ export const generateTripCapsule = createServerFn({ method: "POST" })
       }
       created.push({ date: req.date, daySegment: req.daySegment });
     }
+
+    // --- Underwear / sleepwear: excluded from `pool` above along with
+    // every other unclassified item (formality and day/evening genuinely
+    // don't apply to a bra or a pair of socks, so nobody ever fills them
+    // in) — meaning this whole category never reached the capsule or the
+    // packing list at all, regardless of trip length. Handled here as a
+    // flat quantity scaled to the trip's day count instead, straight from
+    // what's actually owned — never invents a count beyond that, per the
+    // "never invent pieces" rule the outfit engine already follows.
+    // Which subcategories apply is gender-aware: a men's packing list has
+    // no reason to include bras, a women's list wants briefs/panties
+    // rather than boxers. An unset gender keeps the broader previous
+    // behavior rather than guessing.
+    const totalTripDays = tripStartDate && tripEndDate
+      ? Math.max(1, Math.round(daysBetween(tripEndDate, tripStartDate)) + 1)
+      : new Set(capped.map((r) => r.date)).size;
+    const underwearPool = locationFiltered.filter((it) => it.category === "Underwear");
+    const takeUpTo = (items: any[], n: number) => items.slice(0, Math.max(0, n)).map((it) => it.id as string);
+    const bottomsSubcats = profile?.gender === "Man" ? ["Boxers", "Briefs"] : profile?.gender === "Woman" ? ["Briefs", "Panties"] : ["Briefs", "Panties", "Boxers"];
+    const includeBras = profile?.gender !== "Man";
+    takeUpTo(underwearPool.filter((it) => bottomsSubcats.includes(it.subcategory)), totalTripDays)
+      .forEach((id) => allChosenItemIds.add(id));
+    if (includeBras) {
+      takeUpTo(underwearPool.filter((it) => ["Bra", "Sports Bra"].includes(it.subcategory)), Math.ceil(totalTripDays / 3))
+        .forEach((id) => allChosenItemIds.add(id));
+    }
+    takeUpTo(underwearPool.filter((it) => it.subcategory === "Socks"), totalTripDays)
+      .forEach((id) => allChosenItemIds.add(id));
+    takeUpTo(underwearPool.filter((it) => it.subcategory === "Sleepwear"), Math.min(2, totalTripDays))
+      .forEach((id) => allChosenItemIds.add(id));
 
     // --- Packing list: only now, per the sequence in the roadmap doc.
     // Never overwrites a piece the person already marked packed by hand
