@@ -1004,7 +1004,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
   }
 
   let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
-  if (html) extracted = extractFromHtml(html, target);
+  if (html) extracted = await extractFromHtml(html, target);
 
   if (!extracted.imageUrl && !usedFallback) {
     if (!hasFallback) {
@@ -1016,7 +1016,7 @@ export async function resolveProductImageUrl(rawUrl: string, accessToken?: strin
     }
     const fc = await fallbackScraper(target.toString());
     if (fc.errored && !fc.html) return { ok: false, error: FIRECRAWL_FAILED_MSG };
-    if (fc.html) extracted = extractFromHtml(fc.html, target);
+    if (fc.html) extracted = await extractFromHtml(fc.html, target);
     pageBlocked = Boolean(fc.pageBlocked);
   }
 
@@ -1093,7 +1093,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     }
 
     let extracted: Extracted = { imageUrl: "", method: "none", confidence: "low", productNode: null, ogTitle: "", candidates: [] };
-            if (fc.html) extracted = await extractFromHtml(fc.html, target);
+    if (html) extracted = await extractFromHtml(html, target);
 
     if (!extracted.imageUrl && !usedFallback) {
       if (!hasFallback) {
