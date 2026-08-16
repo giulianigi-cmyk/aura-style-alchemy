@@ -45,6 +45,8 @@ const OutputSchema = z.object({
   styleTags: z.array(z.string()),
   formality: z.number(),
   dayEvening: z.string(),
+  detectedProductCode: z.string(),
+  detectedManufacturer: z.string(),
 });
 
 export type WardrobeAnalysis = ReturnType<typeof buildFallback>;
@@ -55,6 +57,7 @@ function buildFallback() {
     seasons: [] as string[], brand: "", materials: [] as string[], length: "", sleeveLength: "",
     fit: "", heelHeight: "", toeShape: "", closure: "", gender: "", styleTags: [] as string[],
     formality: null as number | null, dayEvening: "",
+    detectedProductCode: "", detectedManufacturer: "",
   };
 }
 
@@ -83,7 +86,12 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
         `Return seasons as an array from: ${SEASONS.join(", ")}. NEVER combine "All Seasons" with a specific season in the same answer — pick either "All Seasons" alone, or 1-3 specific seasons, never both. Reason from the garment's material, coverage and weight rather than guessing: heavy insulating materials (Wool, Cashmere, Shearling, Down, Alpaca, thick fleece) or covering outerwear (coats, heavy jackets, boots) → Autumn/Winter; lightweight breathable materials (Linen, thin Cotton, thin Viscose) or minimal-coverage pieces (shorts, tank tops, sandals, swimwear) → Spring/Summer. Reserve "All Seasons" for genuinely versatile mid-weight basics with no strong material or coverage signal pointing to a specific time of year (e.g. plain cotton t-shirt, straight jeans, a simple leather bag, classic sneakers) — it is not a fallback for uncertainty, and most garments should get a specific 1-2 season pick rather than "All Seasons".`,
         `Return materials as an array (1-2) from: ${MATERIALS.join(", ")}. Always give your best guess — materials power season matching and outfit suggestions, and the user can correct them before saving. Combine visible texture cues (sheen, weave, grain, knit stitches) with what this garment type is typically made of (t-shirts and shirts → Cotton; jeans and denim jackets → Denim; tailored blazers and coats → Wool, Polyester or Viscose; flowing dresses and blouses → Viscose, Silk, Linen or Polyester; chunky sweaters → Wool, Cashmere, Merino or Acrylic depending on visible fiber thickness and sheen; sporty/technical pieces → Polyester, Polyamide or Elastane; boots and belts → Leather or Suede; watches, jewelry and metal hardware → Metal, Steel, Gold, Silver or Pearl). "Knit" describes a construction technique, not a fiber — never return it as a material even if the garment is visibly knitted; name the actual fiber instead. Return an empty array only if the item is genuinely impossible to assess (e.g. heavily obscured or not a garment).`,
 
-    "Return brand ONLY if a clearly visible logo/label is present in the image; otherwise return an empty string. Never guess a brand.",
+    "Return brand if you can identify the commercial brand with confidence — either from readable brand text/wordmark, OR from a graphic/symbolic logo you recognize (e.g. a stylized animal, geometric mark or symbol used as a fashion house's mark — many luxury and premium brands use a symbol instead of, or alongside, their name). Use your general knowledge of fashion brand logos for this: a small monogram, animal silhouette or symbol on a label is very often a recognizable brand mark, not decoration — look closely before deciding it's unidentifiable. Only return an empty string if you genuinely don't recognize the brand from either text or symbol; never guess or invent a brand name you're not confident about, and never confuse a manufacturer/company name (see detectedManufacturer below) for the brand — a manufacturer name printed in plain text on a label is a DIFFERENT thing from the brand's logo, even when the manufacturer name is the only text visible.",
+    "",
+    "LABEL / TAG TEXT — the photo may show a garment's care label or hang tag instead of (or in addition to) the garment itself. If ANY printed text is visible on a label or tag, read it carefully and extract:",
+    "- detectedProductCode: any article number, style code, product code, model code or reference number printed on the label (e.g. \"800005 D001\"). Copy it EXACTLY as printed, including spaces — this is used as a search key, so accuracy matters more than tidiness. Return an empty string if no such code is visible.",
+    "- detectedManufacturer: the manufacturer/company name printed on the label if present (e.g. \"Tessilform S.p.A.\"), which is often DIFFERENT from the commercial brand (e.g. a logo like a stylized animal or symbol) — never assume the manufacturer name IS the brand, and never assume the brand is unknown just because only a manufacturer name is printed. Return an empty string if no manufacturer/company name is visible.",
+    "These two fields are read literally from visible text — never invent or infer them from general knowledge of the category.",
     "",
     "SEPARATE ATTRIBUTES — these are independent fields, never folded into subcategory. Only fill in an attribute if it genuinely applies to this category (see rules below); otherwise return an empty string for it:",
     `- length: this is CATEGORY-DEPENDENT, use the matching value set only — Dresses: ${LENGTH_OPTIONS_BY_CATEGORY.Dresses.join("/")}; Outerwear: ${LENGTH_OPTIONS_BY_CATEGORY.Outerwear.join("/")}; Tops: ${LENGTH_OPTIONS_BY_CATEGORY.Tops.join("/")}; Bottoms: ONLY when subcategory is "Skirt", use Mini/Midi/Maxi (leave empty for Jeans/Trousers/Shorts/etc.). For any other category, leave length empty.`,
@@ -100,7 +108,7 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
     "- dayEvening: EXACTLY one of day, evening, both — whether this piece reads as appropriate for daytime, nighttime, or either. Most everyday pieces are \"both\"; reserve \"evening\" for pieces that read as distinctly after-dark (sequins, evening satin, tuxedo-type pieces) and \"day\" only for pieces that would look out of place at night (e.g. very sporty daywear).",
     "",
     "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-    '{"category": "", "subcategory": "", "colors": [], "styles": [], "occasions": [], "seasons": [], "brand": "", "materials": [], "length": "", "sleeveLength": "", "fit": "", "heelHeight": "", "toeShape": "", "closure": "", "gender": "", "styleTags": [], "formality": 3, "dayEvening": "both"}',
+    '{"category": "", "subcategory": "", "colors": [], "styles": [], "occasions": [], "seasons": [], "brand": "", "materials": [], "length": "", "sleeveLength": "", "fit": "", "heelHeight": "", "toeShape": "", "closure": "", "gender": "", "styleTags": [], "formality": 3, "dayEvening": "both", "detectedProductCode": "", "detectedManufacturer": ""}',
   ].join(" ");
 
   try {
@@ -188,6 +196,8 @@ export async function analyzeWardrobeImageCore(imageDataUrl: string): Promise<Wa
       styleTags: allowed(output.styleTags, STYLE_TAG_OPTIONS).slice(0, 4),
       formality: Number.isFinite(output.formality) ? Math.min(5, Math.max(1, Math.round(output.formality))) : null,
       dayEvening: (["day", "evening", "both"] as const).includes(output.dayEvening as never) ? output.dayEvening : "",
+      detectedProductCode: output.detectedProductCode?.trim() ?? "",
+      detectedManufacturer: output.detectedManufacturer?.trim() ?? "",
     };
   } catch (err) {
     console.error("[AURA analyze] failed", err);
