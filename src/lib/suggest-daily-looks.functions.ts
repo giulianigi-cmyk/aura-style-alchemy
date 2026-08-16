@@ -91,6 +91,14 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       "   Set each look's \"occasion\" field to exactly that label. Avoid reusing",
       "   the exact same combination as \"today\" or as another curated look.",
       "",
+      "Today's actual weather (see below) applies to EVERY look you produce —",
+      "\"today\" AND all three curated occasions, no exceptions. A look is never",
+      "\"for some future day\" or \"aspirational\": Work/Weekend/Evening must all",
+      "be wearable outside right now. If it's hot, no coats, wool knits, heavy",
+      "layering or boots in ANY look, including Work. If it's cold or rainy, no",
+      "bare tanks or thin sandals in ANY look, including Evening. Weather is a",
+      "hard constraint like formality, not a decorative detail for \"today\" only.",
+      "",
       "   Formality and day/evening context outrank color or style match — a",
       "   great color pairing never justifies the wrong occasion.",
       "   \"Work\" must EXCLUDE: off-shoulder or bare-shoulder tops, strappy or",
@@ -160,8 +168,45 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         return false;
       });
 
+    // Weather is a hard constraint for EVERY look (today + all curated
+    // occasions), not just "today" — enforced in code, mirroring
+    // violatesWorkFormality above. A great Work outfit is not an excuse to
+    // wear a wool coat at 39°C.
+    const HOT_THRESHOLD_C = 26;
+    const COLD_THRESHOLD_C = 10;
+    const HEAVY_SIGNAL = /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool knit|maglione|sweater|felted|fleece|boots?\b|stivali/i;
+    const LIGHT_SIGNAL = /tank|canotta|sandal|sandalo|shorts?\b|infradito|flip.?flop|sleeveless|senza maniche/i;
+    /** Hard exclusion for weather: heavy pieces never pass when it's hot,
+     *  bare/light pieces never pass when it's cold — for ANY occasion. */
+    const violatesWeather = (ids: string[]): boolean => {
+      if (data.temperature == null) return false;
+      const hot = data.temperature >= HOT_THRESHOLD_C;
+      const cold = data.temperature <= COLD_THRESHOLD_C;
+      if (!hot && !cold) return false;
+      return ids.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        if (!item) return false;
+        const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")}`;
+        if (hot) {
+          if (item.season === "winter") return true;
+          if (HEAVY_SIGNAL.test(text)) return true;
+        }
+        if (cold) {
+          if (item.season === "summer" && LIGHT_SIGNAL.test(text)) return true;
+        }
+        return false;
+      });
+    };
+
     const sanitize = (r: DailyLooksResult): DailyLooksResult => {
-      const today = { ...r.today, item_ids: r.today.item_ids.filter((id) => validIds.has(id)) };
+      // "today" is singular — a weather violation strips just the offending
+      // item(s) rather than discarding the whole look (there's no second
+      // candidate to fall back to for "today").
+      const todayIds = r.today.item_ids.filter((id) => validIds.has(id));
+      const today = {
+        ...r.today,
+        item_ids: todayIds.filter((id) => !violatesWeather([id])),
+      };
       const seen = [today.item_ids];
       const curated = r.curated
         .map((l) => ({ ...l, item_ids: l.item_ids.filter((id) => validIds.has(id)) }))
@@ -170,6 +215,9 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         .filter((l) => !hasSlotViolation(l.item_ids))
         // Hard occasion exclusion: evening-coded pieces never pass for Work.
         .filter((l) => !(l.occasion === "Work" && violatesWorkFormality(l.item_ids)))
+        // Hard weather exclusion: applies to EVERY occasion, not just Work —
+        // a wool coat is wrong for Weekend/Evening at 39°C just as much.
+        .filter((l) => !violatesWeather(l.item_ids))
         // Drop any curated look that's identical OR near-identical (>=70%
         // item overlap) to "today" or an earlier curated look — a real
         // similarity check, not just an exact-match string comparison.
