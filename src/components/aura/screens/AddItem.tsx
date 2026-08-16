@@ -194,20 +194,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const downloadImage = useServerFn(downloadImportImage);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  // Background removal is the slow, paid step. When multiple photo
-  // candidates exist (import-from-URL), we delay it until the photo choice
-  // settles instead of running it once per candidate the person taps —
-  // same principle as the explicit "remove background" step in batch
-  // review, just automated with a short grace window instead of a button.
-  const bgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bgRunIdRef = useRef(0);
-  const clearPendingBgRemoval = () => {
-    if (bgTimerRef.current) {
-      clearTimeout(bgTimerRef.current);
-      bgTimerRef.current = null;
-    }
-  };
-  useEffect(() => () => clearPendingBgRemoval(), []);
 
   useEffect(() => {
     fetchLocations()
@@ -283,7 +269,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     brand?: string; source?: "photo" | "url" | "library"; price?: string; currency?: string;
     materials?: string[]; composition?: CompositionEntry[]; productId?: string;
     category?: string; subcategory?: string; colors?: string[]; season?: string;
-    deferBgRemoval?: boolean;
   }) => {
 
     const compressedFile = await compressImageForUpload(initialFile);
@@ -305,9 +290,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
     const dataUrl = await readFileAsDataUrl(compressedFile);
 
+    // Background removal does NOT run here anymore. It used to fire the
+    // moment a photo was captured/picked — before the person had even
+    // decided this was the photo they wanted to keep — burning a WASM
+    // pass (and, on multi-candidate URL imports, one pass per candidate
+    // never used) for nothing. It now runs once, in save(), right before
+    // upload — same principle as batch scan, where background removal is
+    // an explicit step, never automatic on capture.
     setStage("analyze");
     const fromLibrary = opts?.source === "library";
-    const analysisPromise = analyze({ data: { imageDataUrl: dataUrl } })
+    await analyze({ data: { imageDataUrl: dataUrl } })
       .then(result => {
         if (result.category && !fromLibrary) setCategory(result.category);
         if (result.subcategory && !fromLibrary) setSubcategory(result.subcategory);
@@ -329,50 +321,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.brand && !opts?.brand) setBrand(result.brand);
       })
       .catch(e => console.warn("[AURA] AI analysis failed", e));
-
-    const applyBgRemoval = async (targetDataUrl: string) => {
-      setStage("bgremove");
-      try {
-        let bg = await removeBackgroundClient(targetDataUrl);
-        let attempt = 1;
-        while (!bg.ok && attempt < 3) {
-          await new Promise((r) => setTimeout(r, 800 * attempt));
-          bg = await removeBackgroundClient(targetDataUrl);
-          attempt++;
-        }
-        if (!bg.ok) toast.message("Background not removed", { description: bg.error });
-        if (bg.ok) {
-          const { file: cleanFile, isTransparent } = await ensureTransparentPng(
-            bg.imageDataUrl,
-            `item-${Date.now()}.png`,
-          );
-          setFile(cleanFile);
-          setPreview(URL.createObjectURL(cleanFile));
-          setTransparent(isTransparent);
-        }
-      } catch (e) {
-        console.warn("[AURA] bg removal failed", e);
-      } finally {
-        setStage((s) => (s === "bgremove" ? "idle" : s));
-      }
-    };
-
-    clearPendingBgRemoval();
-    if (opts?.deferBgRemoval) {
-      // There's a photo picker in play ("Wrong photo? Pick another") — wait
-      // for the choice to settle instead of removing the background on the
-      // default pick and then again on whatever gets tapped a moment later.
-      const runId = ++bgRunIdRef.current;
-      bgTimerRef.current = setTimeout(() => {
-        bgTimerRef.current = null;
-        if (bgRunIdRef.current !== runId) return; // superseded by a newer pick
-        void applyBgRemoval(dataUrl);
-      }, 1200);
-    } else {
-      await applyBgRemoval(dataUrl);
-    }
-
-    await analysisPromise;
     setStage((s) => (s === "analyze" ? "idle" : s));
   };
 
@@ -400,7 +348,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setImportReferer(parsed.origin);
       const raw = await dataUrlToFile(result.imageDataUrl, `import-${Date.now()}.jpg`);
       const file = await normalizeForPipeline(raw);
-      const hasAlternatives = (result.imageCandidates?.length ?? 0) > 1;
       await runPipeline(file, {
         brand: result.brand || undefined,
         source: "url",
@@ -408,7 +355,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency: result.priceCurrency || undefined,
         materials: result.materials?.length ? result.materials : undefined,
         composition: result.composition?.length ? result.composition : undefined,
-        deferBgRemoval: hasAlternatives,
       });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
       if (result.confidence === "low") {
@@ -608,7 +554,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency,
         materials: materials.length ? materials : undefined,
         composition: composition.length ? composition : undefined,
-        deferBgRemoval: altImages.length > 1,
       });
     } catch (e) {
       console.error("[AURA import-alt]", e);
@@ -638,11 +583,46 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (!file) return;
     setSaving(true); setErr(null);
     try {
+      // Background removal runs here — right before upload, once, on the
+      // photo the person actually decided to keep — not the moment it was
+      // captured/picked. Skip it if it already ran (e.g. a retry after a
+      // failed save shouldn't burn a second WASM pass on the same file).
+      let fileToSave = file;
+      if (!transparent) {
+        setStage("bgremove");
+        try {
+          const targetDataUrl = await readFileAsDataUrl(file);
+          let bg = await removeBackgroundClient(targetDataUrl);
+          let attempt = 1;
+          while (!bg.ok && attempt < 3) {
+            await new Promise((r) => setTimeout(r, 800 * attempt));
+            bg = await removeBackgroundClient(targetDataUrl);
+            attempt++;
+          }
+          if (bg.ok) {
+            const { file: cleanFile, isTransparent } = await ensureTransparentPng(
+              bg.imageDataUrl,
+              `item-${Date.now()}.png`,
+            );
+            fileToSave = cleanFile;
+            setFile(cleanFile);
+            setPreview(URL.createObjectURL(cleanFile));
+            setTransparent(isTransparent);
+          } else {
+            toast.message("Background not removed", { description: bg.error });
+          }
+        } catch (e) {
+          console.warn("[AURA] bg removal failed", e);
+        } finally {
+          setStage((s) => (s === "bgremove" ? "idle" : s));
+        }
+      }
+
       const { data: auth, error: authErr } = await supabase.auth.getUser();
       if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
       const uid = auth.user.id;
 
-      const trimmedFile = await trimFileMargins(file);
+      const trimmedFile = await trimFileMargins(fileToSave);
       const isPng = trimmedFile.type === "image/png";
       const ext = isPng ? "png" : (trimmedFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg");
       const path = `${uid}/item-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
