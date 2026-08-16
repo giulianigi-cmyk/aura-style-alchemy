@@ -232,6 +232,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   const [brand, setBrand] = useState("");
+  const [detectedProductCode, setDetectedProductCode] = useState("");
+  const [detectedManufacturer, setDetectedManufacturer] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("Tops");
   const [subcategory, setSubcategory] = useState("");
@@ -263,6 +265,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
     setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setDetectedProductCode(""); setDetectedManufacturer("");
   };
 
     const runPipeline = async (initialFile: File, opts?: {
@@ -319,6 +322,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         if (result.seasons?.length) setSeasons(result.seasons);
         if (!opts?.materials?.length && result.materials?.length) setMaterials(result.materials);
         if (result.brand && !opts?.brand) setBrand(result.brand);
+        setDetectedProductCode(result.detectedProductCode ?? "");
+        setDetectedManufacturer(result.detectedManufacturer ?? "");
       })
       .catch(e => console.warn("[AURA] AI analysis failed", e));
     setStage((s) => (s === "analyze" ? "idle" : s));
@@ -371,11 +376,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   };
 
   /** Ricerca testuale — nessun upload, nessuna chiamata di rete: apre
-   *  Google con una query costruita dai campi già noti (brand, categoria,
-   *  colore). Sempre disponibile una volta scattata/scelta una foto. */
+   *  Google con una query costruita dai dati più specifici disponibili.
+   *  Il codice prodotto letto dall'etichetta (se presente) è il termine più
+   *  affidabile — vince su categoria/colore. Il brand, se non visibile come
+   *  logo, può comunque venire dal nome del produttore stampato
+   *  sull'etichetta (es. "Tessilform S.p.A." per Patrizia Pepe) — non è lo
+   *  stesso concetto, ma è meglio di nessun termine identificativo. */
   const handleSearchGoogle = () => {
     const query = buildProductSearchQuery({
-      brand,
+      productCode: detectedProductCode,
+      brand: brand || detectedManufacturer,
       subcategory,
       category,
       color: colors[0],
@@ -1020,6 +1030,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             )}
           </div>
 
+          {file && (detectedProductCode || detectedManufacturer) && (
+            <p className="mt-3 text-[10px] uppercase tracking-widest text-muted-foreground text-center">
+              Detected on label:{detectedProductCode ? ` code "${detectedProductCode}"` : ""}{detectedProductCode && detectedManufacturer ? " · " : ""}{detectedManufacturer ? detectedManufacturer : ""}
+            </p>
+          )}
+
           {file && (
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
@@ -1139,153 +1155,4 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               />
             )}
             {lengthAppliesTo(category, subcategory) && (
-              <ChipGroup label="Length" options={lengthOptionsFor(category, subcategory)} value={length} onChange={setLength} />
-            )}
-            {attributeAppliesTo("sleeveLength", category) && (
-              <ChipGroup label="Sleeve" options={sleeveLengthOptions} value={sleeveLength} onChange={setSleeveLength} />
-            )}
-            {attributeAppliesTo("fit", category) && (
-              <ChipGroup label="Fit" options={fitOptions} value={fit} onChange={setFit} />
-            )}
-            {attributeAppliesTo("heelHeight", category) && (
-              <ChipGroup label="Heel" options={heelHeightOptions} value={heelHeight} onChange={setHeelHeight} />
-            )}
-            {attributeAppliesTo("toeShape", category) && (
-              <ChipGroup label="Toe shape" options={toeShapeOptions} value={toeShape} onChange={setToeShape} />
-            )}
-            {attributeAppliesTo("closure", category) && (
-              <ChipGroup label="Closure" options={closureOptions} value={closure} onChange={setClosure} />
-            )}
-            <ChipGroup label="Gender" options={genderOptions} value={gender} onChange={setGender} />
-            <MultiChipGroup
-              label="Style tags"
-              options={styleTagOptions}
-              values={styleTags}
-              onToggle={(v: string) => toggle(styleTags, setStyleTags, v)}
-            />
-            <ColorPicker value={colors} onChange={setColors} />
-
-            <div className="border-b border-border/60 pb-3">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                                {seasonOptions.map(s => {
-                  const on = seasons.includes(s);
-                  return (
-                    <button key={s} onClick={() => toggleSeason(seasons, setSeasons, s)}
-                      className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                      {s}
-                    </button>
-                  );
-                })}
-
-              </div>
-            </div>
-
-            <div className="border-b border-border/60 pb-3">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Formality</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">How dressed-up this piece reads — used to decide which occasions it's eligible for.</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {FORMALITY_OPTIONS.map((label, i) => {
-                  const level = i + 1;
-                  const on = formality === level;
-                  return (
-                    <button key={label} onClick={() => setFormality(level)}
-                      className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="border-b border-border/60 pb-3">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Day / Evening</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">When it's actually worn — a piece missing this never shows up in outfit or trip suggestions at all.</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {DAY_EVENING_OPTIONS.map(({ value, label }) => {
-                  const on = dayEvening === value;
-                  return (
-                    <button key={value} onClick={() => setDayEvening(value)}
-                      className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <MultiChipGroup label="Style" options={styleOptions} values={styles} onToggle={(v: string) => toggle(styles, setStyles, v)} />
-            <MultiChipGroup label="Occasion" options={occasionOptions} values={occasions} onToggle={(v: string) => toggle(occasions, setOccasions, v)} />
-            <MaterialCombobox label="Material" options={materialOptions} values={materials} onChange={setMaterials} />
-            {composition.length > 0 && (
-              <p className="text-[11px] text-muted-foreground -mt-1">
-                Composition: {composition.map((c) => (c.pct != null ? `${c.pct}% ${c.material}` : c.material)).join(" · ")}
-              </p>
-            )}
-          </div>
-
-          {err && <p className="mt-4 text-xs text-red-700">{err}</p>}
-
-          <button
-            onClick={save}
-            disabled={saving || authLoading}
-            className="mt-8 w-full h-14 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            <span className="text-xs uppercase tracking-[0.3em]">Save to closet</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
-  return (
-    <div className="border-b border-border/60 pb-3">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
-      />
-      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-function ChipGroup({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="border-b border-border/60 pb-3">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {options.map(o => (
-          <button key={o}
-            onClick={() => onChange(o)}
-            className={`rounded-full px-3 py-1.5 text-xs transition ${value === o ? "bg-foreground text-background" : "bg-secondary/60"}`}
-          >{o}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MultiChipGroup({ label, options, values, onToggle }: { label: string; options: string[]; values: string[]; onToggle: (v: string) => void }) {
-  return (
-    <div className="border-b border-border/60 pb-3">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {options.map(o => {
-          const on = values.includes(o);
-          return (
-            <button key={o}
-              onClick={() => onToggle(o)}
-              className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}
-            >{o}</button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+              
