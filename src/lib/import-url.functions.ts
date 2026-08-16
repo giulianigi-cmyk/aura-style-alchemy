@@ -383,7 +383,18 @@ function collectDomImages(html: string, base: URL): Array<{ url: string; alt: st
   return out;
 }
 
-function scoreImage(url: string, alt: string, productTokens: string[]): number {
+// The MODEL_KEYWORDS penalty below exists so the AUTO-PICKED primary image
+// favors a clean flat/packshot — that's what background removal (WASM,
+// isnet_quint8) works best on. But that same penalty, applied to the
+// candidate GALLERY too, was silently burying worn/model shots under
+// detail crops (back, strap, close-up) in the "Wrong photo? Pick another"
+// picker — exactly backwards for categories like swimwear or dresses,
+// where the worn shot is often the ONLY view that shows the actual
+// garment shape, and a user picking an alternative needs real variety,
+// not five near-duplicate crops. `forGallery` keeps the penalty for the
+// automatic primary pick but removes it when ranking what the person
+// gets to choose from.
+function scoreImage(url: string, alt: string, productTokens: string[], forGallery = false): number {
   const u = url.toLowerCase();
   const a = alt.toLowerCase();
   const combined = `${u} ${a}`;
@@ -391,7 +402,7 @@ function scoreImage(url: string, alt: string, productTokens: string[]): number {
   if (JUNK_KEYWORDS.test(combined)) s -= 30;
   if (RELATED_URL_KEYWORDS.test(combined)) s -= 15;
   if (PRODUCT_KEYWORDS.test(combined)) s += 8;
-  if (MODEL_KEYWORDS.test(combined)) s -= 12;
+  if (!forGallery && MODEL_KEYWORDS.test(combined)) s -= 12;
   if (/\.(png|jpe?g|webp)(\?|$)/i.test(u)) s += 1;
   for (const tok of productTokens) {
     if (tok.length >= 4 && combined.includes(tok)) { s += 4; break; }
@@ -618,7 +629,6 @@ async function directFetch(target: URL): Promise<{ html: string | null; blocked:
     clearTimeout(timer);
   }
 }
-
 type ExtractionMethod = "json-ld" | "og-image" | "dom" | "none";
 export type ImportConfidence = "high" | "medium" | "low";
 type Extracted = {
@@ -702,7 +712,7 @@ async function extractFromHtml(html: string, target: URL): Promise<Extracted> {
 
   const rankDom = (arr: Array<{ url: string; alt: string }>) =>
 
-    arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens), i }))
+    arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens, true), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
        .map((x) => x.u);
   const candidates = Array.from(new Set([...ldImgs, ...rankDom(domImgs)])).slice(0, MAX_CANDIDATES);
@@ -1213,4 +1223,3 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       usedFallback,
     };
   });
-
