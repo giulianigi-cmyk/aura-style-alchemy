@@ -15,6 +15,7 @@ import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
 import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
 import { searchSharedLibrary, syncMySharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
+import { buildProductSearchQuery, buildGoogleSearchUrl, buildGoogleLensUrl } from "@/lib/search-online";
 
 import { compressImageForUpload } from "@/lib/image-compress";
 import { sizeEquivalences, isShoeCategory } from "@/lib/size-conversion";
@@ -225,6 +226,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
+  const [searchingByPhoto, setSearchingByPhoto] = useState(false);
   const [altImages, setAltImages] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState<string | null>(null);
   const [brokenAltImages, setBrokenAltImages] = useState<Record<string, boolean>>({});
@@ -419,6 +421,57 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       toast.error("Could not import from that URL");
     } finally {
       setImporting(false);
+    }
+  };
+
+  /** Ricerca testuale — nessun upload, nessuna chiamata di rete: apre
+   *  Google con una query costruita dai campi già noti (brand, categoria,
+   *  colore). Sempre disponibile una volta scattata/scelta una foto. */
+  const handleSearchGoogle = () => {
+    const query = buildProductSearchQuery({
+      brand,
+      subcategory,
+      category,
+      color: colors[0],
+    });
+    if (!query) { toast.error("Add a brand or category first so we know what to search for."); return; }
+    window.open(buildGoogleSearchUrl(query), "_blank", "noopener,noreferrer");
+  };
+
+  /** Ricerca per immagine (Google Lens) — richiede un URL pubblico
+   *  raggiungibile da Google, quindi la foto corrente va prima caricata su
+   *  uno storage path temporaneo e firmata con un signed URL a breve
+   *  scadenza (mai il path permanente, per non lasciare in giro link
+   *  validi a lungo termine a una foto privata dell'utente). */
+  const handleSearchByPhoto = async () => {
+    if (!file) { toast.error("Take or choose a photo first."); return; }
+    setSearchingByPhoto(true);
+    try {
+      const { data: auth, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !auth?.user?.id) throw new Error("You must be signed in to search by photo.");
+      const uid = auth.user.id;
+
+      const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const tmpPath = `${uid}/tmp-search/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("wardrobe").upload(tmpPath, file, {
+        cacheControl: "60", upsert: false, contentType: file.type || "image/jpeg",
+      });
+      if (upErr) throw upErr;
+
+      // 10 minuti: il tempo che serve a Google per recuperare l'immagine,
+      // non un secondo di più — è la stessa logica di breve scadenza già
+      // usata altrove nel progetto per i link di condivisione temporanei.
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("wardrobe")
+        .createSignedUrl(tmpPath, 600);
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("Could not sign the image URL.");
+
+      window.open(buildGoogleLensUrl(signed.signedUrl), "_blank", "noopener,noreferrer");
+    } catch (e) {
+      console.error("[AURA search-by-photo]", e);
+      toast.error("Could not start the photo search. Please try again.");
+    } finally {
+      setSearchingByPhoto(false);
     }
   };
 
@@ -986,6 +1039,26 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               />
             )}
           </div>
+
+          {file && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={handleSearchGoogle}
+                className="h-11 rounded-full border border-foreground/15 bg-secondary/40 flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-widest active:scale-95 transition"
+              >
+                <Search size={13} />
+                Search on Google
+              </button>
+              <button
+                onClick={() => void handleSearchByPhoto()}
+                disabled={searchingByPhoto}
+                className="h-11 rounded-full border border-foreground/15 bg-secondary/40 flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-widest active:scale-95 transition disabled:opacity-60"
+              >
+                {searchingByPhoto ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />}
+                Search by photo
+              </button>
+            </div>
+          )}
 
           {altImages.length > 1 && (
             <div className="mt-3">
