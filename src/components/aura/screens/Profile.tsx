@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info } from "lucide-react";
+import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,7 @@ import { AvatarCropper } from "../AvatarCropper";
 import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
+import { MyQrSection, QrFullscreen } from "../MyQrCode";
 
 
 const STYLES = [
@@ -82,6 +83,7 @@ const SHARING_DEFINITIONS = [
 
 export function Profile({ go: _go }: { go: (s: Screen) => void }) {
   const { user, signOut } = useAuth();
+  const [qrOpen, setQrOpen] = useState(false);
   const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -195,6 +197,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
+      {qrOpen && <QrFullscreen userId={user?.id} onClose={() => setQrOpen(false)} />}
       {cropSrc && (
         <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={onCropSave} />
       )}
@@ -217,13 +220,20 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
         ><Share2 size={15} /></button>
         <h1 className="font-serif text-lg italic">Profile</h1>
-        <button
-          onClick={() => editing ? setEditing(false) : setEditing(true)}
-          aria-label={editing ? "Cancel editing profile" : "Edit profile"}
-          className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
-        >
-          {editing ? <X size={15} /> : <Pencil size={14} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => editing ? setEditing(false) : setEditing(true)}
+            aria-label={editing ? "Cancel editing profile" : "Edit profile"}
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          >
+            {editing ? <X size={15} /> : <Pencil size={14} />}
+          </button>
+          <button
+            onClick={() => setQrOpen(true)}
+            aria-label="My QR code"
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          ><QrCode size={15} /></button>
+        </div>
       </header>
 
       {/* Identity */}
@@ -528,6 +538,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           )}
                     <MyBrands />
           <WardrobeLocationsSection />
+          <MyQrSection userId={user?.id} onOpen={() => setQrOpen(true)} />
           <MySizes userId={user?.id} />
           <DressPreferencesSection userId={user?.id} />
 
