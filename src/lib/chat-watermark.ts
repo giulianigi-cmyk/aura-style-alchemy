@@ -35,8 +35,8 @@ async function loadSourceImage(pathOrUrl: string): Promise<HTMLImageElement> {
   }
 }
 
-/** Draws the watermark bottom-left: dark text with a light halo, so it stays
- *  legible on both light and dark backgrounds. */
+/** Draws the watermark bottom-left with an adaptive ink colour: samples the
+ *  pixels under the text area and picks black or white accordingly. */
 function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, label: string) {
   const size = Math.max(14, Math.round(Math.min(w, h) * 0.032));
   const pad = Math.round(size * 1.1);
@@ -50,21 +50,33 @@ function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, labe
   const x = pad;
   const y = h - pad;
 
-  // Halo / outline for contrast on dark imagery.
-  ctx.lineJoin = "round";
-  ctx.lineWidth = Math.max(2, size * 0.22);
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.globalAlpha = 1;
-  ctx.strokeText(label, x, y);
+  // Sample the background under the future text box.
+  const textW = Math.min(Math.ceil(ctx.measureText(label).width) + size, w - x);
+  const boxX = Math.max(0, x);
+  const boxY = Math.max(0, Math.round(y - size));
+  const boxW = Math.max(1, Math.min(textW, w - boxX));
+  const boxH = Math.max(1, Math.min(Math.round(size * 1.4), h - boxY));
 
-  // Soft shadow + semi-transparent ink for contrast on light imagery.
-  ctx.shadowColor = "rgba(0,0,0,0.35)";
-  ctx.shadowBlur = Math.max(2, size * 0.25);
-  ctx.fillStyle = "rgba(0,0,0,0.85)";
-  ctx.globalAlpha = 0.45;
+  let ink = "0,0,0";
+  try {
+    const { data } = ctx.getImageData(boxX, boxY, boxW, boxH);
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < data.length; i += 4 * 6) {
+      sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      count++;
+    }
+    const luma = count ? sum / count : 255;
+    ink = luma > 140 ? "0,0,0" : "255,255,255";
+  } catch {
+    /* tainted canvas — keep the default dark ink */
+  }
+
+  ctx.fillStyle = `rgba(${ink},0.75)`;
   ctx.fillText(label, x, y);
   ctx.restore();
 }
+
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
