@@ -194,12 +194,12 @@ function Inner() {
           {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
-          {screen === "community" && <Community go={go} />}
+          {screen === "community" && <Community go={go} openConversation={openConversation} />}
           {screen === "profile" && <Profile go={go} />}
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
-          {screen === "notifications" && <Notifications go={go} />}
+          {screen === "notifications" && <Notifications go={go} openThread={openConversation} />}
           {screen === "invite" && <Invite go={go} />}
           {screen === "storage-debug" && <StorageDebug go={go} />}
           {screen === "chats" && <Chats go={go} openThread={openConversation} />}

@@ -683,3 +683,18 @@ export function getBrandFromUrl(url: string): string | null {
     return null;
   }
 }
+
+/**
+ * Canonical key for comparing brand names across sources (wardrobe items,
+ * saved profile brands, user input). Normalises: trim, lowercase, collapse
+ * whitespace, strip diacritics and typographic apostrophes.
+ */
+export function canonicalBrandKey(name: string | null | undefined): string {
+  return (name ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u2018\u2019\u02bc'`´]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}

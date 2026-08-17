@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Bell, Loader2, X } from "lucide-react";
+import { ArrowLeft, Bell, Loader2, MessageCircle, X } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,9 +13,10 @@ type Notification = {
   body: string | null;
   read_at: string | null;
   created_at: string;
+  data: { conversation_id?: string } | null;
 };
 
-export function Notifications({ go }: { go: (s: Screen) => void }) {
+export function Notifications({ go, openThread }: { go: (s: Screen) => void; openThread?: (id: string) => void }) {
   const { user } = useAuth();
   const markRead = useServerFn(markNotificationsRead);
   const [items, setItems] = useState<Notification[]>([]);
@@ -27,7 +28,7 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
       if (!user) { setLoading(false); return; }
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, type, title, body, read_at, created_at")
+        .select("id, type, title, body, read_at, created_at, data")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) console.error("[AURA notifications] load failed", error);
@@ -37,8 +38,10 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
       }
             const unread = (data ?? []).filter((n) => !n.read_at).map((n) => n.id);
       if (unread.length) {
-        try { await markRead({ data: { ids: unread } }); }
-        catch (e) { console.error("[AURA notifications] mark read failed", e); }
+        try {
+          await markRead({ data: { ids: unread } });
+          window.dispatchEvent(new Event("aura:notifications-read"));
+        } catch (e) { console.error("[AURA notifications] mark read failed", e); }
       }
     })();
     return () => { cancelled = true; };
@@ -49,6 +52,7 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
     const prev = items;
     setItems((cur) => cur.filter((n) => n.id !== id));
     const { error } = await supabase.from("notifications").delete().eq("id", id);
+    window.dispatchEvent(new Event("aura:notifications-read"));
     if (error) {
       console.error("[AURA notifications] delete failed", error);
       setItems(prev);
@@ -79,25 +83,34 @@ export function Notifications({ go }: { go: (s: Screen) => void }) {
 
       {!loading && items.length > 0 && (
         <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-card border border-border/60 overflow-hidden animate-fade-up">
-          {items.map((n) => (
+          {items.map((n) => {
+            const conversationId = n.data?.conversation_id;
+            const clickable = Boolean(conversationId && openThread);
+            return (
             <div key={n.id} className="px-5 py-4 flex gap-3">
               <div className="h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0">
-                <Bell size={14} />
+                {clickable ? <MessageCircle size={14} /> : <Bell size={14} />}
               </div>
-              <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                disabled={!clickable}
+                onClick={() => { if (conversationId && openThread) openThread(conversationId); }}
+                className={`flex-1 min-w-0 text-left ${clickable ? "active:opacity-70" : "cursor-default"}`}
+              >
                 <p className="text-sm">{n.title}</p>
                 {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-2">
                   {new Date(n.created_at).toLocaleString("en-US")}
                 </p>
-              </div>
+              </button>
               <button
                 onClick={() => void deleteNotification(n.id)}
                 aria-label="Delete notification"
                 className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90 self-start"
               ><X size={12} /></button>
             </div>
-          ))}
+            );
+          })}
         </section>
       )}
 

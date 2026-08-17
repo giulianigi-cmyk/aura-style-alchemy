@@ -2,11 +2,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search, X, Sparkles, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { BRAND_NAMES } from "@/lib/brand-domains";
+import { BRAND_NAMES, canonicalBrandKey } from "@/lib/brand-domains";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 
 type Suggestion = { brand: string; count: number; pct: number } | null;
+
+const DISMISS_KEY = "aura.brands.dismissedSuggestions";
+
+function loadDismissed(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(DISMISS_KEY);
+    const arr = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(arr) ? arr.map((v) => String(v)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissed(set: Set<string>) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(DISMISS_KEY, JSON.stringify([...set])); } catch { /* ignore */ }
+}
 
 export function MyBrands() {
   const { user } = useAuth();
@@ -15,7 +33,7 @@ export function MyBrands() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -33,7 +51,7 @@ export function MyBrands() {
   const addBrand = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (brands.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
+    if (brands.some(b => canonicalBrandKey(b) === canonicalBrandKey(trimmed))) {
       setQuery(""); setOpen(false); return;
     }
     const next = [...brands, trimmed];
@@ -51,14 +69,14 @@ export function MyBrands() {
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const owned = new Set(brands.map(b => b.toLowerCase()));
-    return BRAND_NAMES.filter(b => b.toLowerCase().includes(q) && !owned.has(b.toLowerCase())).slice(0, 8);
+    const owned = new Set(brands.map(canonicalBrandKey));
+    return BRAND_NAMES.filter(b => b.toLowerCase().includes(q) && !owned.has(canonicalBrandKey(b))).slice(0, 8);
   }, [query, brands]);
 
   const canAddCustom =
     query.trim().length > 0 &&
-    !suggestions.some(s => s.toLowerCase() === query.trim().toLowerCase()) &&
-    !brands.some(b => b.toLowerCase() === query.trim().toLowerCase());
+    !suggestions.some(s => canonicalBrandKey(s) === canonicalBrandKey(query)) &&
+    !brands.some(b => canonicalBrandKey(b) === canonicalBrandKey(query));
 
   const checkWardrobeSuggestion = async () => {
     if (!user) return;
@@ -66,22 +84,31 @@ export function MyBrands() {
       .from("wardrobe_items").select("brand").eq("user_id", user.id);
     if (error || !data || data.length < 3) return;
 
-    const counts = new Map<string, number>();
+    // Count wardrobe brands by canonical key, keeping the first pretty label seen.
+    const counts = new Map<string, { label: string; count: number }>();
     for (const row of data) {
-      const b = (row.brand ?? "").trim();
-      if (!b) continue;
-      counts.set(b, (counts.get(b) ?? 0) + 1);
+      const label = (row.brand ?? "").trim();
+      const key = canonicalBrandKey(label);
+      if (!key) continue;
+      const cur = counts.get(key);
+      if (cur) cur.count += 1;
+      else counts.set(key, { label, count: 1 });
     }
-    const owned = new Set((profile?.owned_brands ?? []).map(b => b.toLowerCase()));
+
+    // Compare against the union of local state and the saved profile brands,
+    // so an already-added brand never gets suggested again.
+    const owned = new Set(
+      [...brands, ...(profile?.owned_brands ?? [])].map(canonicalBrandKey).filter(Boolean),
+    );
     const total = data.length;
 
     let best: Suggestion = null;
-    for (const [brand, count] of counts.entries()) {
+    for (const [key, { label, count }] of counts.entries()) {
       const pct = count / total;
       if (pct < 0.1) continue;
-      if (owned.has(brand.toLowerCase())) continue;
-      if (dismissed.has(brand.toLowerCase())) continue;
-      if (!best || count > best.count) best = { brand, count, pct };
+      if (owned.has(key)) continue;
+      if (dismissed.has(key)) continue;
+      if (!best || count > best.count) best = { brand: label, count, pct };
     }
     setSuggestion(best);
   };
@@ -89,14 +116,14 @@ export function MyBrands() {
   useEffect(() => {
     void checkWardrobeSuggestion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, profile?.owned_brands, dismissed]);
+  }, [user?.id, profile?.owned_brands, brands, dismissed]);
 
   useEffect(() => {
     const handler = () => { void checkWardrobeSuggestion(); };
     window.addEventListener("aura:wardrobe-item-created", handler);
     return () => window.removeEventListener("aura:wardrobe-item-created", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, profile?.owned_brands, dismissed]);
+  }, [user?.id, profile?.owned_brands, brands, dismissed]);
 
   return (
     <section className="mx-6 mt-4 animate-fade-up">
@@ -120,7 +147,11 @@ export function MyBrands() {
             ><Check size={12} /></button>
             <button
               onClick={() => {
-                setDismissed(prev => new Set(prev).add(suggestion.brand.toLowerCase()));
+                setDismissed(prev => {
+                  const next = new Set(prev).add(canonicalBrandKey(suggestion.brand));
+                  saveDismissed(next);
+                  return next;
+                });
                 setSuggestion(null);
               }}
               className="h-7 w-7 rounded-full border border-border flex items-center justify-center active:scale-90"
