@@ -37,7 +37,8 @@ export type Screen =
     | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
       | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
-      | "trips" | "trip-create" | "trip-detail" | "essential-presets";
+      | "trips" | "trip-create" | "trip-detail" | "essential-presets"
+      | "chats" | "chat-thread";
 
 
 
