@@ -840,6 +840,7 @@ export type Database = {
           notes: string | null
           occasion: string[]
           season: string[]
+          thumbnail_path: string | null
           user_id: string
         }
         Insert: {
@@ -853,6 +854,7 @@ export type Database = {
           notes?: string | null
           occasion?: string[]
           season?: string[]
+          thumbnail_path?: string | null
           user_id?: string
         }
         Update: {
@@ -866,6 +868,7 @@ export type Database = {
           notes?: string | null
           occasion?: string[]
           season?: string[]
+          thumbnail_path?: string | null
           user_id?: string
         }
         Relationships: []
