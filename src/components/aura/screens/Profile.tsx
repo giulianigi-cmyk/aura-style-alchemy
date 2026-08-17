@@ -274,18 +274,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           {meta || "Tap edit to complete profile"}
         </p>
 
-        <div className="mt-4 flex gap-8">
-          {[
-                        { n: profile?.owned_brands?.length ?? 0, l: "Brands" },
-            { n: profile?.style_preferences?.length ?? 0, l: "Styles" },
-            { n: calcAge(profile?.birth_date) ?? "—", l: "Age" },
-          ].map(s => (
-            <div key={s.l} className="text-center">
-              <p className="font-serif text-xl">{s.n}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">{s.l}</p>
-            </div>
-          ))}
-        </div>
+        <ProfileSocial
+          onOpenChats={() => _go("chats")}
+          openThread={openConversation}
+          openUserProfile={openUserProfile}
+        />
+
       </section>
 
       {/* Editable details */}
