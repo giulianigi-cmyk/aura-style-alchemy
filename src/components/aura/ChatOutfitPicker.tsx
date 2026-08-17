@@ -124,9 +124,7 @@ export function ChatOutfitPicker({
                     onClick={() => setSelected(r.id)}
                     className={`relative rounded-2xl overflow-hidden border text-left transition ${on ? "border-foreground" : "border-border/60"}`}
                   >
-                    <div className="aspect-[4/5] bg-white">
-                      {url && <img src={url} alt={r.name} className="h-full w-full object-contain" />}
-                    </div>
+                    <OutfitThumb path={r.canvas_image_url} url={url} alt={r.name} signing={loading} />
                     <p className="px-3 py-2 text-xs truncate">{r.name}</p>
                     {on && (
                       <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center">
