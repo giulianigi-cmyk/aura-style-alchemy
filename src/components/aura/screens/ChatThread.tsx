@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { acceptedFriends, initials, signPaths, type Friendship } from "@/lib/community";
 import { ChatOutfitPicker, type PickedOutfit } from "../ChatOutfitPicker";
+import { createWatermarkedChatSnapshot } from "@/lib/chat-watermark";
+
 import {
   listMessages, listParticipants, listMessageComments, markRead, listConversations,
   sendText, sendOutfitShare, toggleReaction, addMessageComment,
