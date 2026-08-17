@@ -134,6 +134,14 @@ function Inner() {
     if (user && ["auth"].includes(screen)) {
       if (typeof window !== "undefined") {
         try {
+          const addBack = window.localStorage.getItem("aura:add_friend_return");
+          if (addBack && addBack.startsWith("/add/")) {
+            window.localStorage.removeItem("aura:add_friend_return");
+            window.location.replace(addBack);
+            return;
+          }
+        } catch { /* ignore */ }
+        try {
           const back = window.localStorage.getItem("aura:mcp_consent_return");
           if (back && back.startsWith("/.lovable/oauth/consent")) {
             window.localStorage.removeItem("aura:mcp_consent_return");
