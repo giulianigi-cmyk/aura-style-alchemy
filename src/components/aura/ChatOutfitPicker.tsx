@@ -7,6 +7,59 @@ import { signPaths } from "@/lib/community";
 
 export type PickedOutfit = { id: string; name: string; canvas_image_url: string };
 
+/** One gallery tile image: skeleton while the signed URL resolves and while the
+ *  bytes are still downloading, one automatic re-sign retry on error, and an
+ *  explicit error state instead of a silent white card. */
+function OutfitThumb({ path, url, alt, signing }: { path: string; url?: string; alt: string; signing: boolean }) {
+  const [src, setSrc] = useState<string | undefined>(url);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [retried, setRetried] = useState(false);
+
+  useEffect(() => {
+    setSrc(url);
+    setLoaded(false);
+    setFailed(false);
+    setRetried(false);
+  }, [url]);
+
+  // signPaths finished but this path got no signed URL → treat as an error.
+  const missing = !signing && !url;
+
+  const onError = async () => {
+    if (retried) { setFailed(true); return; }
+    setRetried(true);
+    const { data } = await supabase.storage.from("outfits").createSignedUrl(path, 60 * 60);
+    if (data?.signedUrl) setSrc(`${data.signedUrl}${data.signedUrl.includes("?") ? "&" : "?"}r=1`);
+    else setFailed(true);
+  };
+
+  if (missing || failed) {
+    return (
+      <div className="aspect-[4/5] bg-secondary/40 flex items-center justify-center px-3 text-center">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Impossibile caricare</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative aspect-[4/5] bg-white">
+      {!loaded && <div className="absolute inset-0 bg-secondary/40 animate-pulse" />}
+      {src && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          onError={() => void onError()}
+          className={`h-full w-full object-contain transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        />
+      )}
+    </div>
+  );
+}
+
 /** Picks one of the user's saved outfits that already has a canvas
  *  snapshot. Outfits without a canvas can't be sent as-is — the snapshot
  *  is produced client-side in the Outfit Builder, so we point there. */
@@ -71,9 +124,7 @@ export function ChatOutfitPicker({
                     onClick={() => setSelected(r.id)}
                     className={`relative rounded-2xl overflow-hidden border text-left transition ${on ? "border-foreground" : "border-border/60"}`}
                   >
-                    <div className="aspect-[4/5] bg-white">
-                      {url && <img src={url} alt={r.name} className="h-full w-full object-contain" />}
-                    </div>
+                    <OutfitThumb path={r.canvas_image_url} url={url} alt={r.name} signing={loading} />
                     <p className="px-3 py-2 text-xs truncate">{r.name}</p>
                     {on && (
                       <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center">
