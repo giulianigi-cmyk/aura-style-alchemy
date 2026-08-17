@@ -235,7 +235,7 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
 
 /* ------------------------------------------------------------------ main */
 
-export function Community({ go: _go }: { go: (s: Screen) => void }) {
+export function Community({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const [tab, setTab] = useState<"feed" | "friends">("feed");
   const [username, setUsername] = useState<string | null>(null);
@@ -366,7 +366,14 @@ export function Community({ go: _go }: { go: (s: Screen) => void }) {
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The atelier</p>
           <h1 className="font-serif text-4xl mt-1">Community</h1>
         </div>
-        {username && <p className="text-xs text-muted-foreground">@{username}</p>}
+        <div className="flex items-center gap-3">
+          {username && <p className="text-xs text-muted-foreground">@{username}</p>}
+          <button
+            onClick={() => go("chats")}
+            aria-label="Chat"
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          ><MessageCircle size={15} /></button>
+        </div>
       </header>
 
       <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar px-6">

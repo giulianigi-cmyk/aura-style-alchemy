@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Splash } from "./screens/Splash";
 import { Onboarding } from "./screens/Onboarding";
 import { Auth } from "./screens/Auth";
@@ -25,6 +25,8 @@ import { Insights } from "./screens/Insights";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
 import { StorageDebug } from "./screens/StorageDebug";
+import { Chats } from "./screens/Chats";
+import { ChatThread } from "./screens/ChatThread";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
 import { TabBar } from "./TabBar";
@@ -32,12 +34,14 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { PhoneFrame } from "./PhoneFrame";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+import { useChatNotifications } from "@/hooks/use-chat-notifications";
 
 export type Screen =
     | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
       | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
-      | "trips" | "trip-create" | "trip-detail" | "essential-presets";
+      | "trips" | "trip-create" | "trip-detail" | "essential-presets"
+      | "chats" | "chat-thread";
 
 
 
@@ -67,6 +71,7 @@ function Inner() {
   const [stylistChatInit, setStylistChatInit] = useState<StylistChatInit>(null);
   const [reviewScanId, setReviewScanId] = useState<string | null>(null);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [wardrobeGapFilter, setWardrobeGapFilter] = useState<"price" | "purchase_date" | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
@@ -95,6 +100,13 @@ function Inner() {
     setStylistChatInit(init);
     setScreen("stylist-chat");
   };
+
+  const openConversation = useCallback((id: string) => {
+    setActiveConversationId(id);
+    setScreen("chat-thread");
+  }, []);
+
+  useChatNotifications(openConversation);
 
   useEffect(() => {
     if (recovery) setScreen("reset");
@@ -146,7 +158,7 @@ function Inner() {
     else setScreen("home");
   };
 
-  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add", "builder", "stylist-chat"].includes(screen);
+  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add", "builder", "stylist-chat", "chat-thread"].includes(screen);
 
   return (
     <PhoneFrame>
@@ -182,6 +194,10 @@ function Inner() {
           {screen === "notifications" && <Notifications go={go} />}
           {screen === "invite" && <Invite go={go} />}
           {screen === "storage-debug" && <StorageDebug go={go} />}
+          {screen === "chats" && <Chats go={go} openThread={openConversation} />}
+          {screen === "chat-thread" && activeConversationId && (
+            <ChatThread go={go} conversationId={activeConversationId} onBack={() => setScreen("chats")} />
+          )}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
           {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
           </ErrorBoundary>
