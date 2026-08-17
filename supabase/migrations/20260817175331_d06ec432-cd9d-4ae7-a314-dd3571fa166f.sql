@@ -1,0 +1,1 @@
+ALTER TABLE public.outfits ADD COLUMN IF NOT EXISTS thumbnail_path text;
