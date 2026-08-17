@@ -125,7 +125,7 @@ export async function createWatermarkedChatSnapshot(params: {
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth || 1000;
   canvas.height = img.naturalHeight || 1250;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas non disponibile");
 
   ctx.fillStyle = "#FFFFFF";
