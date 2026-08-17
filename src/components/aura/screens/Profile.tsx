@@ -536,9 +536,9 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
               </div>
             </section>
           )}
-                    <MyBrands />
-          <WardrobeLocationsSection />
           <MyQrSection userId={user?.id} onOpen={() => setQrOpen(true)} />
+          <MyBrands />
+          <WardrobeLocationsSection />
           <MySizes userId={user?.id} />
           <DressPreferencesSection userId={user?.id} />
 
