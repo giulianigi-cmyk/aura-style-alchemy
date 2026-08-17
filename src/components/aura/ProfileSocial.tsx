@@ -1,25 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, Loader2, MessageCircle, X } from "lucide-react";
+import { ChevronRight, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { acceptedFriends, initials, signPaths, type Friendship } from "@/lib/community";
-import { ConversationList } from "./ConversationList";
+import { getOrCreateDirect } from "@/lib/chat";
 
 type Counts = { items: number; outfits: number; friends: number };
 
 /**
  * Instagram-style social block for the user's own profile:
- * Items · Outfits · Friends counters + friends list sheet + chat shortcut.
+ * Items · Outfits · Friends counters + friends list sheet.
  * The friend count is private: it is computed only for the signed-in user.
  */
 export function ProfileSocial({
-  onOpenChats,
   openThread,
-  openUserProfile,
 }: {
-  onOpenChats: () => void;
   openThread?: (id: string) => void;
-  openUserProfile?: (id: string) => void;
 }) {
   const { user } = useAuth();
   const [counts, setCounts] = useState<Counts>({ items: 0, outfits: 0, friends: 0 });
@@ -65,29 +61,10 @@ export function ProfileSocial({
         ))}
       </div>
 
-      {/* Quick access to chats */}
-      <section className="mx-6 mt-5 rounded-3xl bg-card border border-border/60 shadow-soft overflow-hidden text-left w-[calc(100%-3rem)]">
-        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageCircle size={14} />
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Messages</p>
-          </div>
-          <button
-            onClick={onOpenChats}
-            className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground inline-flex items-center gap-1 active:text-foreground"
-          >See all <ChevronRight size={12} /></button>
-        </div>
-        {openThread && (
-          <div className="max-h-64 overflow-y-auto no-scrollbar pb-2">
-            <ConversationList openThread={openThread} onStartChat={onOpenChats} />
-          </div>
-        )}
-      </section>
-
       {friendsOpen && (
         <FriendsSheet
           onClose={() => setFriendsOpen(false)}
-          openUserProfile={openUserProfile}
+          openThread={openThread}
         />
       )}
     </>
@@ -96,10 +73,10 @@ export function ProfileSocial({
 
 function FriendsSheet({
   onClose,
-  openUserProfile,
+  openThread,
 }: {
   onClose: () => void;
-  openUserProfile?: (id: string) => void;
+  openThread?: (id: string) => void;
 }) {
   const [rows, setRows] = useState<Friendship[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
@@ -116,6 +93,17 @@ function FriendsSheet({
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const openFriendChat = async (friendId: string) => {
+    if (!openThread) return;
+    try {
+      const conversationId = await getOrCreateDirect(friendId);
+      onClose();
+      openThread(conversationId);
+    } catch (e) {
+      console.error("[AURA] open friend chat", e);
+    }
+  };
 
   return (
     <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm animate-fade-in overflow-y-auto no-scrollbar">
@@ -134,7 +122,7 @@ function FriendsSheet({
           {rows.map((f) => (
             <button
               key={f.friendship_id}
-              onClick={() => { onClose(); openUserProfile?.(f.other_id); }}
+              onClick={() => openFriendChat(f.other_id)}
               className="w-full py-3 flex items-center gap-3 text-left active:opacity-70"
             >
               {f.profile_image && avatars[f.profile_image] ? (
