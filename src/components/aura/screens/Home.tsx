@@ -12,12 +12,14 @@ import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { suggestDailyLooks, type DailyLook } from "@/lib/suggest-daily-looks.functions";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 export function Home({ go }: { go: (s: Screen) => void }) {
+  const unreadCount = useUnreadNotifications();
   const { user } = useAuth();
   const { profile } = useProfile();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
@@ -222,7 +224,9 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           </button>
           <button onClick={() => go("notifications")} aria-label="Notifications" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
             <Bell size={16} />
-            <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-[var(--champagne)]" />
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-[var(--champagne)]" />
+            )}
           </button>
         </div>
       </header>

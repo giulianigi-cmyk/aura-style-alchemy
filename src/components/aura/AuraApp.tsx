@@ -199,7 +199,7 @@ function Inner() {
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
-          {screen === "notifications" && <Notifications go={go} />}
+          {screen === "notifications" && <Notifications go={go} openThread={openConversation} />}
           {screen === "invite" && <Invite go={go} />}
           {screen === "storage-debug" && <StorageDebug go={go} />}
           {screen === "chats" && <Chats go={go} openThread={openConversation} />}
