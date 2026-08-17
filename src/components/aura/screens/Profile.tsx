@@ -276,9 +276,7 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
         </p>
 
         <ProfileSocial
-          onOpenChats={() => _go("chats")}
           openThread={openConversation}
-          openUserProfile={openUserProfile}
         />
 
       </section>
