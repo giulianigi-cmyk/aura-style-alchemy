@@ -15,7 +15,7 @@ import { AvatarCropper } from "../AvatarCropper";
 import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
-import { MyQrSection, QrFullscreen } from "../MyQrCode";
+import { QrFullscreen } from "../MyQrCode";
 
 
 const STYLES = [
@@ -520,7 +520,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       {/* Read-only summary chips */}
       {!editing && (
         <>
-          <MyQrSection userId={user?.id} onOpen={() => setQrOpen(true)} />
+          
           {profile?.bio && (
             <section className="mx-6 mt-6 animate-fade-up">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Bio</p>
