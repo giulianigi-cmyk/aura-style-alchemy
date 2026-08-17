@@ -45,37 +45,66 @@ function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, labe
   ctx.font = `500 ${size}px ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif`;
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
-  ctx.letterSpacing = `${Math.round(size * 0.08)}px`;
+  try {
+    ctx.letterSpacing = `${Math.round(size * 0.08)}px`;
+  } catch {
+    /* letterSpacing unsupported */
+  }
 
   const x = pad;
   const y = h - pad;
 
-  // Sample the background under the future text box.
-  const textW = Math.min(Math.ceil(ctx.measureText(label).width) + size, w - x);
-  const boxX = Math.max(0, x);
-  const boxY = Math.max(0, Math.round(y - size));
-  const boxW = Math.max(1, Math.min(textW, w - boxX));
-  const boxH = Math.max(1, Math.min(Math.round(size * 1.4), h - boxY));
+  // Sample exactly the glyph box: from the baseline upwards (ascent), not below it.
+  const m = ctx.measureText(label);
+  const ascent = m.actualBoundingBoxAscent || size * 0.72;
+  const descent = m.actualBoundingBoxDescent || size * 0.2;
+  const textW = Math.ceil(m.width) || size * 4;
 
-  let ink = "0,0,0";
+  const boxX = Math.max(0, Math.floor(x));
+  const boxY = Math.max(0, Math.floor(y - ascent));
+  const boxW = Math.max(1, Math.min(Math.ceil(textW), w - boxX));
+  const boxH = Math.max(1, Math.min(Math.ceil(ascent + descent), h - boxY));
+
+  let ink = "255,255,255";
+  let luma = 0;
+  let sampled = false;
   try {
     const { data } = ctx.getImageData(boxX, boxY, boxW, boxH);
     let sum = 0;
     let count = 0;
-    for (let i = 0; i < data.length; i += 4 * 6) {
-      sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    // step over whole pixels (multiple of 4) to keep channel alignment
+    const step = 4 * Math.max(1, Math.floor((boxW * boxH) / 4000));
+    for (let i = 0; i + 3 < data.length; i += step) {
+      const a = data[i + 3] / 255;
+      // pixels are composited over the white base we painted first
+      const r = data[i] * a + 255 * (1 - a);
+      const g = data[i + 1] * a + 255 * (1 - a);
+      const b = data[i + 2] * a + 255 * (1 - a);
+      sum += 0.299 * r + 0.587 * g + 0.114 * b;
       count++;
     }
-    const luma = count ? sum / count : 255;
-    ink = luma > 140 ? "0,0,0" : "255,255,255";
-  } catch {
-    /* tainted canvas — keep the default dark ink */
+    if (count) {
+      luma = sum / count;
+      sampled = true;
+      ink = luma >= 140 ? "0,0,0" : "255,255,255";
+    }
+  } catch (e) {
+    // Tainted canvas: we cannot know the background -> white reads better on
+    // photos than black, and stays visible on mid tones.
+    console.warn("[watermark] getImageData failed, defaulting to white ink", e);
   }
+  console.log("[watermark] luma", sampled ? Math.round(luma) : "n/a", "ink", ink, {
+    boxX,
+    boxY,
+    boxW,
+    boxH,
+  });
 
-  ctx.fillStyle = `rgba(${ink},0.75)`;
+  ctx.fillStyle = `rgba(${ink},0.78)`;
   ctx.fillText(label, x, y);
   ctx.restore();
 }
+
 
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
