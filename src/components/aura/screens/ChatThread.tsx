@@ -313,11 +313,19 @@ export function ChatThread({
     setPicker(false);
     setSending(true);
     try {
+      // Burn a per-share watermark with the sender's username. Always a new
+      // file: the outfit's own canvas_image_url is never modified.
+      const senderUsername = participants.find((p) => p.user_id === user.id)?.username ?? null;
+      const snapshotImageUrl = await createWatermarkedChatSnapshot({
+        sourcePath: outfit.canvas_image_url,
+        senderId: user.id,
+        senderUsername,
+      });
       await sendOutfitShare({
         conversationId,
         senderId: user.id,
         outfitId: outfit.id,
-        snapshotImageUrl: outfit.canvas_image_url,
+        snapshotImageUrl,
         body: text.trim() || null,
       });
       setText("");
@@ -328,6 +336,7 @@ export function ChatThread({
       setSending(false);
     }
   };
+
 
   const toggleBlock = async () => {
     if (!user || !otherId) return;
