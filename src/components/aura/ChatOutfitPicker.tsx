@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { signPaths } from "@/lib/community";
+import { outfitThumbSrc } from "@/lib/outfit-thumb";
 
-export type PickedOutfit = { id: string; name: string; canvas_image_url: string };
+export type PickedOutfit = { id: string; name: string; canvas_image_url: string; thumbnail_path?: string | null };
 
 /** One gallery tile image: skeleton while the signed URL resolves and while the
  *  bytes are still downloading, one automatic re-sign retry on error, and an
@@ -80,7 +81,7 @@ export function ChatOutfitPicker({
     (async () => {
       const { data, error } = await supabase
         .from("outfits")
-        .select("id, name, canvas_image_url")
+        .select("id, name, canvas_image_url, thumbnail_path")
         .eq("archived", false)
         .not("canvas_image_url", "is", null)
         .order("created_at", { ascending: false })
@@ -89,7 +90,7 @@ export function ChatOutfitPicker({
       if (error) { toast.error(error.message); setLoading(false); return; }
       const list = (data ?? []) as PickedOutfit[];
       setRows(list);
-      setImages(await signPaths("outfits", list.map((r) => r.canvas_image_url)));
+      setImages(await signPaths("outfits", list.flatMap((r) => [r.thumbnail_path, r.canvas_image_url])));
       if (alive) setLoading(false);
     })();
     return () => { alive = false; };
@@ -117,14 +118,14 @@ export function ChatOutfitPicker({
             <div className="grid grid-cols-2 gap-3">
               {rows.map((r) => {
                 const on = selected === r.id;
-                const url = images[r.canvas_image_url];
+                const url = outfitThumbSrc(r, images);
                 return (
                   <button
                     key={r.id}
                     onClick={() => setSelected(r.id)}
                     className={`relative rounded-2xl overflow-hidden border text-left transition ${on ? "border-foreground" : "border-border/60"}`}
                   >
-                    <OutfitThumb path={r.canvas_image_url} url={url} alt={r.name} signing={loading} />
+                    <OutfitThumb path={r.thumbnail_path || r.canvas_image_url} url={url} alt={r.name} signing={loading} />
                     <p className="px-3 py-2 text-xs truncate">{r.name}</p>
                     {on && (
                       <span className="absolute top-2 right-2 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center">
