@@ -16,6 +16,7 @@ import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
 import { QrFullscreen } from "../MyQrCode";
+import { ProfileSocial } from "../ProfileSocial";
 
 
 const STYLES = [
