@@ -715,7 +715,19 @@ async function extractFromHtml(html: string, target: URL): Promise<Extracted> {
     arr.map((img, i) => ({ u: img.url, s: scoreImage(img.url, img.alt, tokens, true), i }))
        .sort((a, b) => (b.s - a.s) || (a.i - b.i))
        .map((x) => x.u);
-  const candidates = Array.from(new Set([...ldImgs, ...rankDom(domImgs)])).slice(0, MAX_CANDIDATES);
+    // Sites with Product JSON-LD (very common — Calzedonia included) used to
+  // have their structured-data images dumped into `candidates` FIRST and
+  // completely unranked, which silently defeated the gallery-ranking fix
+  // above: whatever order the retailer's own JSON-LD happened to list
+  // images in (often not variety-optimized — e.g. two near-duplicate back
+  // shots before any usable alternate) is what the "wrong photo? pick
+  // another" picker showed, regardless of scoreImage. Both sources are now
+  // pooled and ranked together, so a worn/model shot from JSON-LD gets the
+  // same fair shot at a good gallery position as one scraped from the DOM.
+  const candidates = rankDom(
+    Array.from(new Map([...ldImgsScored, ...domImgs].map((img) => [img.url, img])).values()),
+  ).slice(0, MAX_CANDIDATES);
+
 
   if (ldImgs.length) {
     const best = pickBestImage(ldImgsScored, tokens) ?? ldImgs[0];
