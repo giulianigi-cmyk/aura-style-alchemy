@@ -194,7 +194,7 @@ function Inner() {
           {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
-          {screen === "community" && <Community go={go} />}
+          {screen === "community" && <Community go={go} openConversation={openConversation} />}
           {screen === "profile" && <Profile go={go} />}
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 

@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Loader2, Search, UserPlus, Check, X, Trash2, Send
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { ConversationList } from "../ConversationList";
 import {
   USERNAME_RE, initials, signPaths, listFriendships, getFeed, getComments, searchProfiles,
   type Friendship, type FeedRow, type ShareComment, type SearchResult,
@@ -235,9 +236,9 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
 
 /* ------------------------------------------------------------------ main */
 
-export function Community({ go }: { go: (s: Screen) => void }) {
+export function Community({ go, openConversation }: { go: (s: Screen) => void; openConversation?: (id: string) => void }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<"feed" | "friends">("feed");
+  const [tab, setTab] = useState<"feed" | "chat" | "friends">("feed");
   const [username, setUsername] = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState(false);
 
@@ -377,16 +378,21 @@ export function Community({ go }: { go: (s: Screen) => void }) {
       </header>
 
       <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar px-6">
-        {(["feed", "friends"] as const).map((c) => (
+        {(["feed", "chat", "friends"] as const).map((c) => (
           <button
             key={c}
             onClick={() => setTab(c)}
             className={`shrink-0 rounded-full px-4 py-2 text-xs transition ${tab === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-          >{c === "feed" ? "Feed" : "Friends"}</button>
+          >{c === "feed" ? "Feed" : c === "chat" ? "Chat" : "Friends"}</button>
         ))}
       </div>
 
-      {tab === "friends" ? (
+      {tab === "chat" ? (
+        <ConversationList
+          openThread={(id) => (openConversation ? openConversation(id) : go("chats"))}
+          onStartChat={() => go("chats")}
+        />
+      ) : tab === "friends" ? (
         <div className="mt-6 px-6 space-y-8">
           <section>
             <div className="flex items-center gap-2 bg-secondary/60 rounded-full px-4 py-2.5">
