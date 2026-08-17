@@ -205,7 +205,7 @@ function Inner() {
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
-          {screen === "profile" && <Profile go={go} />}
+          {screen === "profile" && <Profile go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
@@ -218,8 +218,12 @@ function Inner() {
           )}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
           {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
-          {screen === "user-profile" && activeUserId && (
-            <UserProfile userId={activeUserId} go={go} onBack={() => setScreen(userProfileBack)} />
+          {screen === "user-profile" && (
+            activeUserId
+              ? <UserProfile userId={activeUserId} go={go} onBack={() => setScreen(userProfileBack)} />
+              : <div className="h-full flex items-center justify-center px-8 text-center text-sm text-muted-foreground">
+                  This profile is not available.
+                </div>
           )}
           </ErrorBoundary>
         </div>

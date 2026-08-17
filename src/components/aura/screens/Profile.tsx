@@ -16,6 +16,7 @@ import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
 import { QrFullscreen } from "../MyQrCode";
+import { ProfileSocial } from "../ProfileSocial";
 
 
 const STYLES = [
@@ -81,7 +82,7 @@ const SHARING_DEFINITIONS = [
   { term: "Turning it off", description: "Your pieces disappear from future searches and the anonymous photo copies are deleted. Pieces other members already imported remain in their closet as independent copies — they are not removed." },
 ];
 
-export function Profile({ go: _go }: { go: (s: Screen) => void }) {
+export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s: Screen) => void; openConversation?: (id: string) => void; openUserProfile?: (id: string) => void }) {
   const { user, signOut } = useAuth();
   const [qrOpen, setQrOpen] = useState(false);
   const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
@@ -274,18 +275,12 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
           {meta || "Tap edit to complete profile"}
         </p>
 
-        <div className="mt-4 flex gap-8">
-          {[
-                        { n: profile?.owned_brands?.length ?? 0, l: "Brands" },
-            { n: profile?.style_preferences?.length ?? 0, l: "Styles" },
-            { n: calcAge(profile?.birth_date) ?? "—", l: "Age" },
-          ].map(s => (
-            <div key={s.l} className="text-center">
-              <p className="font-serif text-xl">{s.n}</p>
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">{s.l}</p>
-            </div>
-          ))}
-        </div>
+        <ProfileSocial
+          onOpenChats={() => _go("chats")}
+          openThread={openConversation}
+          openUserProfile={openUserProfile}
+        />
+
       </section>
 
       {/* Editable details */}
