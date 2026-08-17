@@ -29,6 +29,8 @@ import { Chats } from "./screens/Chats";
 import { ChatThread } from "./screens/ChatThread";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
+import { UserProfile } from "./screens/UserProfile";
+
 import { TabBar } from "./TabBar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PhoneFrame } from "./PhoneFrame";
@@ -41,7 +43,7 @@ export type Screen =
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
       | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
       | "trips" | "trip-create" | "trip-detail" | "essential-presets"
-      | "chats" | "chat-thread";
+      | "chats" | "chat-thread" | "user-profile";
 
 
 
@@ -72,6 +74,8 @@ function Inner() {
   const [reviewScanId, setReviewScanId] = useState<string | null>(null);
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [userProfileBack, setUserProfileBack] = useState<Screen>("community");
   const [wardrobeGapFilter, setWardrobeGapFilter] = useState<"price" | "purchase_date" | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
@@ -105,6 +109,12 @@ function Inner() {
     setActiveConversationId(id);
     setScreen("chat-thread");
   }, []);
+
+  const openUserProfile = useCallback((id: string) => {
+    setActiveUserId(id);
+    setUserProfileBack((prev) => (screen === "user-profile" ? prev : screen));
+    setScreen("user-profile");
+  }, [screen]);
 
   useChatNotifications(openConversation);
 
@@ -194,7 +204,7 @@ function Inner() {
           {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
-          {screen === "community" && <Community go={go} openConversation={openConversation} />}
+          {screen === "community" && <Community go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
           {screen === "profile" && <Profile go={go} />}
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
@@ -208,6 +218,9 @@ function Inner() {
           )}
           {screen === "builder" && <OutfitBuilder go={go} init={builderInit} />}
           {screen === "color-analysis" && <PersonalColorAnalysis go={go} />}
+          {screen === "user-profile" && activeUserId && (
+            <UserProfile userId={activeUserId} go={go} onBack={() => setScreen(userProfileBack)} />
+          )}
           </ErrorBoundary>
         </div>
         {showTabs && <TabBar current={screen} go={go} />}
