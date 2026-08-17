@@ -81,7 +81,7 @@ const SHARING_DEFINITIONS = [
   { term: "Turning it off", description: "Your pieces disappear from future searches and the anonymous photo copies are deleted. Pieces other members already imported remain in their closet as independent copies — they are not removed." },
 ];
 
-export function Profile({ go: _go }: { go: (s: Screen) => void }) {
+export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s: Screen) => void; openConversation?: (id: string) => void; openUserProfile?: (id: string) => void }) {
   const { user, signOut } = useAuth();
   const [qrOpen, setQrOpen] = useState(false);
   const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
