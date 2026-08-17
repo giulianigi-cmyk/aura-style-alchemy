@@ -235,7 +235,7 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
 
 /* ------------------------------------------------------------------ main */
 
-export function Community({ go: _go }: { go: (s: Screen) => void }) {
+export function Community({ go }: { go: (s: Screen) => void }) {
   const { user } = useAuth();
   const [tab, setTab] = useState<"feed" | "friends">("feed");
   const [username, setUsername] = useState<string | null>(null);
