@@ -2192,6 +2192,15 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: undefined
       }
+      profile_by_username: {
+        Args: { _username: string }
+        Returns: {
+          id: string
+          profile_image: string
+          relation: string
+          username: string
+        }[]
+      }
       promote_to_admin: {
         Args: { _conversation_id: string; _target: string }
         Returns: undefined
