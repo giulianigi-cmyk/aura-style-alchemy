@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { uploadOutfitThumb } from "@/lib/outfit-thumb";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import {
@@ -455,11 +456,16 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       });
       if (up.error) throw up.error;
 
+      // Small JPEG used by gallery views (chat outfit picker). Best-effort:
+      // a failed thumbnail never blocks saving the outfit.
+      const thumbPath = await uploadOutfitThumb(user.id, exported.dataUrl);
+
       const seasonTag = weather ? [season] : [];
       const payload = {
         name: name.trim() || `Outfit ${new Date().toLocaleDateString("en-US")}`,
         item_ids: placed.map((p) => p.itemId),
         canvas_image_url: path,
+        thumbnail_path: thumbPath,
         occasion: occasion ? [occasion] : [],
         season: seasonTag,
         notes: notes.trim() || null,
