@@ -2074,6 +2074,50 @@ export type Database = {
         Args: { _confidence: number; _last_seen: string }
         Returns: number
       }
+      get_conversation_messages: {
+        Args: { _conversation_id: string; _limit?: number }
+        Returns: {
+          body: string
+          comment_count: number
+          content_type: string
+          created_at: string
+          deleted_at: string
+          dislike_count: number
+          event_snapshot: Json
+          id: string
+          like_count: number
+          metadata: Json
+          my_reaction: string
+          outfit_id: string
+          ref_type: string
+          sender_id: string
+          sender_profile_image: string
+          sender_username: string
+          snapshot_image_url: string
+        }[]
+      }
+      get_conversation_participants: {
+        Args: { _conversation_id: string }
+        Returns: {
+          joined_at: string
+          left_at: string
+          profile_image: string
+          role: string
+          user_id: string
+          username: string
+        }[]
+      }
+      get_message_thread_comments: {
+        Args: { _message_id: string }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          profile_image: string
+          user_id: string
+          username: string
+        }[]
+      }
       get_or_create_direct_conversation: {
         Args: { _other: string }
         Returns: string
@@ -2113,6 +2157,25 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: undefined
       }
+      list_conversations: {
+        Args: never
+        Returns: {
+          can_send: boolean
+          conversation_id: string
+          created_at: string
+          is_group: boolean
+          last_message_at: string
+          last_message_body: string
+          last_message_type: string
+          member_count: number
+          my_role: string
+          other_id: string
+          other_profile_image: string
+          status: string
+          title: string
+          unread_count: number
+        }[]
+      }
       list_friendships: {
         Args: never
         Returns: {
@@ -2124,6 +2187,10 @@ export type Database = {
           status: string
           username: string
         }[]
+      }
+      mark_conversation_read: {
+        Args: { _conversation_id: string }
+        Returns: undefined
       }
       promote_to_admin: {
         Args: { _conversation_id: string; _target: string }
