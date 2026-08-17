@@ -122,6 +122,19 @@ function Inner() {
     if (recovery) setScreen("reset");
   }, [recovery]);
 
+  // Backfill thumbnails for outfits saved before the thumbnail pipeline
+  // existed. Idle, best-effort, once per session — the picker keeps
+  // falling back to the original image for anything not yet processed.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      void import("@/lib/outfit-thumb").then((m) => m.backfillOutfitThumbs(user.id));
+    }, 4000);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [user]);
+
   useEffect(() => {
     if (loading) return;
     if (screen !== "splash") return;
