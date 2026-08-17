@@ -520,7 +520,7 @@ export function Profile({ go: _go }: { go: (s: Screen) => void }) {
       {/* Read-only summary chips */}
       {!editing && (
         <>
-          <MyQrSection userId={user?.id} onOpen={() => setQrOpen(true)} />
+          
           {profile?.bio && (
             <section className="mx-6 mt-6 animate-fade-up">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Bio</p>

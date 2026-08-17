@@ -369,11 +369,6 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
         </div>
         <div className="flex items-center gap-3">
           {username && <p className="text-xs text-muted-foreground">@{username}</p>}
-          <button
-            onClick={() => go("chats")}
-            aria-label="Chat"
-            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
-          ><MessageCircle size={15} /></button>
         </div>
       </header>
 
