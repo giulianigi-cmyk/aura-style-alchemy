@@ -2205,6 +2205,17 @@ export type Database = {
         Args: { _conversation_id: string; _target: string }
         Returns: undefined
       }
+      public_profile: {
+        Args: { _user_id: string }
+        Returns: {
+          bio: string
+          full_name: string
+          id: string
+          profile_image: string
+          relation: string
+          username: string
+        }[]
+      }
       record_scrape_domain_hint: {
         Args: { p_domain: string; p_signal: string }
         Returns: undefined
