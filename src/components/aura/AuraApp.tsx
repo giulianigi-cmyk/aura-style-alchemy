@@ -29,6 +29,8 @@ import { Chats } from "./screens/Chats";
 import { ChatThread } from "./screens/ChatThread";
 import { OutfitBuilder } from "./screens/OutfitBuilder";
 import { PersonalColorAnalysis } from "./screens/PersonalColorAnalysis";
+import { UserProfile } from "./screens/UserProfile";
+
 import { TabBar } from "./TabBar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PhoneFrame } from "./PhoneFrame";
