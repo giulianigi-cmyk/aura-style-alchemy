@@ -94,9 +94,9 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
 /* ------------------------------------------------------------------ feed */
 
 
-function FeedCard({ row, avatar, image, onChanged, meId }: {
+function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
   row: FeedRow; avatar?: string | null; image?: string | null;
-  onChanged: () => void; meId: string;
+  onChanged: () => void; meId: string; onOpenProfile?: (id: string) => void;
 }) {
   const [liked, setLiked] = useState(row.liked_by_me);
   const [likes, setLikes] = useState(Number(row.like_count));
@@ -153,7 +153,11 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
   return (
     <article className="animate-fade-up">
       <div className="px-6 flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onOpenProfile?.(row.direction === "outgoing" ? row.shared_with : row.shared_by)}
+          className="flex items-center gap-3 text-left active:scale-[0.98] transition"
+        >
           <Avatar url={avatar} username={row.other_username} />
           <div>
             <p className="text-sm font-medium">{row.other_username ?? "—"}</p>
@@ -161,7 +165,7 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
               {row.direction === "outgoing" ? "You shared" : "Shared with you"}
             </p>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="relative" style={{ background: "#FFFFFF" }}>
@@ -236,7 +240,7 @@ function FeedCard({ row, avatar, image, onChanged, meId }: {
 
 /* ------------------------------------------------------------------ main */
 
-export function Community({ go, openConversation }: { go: (s: Screen) => void; openConversation?: (id: string) => void }) {
+export function Community({ go, openConversation, openUserProfile }: { go: (s: Screen) => void; openConversation?: (id: string) => void; openUserProfile?: (id: string) => void }) {
   const { user } = useAuth();
   const [tab, setTab] = useState<"feed" | "chat" | "friends">("feed");
   const [username, setUsername] = useState<string | null>(null);
@@ -406,8 +410,10 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
             <div className="mt-3 space-y-1">
               {results.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 py-2">
-                  <Avatar username={r.username} />
-                  <span className="text-sm flex-1">{r.username}</span>
+                  <button type="button" onClick={() => openUserProfile?.(r.id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
+                    <Avatar username={r.username} />
+                    <span className="text-sm flex-1">{r.username}</span>
+                  </button>
                   {r.relation === "friends" ? (
                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Friends</span>
                   ) : r.relation === "outgoing" ? (
@@ -437,8 +443,10 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
                   <h2 className="font-serif text-2xl italic mb-2">Requests</h2>
                   {incoming.map((f) => (
                     <div key={f.friendship_id} className="flex items-center gap-3 py-2">
-                      <Avatar username={f.username} />
-                      <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                      <button type="button" onClick={() => openUserProfile?.(f.other_id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
+                        <Avatar username={f.username} />
+                        <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                      </button>
                       <button onClick={() => void accept(f)} aria-label="Accept" className="h-8 w-8 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"><Check size={13} /></button>
                       <button onClick={() => void removeFriendship(f, "Request declined")} aria-label="Decline" className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"><X size={13} /></button>
                     </div>
@@ -451,8 +459,10 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
                   <h2 className="font-serif text-2xl italic mb-2">Sent</h2>
                   {outgoing.map((f) => (
                     <div key={f.friendship_id} className="flex items-center gap-3 py-2">
-                      <Avatar username={f.username} />
-                      <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                      <button type="button" onClick={() => openUserProfile?.(f.other_id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
+                        <Avatar username={f.username} />
+                        <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                      </button>
                       <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Pending</span>
                       <button
                         onClick={() => void removeFriendship(f, "Request cancelled")}
@@ -471,8 +481,10 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
                   </p>
                 ) : accepted.map((f) => (
                   <div key={f.friendship_id} className="flex items-center gap-3 py-2">
-                    <Avatar url={f.profile_image ? friendAvatars[f.profile_image] : null} username={f.username} />
-                    <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                    <button type="button" onClick={() => openUserProfile?.(f.other_id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
+                      <Avatar url={f.profile_image ? friendAvatars[f.profile_image] : null} username={f.username} />
+                      <span className="text-sm flex-1">{f.username ?? "—"}</span>
+                    </button>
                     <button
                       onClick={() => void removeFriendship(f, "Friend removed")}
                       className="h-8 px-3 rounded-full border border-border text-[10px] uppercase tracking-[0.2em] active:scale-95"
@@ -509,6 +521,7 @@ export function Community({ go, openConversation }: { go: (s: Screen) => void; o
               avatar={row.other_profile_image ? feedAvatars[row.other_profile_image] : null}
               image={row.canvas_image_url ? feedImages[row.canvas_image_url] : null}
               onChanged={() => void loadFeed()}
+              onOpenProfile={openUserProfile}
             />
           ))}
         </section>
