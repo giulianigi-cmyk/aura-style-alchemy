@@ -112,6 +112,9 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       "1 dress, + shoes, optionally outerwear/accessory). Match colors and style",
       "coherently. Use subcategory to judge fit-for-purpose when present (e.g. prefer",
       "sandals over boots in hot weather; heels over sneakers for formal occasions).",
+      "NEVER use subcategory \"Running Shoes\" in any look, for any occasion — this",
+      "is a styling engine, not a workout planner. \"Sneakers\" (lifestyle) remain",
+      "fine for casual/Weekend looks.",
       "If the wardrobe genuinely can't support a distinct, coherent look for one of",
       "the three occasions without being repetitive or nonsensical, skip that",
       "occasion rather than forcing a bad or near-identical combination — quality",
@@ -187,25 +190,37 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         const item = catalog.find((c) => c.id === id);
         if (!item) return false;
         const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")}`;
+        const season = (item.season ?? "").toLowerCase();
         if (hot) {
-          if (item.season === "winter") return true;
+          if (season === "winter") return true;
           if (HEAVY_SIGNAL.test(text)) return true;
         }
         if (cold) {
-          if (item.season === "summer" && LIGHT_SIGNAL.test(text)) return true;
+          if (season === "summer" && LIGHT_SIGNAL.test(text)) return true;
         }
         return false;
       });
     };
 
+    // Technical/running shoes are a hard exclusion from every look this
+    // engine produces — this engine styles outfits (Today's edit, Work,
+    // Weekend, Evening), never a workout fit. Formality alone doesn't
+    // catch this: a performance running shoe and a canvas lifestyle
+    // sneaker can both read as formality 1, but only one belongs in a
+    // styled outfit. The taxonomy already separates the two at
+    // classification time (subcategory "Running Shoes" vs "Sneakers" —
+    // see ai-analyze.functions.ts), so this just has to trust that field.
+    const violatesStylingFootwear = (ids: string[]): boolean =>
+      ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
+
     const sanitize = (r: DailyLooksResult): DailyLooksResult => {
-      // "today" is singular — a weather violation strips just the offending
+      // "today" is singular — a violation strips just the offending
       // item(s) rather than discarding the whole look (there's no second
       // candidate to fall back to for "today").
       const todayIds = r.today.item_ids.filter((id) => validIds.has(id));
       const today = {
         ...r.today,
-        item_ids: todayIds.filter((id) => !violatesWeather([id])),
+        item_ids: todayIds.filter((id) => !violatesWeather([id]) && !violatesStylingFootwear([id])),
       };
       const seen = [today.item_ids];
       const curated = r.curated
@@ -218,6 +233,9 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         // Hard weather exclusion: applies to EVERY occasion, not just Work —
         // a wool coat is wrong for Weekend/Evening at 39°C just as much.
         .filter((l) => !violatesWeather(l.item_ids))
+        // Hard exclusion: running/performance shoes never belong in a
+        // styled outfit, for any occasion (see violatesStylingFootwear).
+        .filter((l) => !violatesStylingFootwear(l.item_ids))
         // Drop any curated look that's identical OR near-identical (>=70%
         // item overlap) to "today" or an earlier curated look — a real
         // similarity check, not just an exact-match string comparison.
