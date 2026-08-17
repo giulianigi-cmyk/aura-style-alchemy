@@ -63,3 +63,65 @@ export function outfitThumbSrc(
   if (outfit.thumbnail_path && signed[outfit.thumbnail_path]) return signed[outfit.thumbnail_path];
   return outfit.canvas_image_url ? signed[outfit.canvas_image_url] : undefined;
 }
+
+/**
+ * One-shot background backfill for outfits saved before the thumbnail
+ * pipeline existed. Runs client-side (thumbs are canvas-generated), in
+ * small batches, and is fully best-effort: any failure just leaves the
+ * outfit on the original-image fallback.
+ */
+let backfillRan = false;
+
+export async function backfillOutfitThumbs(userId: string, batch = 12): Promise<number> {
+  if (backfillRan) return 0;
+  backfillRan = true;
+  try {
+    const { data, error } = await supabase
+      .from("outfits")
+      .select("id, canvas_image_url")
+      .eq("user_id", userId)
+      .is("thumbnail_path", null)
+      .not("canvas_image_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(batch);
+    if (error || !data?.length) return 0;
+
+    let done = 0;
+    for (const row of data as { id: string; canvas_image_url: string }[]) {
+      try {
+        const { data: signed } = await supabase.storage
+          .from("outfits")
+          .createSignedUrl(row.canvas_image_url, 300);
+        if (!signed?.signedUrl) continue;
+        const res = await fetch(signed.signedUrl);
+        if (!res.ok) continue;
+        const objectUrl = URL.createObjectURL(await res.blob());
+        try {
+          const thumb = await makeOutfitThumbBlob(objectUrl);
+          if (!thumb) continue;
+          const path = `${userId}/thumbs/outfit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+          const up = await supabase.storage.from("outfits").upload(path, thumb, {
+            contentType: "image/jpeg",
+            upsert: false,
+            cacheControl: "3600",
+          });
+          if (up.error) continue;
+          const { error: updErr } = await supabase
+            .from("outfits")
+            .update({ thumbnail_path: path })
+            .eq("id", row.id)
+            .eq("user_id", userId);
+          if (!updErr) done++;
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+        }
+      } catch (e) {
+        console.warn("[AURA] outfit thumb backfill item failed", row.id, e);
+      }
+    }
+    return done;
+  } catch (e) {
+    console.warn("[AURA] outfit thumb backfill failed", e);
+    return 0;
+  }
+}
