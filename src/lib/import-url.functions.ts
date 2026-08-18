@@ -37,6 +37,46 @@ function stripTrackingParams(u: URL): URL {
   return clean;
 }
 
+// Common query-param names fashion e-commerce sites use to pin down a
+// SPECIFIC color variant of a product (Zara's "v1", Mango/COS's "colorId",
+// generic "color"/"variant"). Their presence is what lets a copied link
+// reliably identify one color out of several. When a hard-blocked domain's
+// URL has none of these AND the page turns out to have multiple colors on
+// it, there's no way to know which color the person actually meant — the
+// info simply isn't in the link. See colorAmbiguityWarning below.
+const COLOR_VARIANT_PARAM_RE = /^(v1|colou?r(id)?|variant|swatch)$/i;
+function hasColorVariantParam(u: URL): boolean {
+  for (const k of u.searchParams.keys()) {
+    if (COLOR_VARIANT_PARAM_RE.test(k)) return true;
+  }
+  return false;
+}
+// Generic signal that a page offers more than one color: JSON-LD's Product
+// type allows an array of `color`, and many sites additionally embed a
+// `hasVariant` list — either one having 2+ distinct values means real
+// ambiguity, not just noise from one repeated value.
+function pageHasMultipleColors(productNode: ProductJson | null): boolean {
+  if (!productNode) return false;
+  const colorField = (productNode as unknown as { color?: unknown }).color;
+  if (Array.isArray(colorField)) {
+    const distinct = new Set(colorField.map((c) => String(c).toLowerCase().trim()));
+    if (distinct.size > 1) return true;
+  }
+  const variants = (productNode as unknown as { hasVariant?: unknown }).hasVariant;
+  if (Array.isArray(variants) && variants.length > 1) return true;
+  return false;
+}
+/** Honest-uncertainty warning (never a silent wrong guess): only fires when
+ *  we can positively tell the page has multiple colors AND the URL gives
+ *  no way to tell which one was intended. Returns null — no warning — the
+ *  moment either signal is missing, since a false "maybe wrong color" on
+ *  every single-color product would just train the person to ignore it. */
+function colorAmbiguityWarning(target: URL, productNode: ProductJson | null): string | null {
+  if (hasColorVariantParam(target)) return null;
+  if (!pageHasMultipleColors(productNode)) return null;
+  return "This product has multiple colors and the link doesn't specify which one — double-check the color before saving, or select the exact color on the site first and copy that link.";
+}
+
 const HARD_BLOCK_DOMAINS = new Set([
   "zalando.com", "zalando.it", "zara.com", "hm.com", "asos.com", "farfetch.com",
   "cos.com", "net-a-porter.com", "mytheresa.com", "gucci.com", "prada.com",
@@ -316,7 +356,13 @@ function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | nul
 }
 
 const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook|-(?:fi|bi|m|dt\d*w?)\.(?:jpe?g|png|webp)(?:\?|$))/i;
-const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary|-[fb]\.(?:jpe?g|png|webp)(?:\?|$))/i;
+// -p suffix added for Zara (Inditex): confirmed directly from a live
+// zara.com product page that its own flat/packshot image is named
+// "{sku}-p.jpg" (e.g. 00858038250-p.jpg, taken from og:image) — distinct
+// from the -f/-b (front/back) convention this regex already covered.
+// Without it, Zara's actual packshot never got the scoring boost here and
+// lost out to whichever worn/editorial photo scored higher elsewhere.
+const PRODUCT_KEYWORDS = /(product|packshot|flat|still|front|back|detail|closeup|close-up|main-image|main_image|primary|-[fbp]\.(?:jpe?g|png|webp)(?:\?|$))/i;
 const JUNK_KEYWORDS = /(logo|sprite|placeholder|icon-|favicon|thumbnail|swatch|badge|banner|arrow|chevron|pixel\.gif|tracking)/i;
 const RELATED_URL_KEYWORDS = /(related|recommend|similar|cross-sell|upsell|editorial|carousel|thumbnail|swatch)/i;
 // Lazy-loaded image tags on many sites (Calzedonia included) carry a tiny
@@ -833,7 +879,11 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
     price = priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue);
   }
 
-  return { brand, title, price, priceValue, priceCurrency, ...extractMaterials(html, extracted.productNode) };
+  return {
+    brand, title, price, priceValue, priceCurrency,
+    colorWarning: colorAmbiguityWarning(target, extracted.productNode),
+    ...extractMaterials(html, extracted.productNode),
+  };
 }
 const AiExtractionSchema = z.object({
   imageUrl: z.string(),
@@ -1232,6 +1282,7 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       imageCandidates: validatedAltCandidates.length ? validatedAltCandidates : [imageUrl],
       materials: meta.materials,
       composition: meta.composition,
+      colorWarning: meta.colorWarning,
       usedFallback,
     };
   });
