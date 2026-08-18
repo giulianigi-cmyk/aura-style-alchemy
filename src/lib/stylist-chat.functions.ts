@@ -5,7 +5,6 @@ import { z } from "zod";
 import { parseAiJson } from "./ai-json";
 import { isItemAllowedByDressPreferences, coversLegs, coversArms, type DressPreferences } from "./dress-preferences";
 import { isItemAtLocation } from "./wardrobe-location";
-
 const ItemSchema = z.object({
   id: z.string(),
   category: z.string().nullable().optional(),
