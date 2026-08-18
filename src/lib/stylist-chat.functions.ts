@@ -239,11 +239,19 @@ export const stylistChat = createServerFn({ method: "POST" })
       const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
 
       let text: string;
+      let firstCallError: string | null = null;
       try {
         const r1 = await generateText({ model, system, messages: history });
         text = r1.text;
       } catch (err) {
         console.error("[AURA stylist-chat] first call failed", err);
+        // TEMP DIAGNOSTIC (2026-08-18): every stylist-chat message is
+        // currently falling through to the generic fallback reply, which
+        // means this catch (or the r2 one below) is firing every time —
+        // but the real cause only ever reached console.error, which isn't
+        // visible from the phone. Stash it so the fallback reply below can
+        // surface it directly in the chat. Revert once root-caused.
+        firstCallError = err instanceof Error ? err.message : String(err);
         text = "";
       }
 
@@ -271,7 +279,19 @@ export const stylistChat = createServerFn({ method: "POST" })
             console.error("[AURA stylist-chat] both parse attempts failed on JSON-shaped text — showing fallback instead of leaking raw JSON. Raw text:", text, finalErr);
             parsed = { reply: "Sorry, something went wrong on my end — could you try asking that again?", item_ids: [] };
           } else {
-            parsed = { reply: text.trim() || "Sorry, I didn't quite catch that — could you rephrase?", item_ids: [] };
+            // TEMP DIAGNOSTIC (2026-08-18): surface the real error inline
+            // instead of the generic "didn't quite catch that" — remove
+            // this branch once the root cause is found and fixed.
+            const diagBits = [
+              firstCallError ? `first call: ${firstCallError}` : null,
+              finalErr instanceof Error ? `retry: ${finalErr.message}` : `retry: ${String(finalErr)}`,
+            ].filter(Boolean).join(" | ");
+            parsed = {
+              reply: diagBits
+                ? `⚠️ DEBUG — AI call failed: ${diagBits}`
+                : (text.trim() || "Sorry, I didn't quite catch that — could you rephrase?"),
+              item_ids: [],
+            };
           }
         }
 
