@@ -1,354 +1,608 @@
-import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateText } from "ai";
-import { z } from "zod";
-import { parseAiJson } from "./ai-json";
-import { isItemAllowedByDressPreferences, coversLegs, coversArms, type DressPreferences } from "./dress-preferences";
-import { isItemAtLocation } from "./wardrobe-location";
+import { ArrowLeft, ArrowUp, Loader2, Sparkles, Mic, Square } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import type { BuilderInit, Screen, StylistChatInit } from "../AuraApp";
+import { supabase } from "@/integrations/supabase/client";
+import type { WardrobeItem } from "@/lib/aura-types";
+import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
+import { useLocation } from "@/hooks/use-location";
+import { useWeather } from "@/hooks/use-weather";
+import { describeWeather } from "@/lib/weather";
+import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { stylistChat } from "@/lib/stylist-chat.functions";
+import { submitOutfitFeedback } from "@/lib/outfit-feedback.functions";
+import { saveOutfitPlan } from "@/lib/outfit-plan.functions";
+import { transcribeVoice } from "@/lib/voice-transcribe.functions";
+import { synthesizeVoice } from "@/lib/voice-synthesize.functions";
+import { loadDressRules, loadDressPreferencesRaw } from "@/lib/dress-preferences";
 
-const ItemSchema = z.object({
-  id: z.string(),
-  category: z.string().nullable().optional(),
-  subcategory: z.string().nullable().optional(),
-  colors: z.array(z.string()).nullable().optional(),
-  style: z.array(z.string()).nullable().optional(),
-  season: z.string().nullable().optional(),
-  brand: z.string().nullable().optional(),
-  material: z.array(z.string()).nullable().optional(),
-  size: z.string().nullable().optional(),
-  length: z.string().nullable().optional(),
-  sleeveLength: z.string().nullable().optional(),
-  fit: z.string().nullable().optional(),
-  heelHeight: z.string().nullable().optional(),
-  toeShape: z.string().nullable().optional(),
-  closure: z.string().nullable().optional(),
-  gender: z.string().nullable().optional(),
-  styleTags: z.array(z.string()).nullable().optional(),
-  formality: z.number().nullable().optional(),
-  dayEvening: z.string().nullable().optional(),
-  locationId: z.string().nullable().optional(),
-});
+type ActionType = "save_canvas" | "add_calendar" | "dismiss";
+type FeedbackType = "liked" | "disliked" | "saved";
 
-const MessageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-});
-
-const InputSchema = z.object({
-  messages: z.array(MessageSchema).min(1).max(30),
-  items: z.array(ItemSchema),
-  dressRules: z.string().nullable().optional(),
-  dressPreferences: z.record(z.string(), z.unknown()).nullable().optional(),
-  industry: z.string().nullable().optional(),
-  workDressCode: z.string().nullable().optional(),
-  personalFormality: z.string().nullable().optional(),
-  styleBoldness: z.string().nullable().optional(),
-  profession: z.string().nullable().optional(),
-  temperature: z.number().nullable().optional(),
-  condition: z.string().nullable().optional(),
-    feedbackContext: z.enum(["liked", "disliked", "saved"]).nullable().optional(),
-  todayDate: z.string().nullable().optional(),
-});
-
-const OutputSchema = z.object({
-  reply: z.string(),
-  item_ids: z.array(z.string()),
-  choices: z.array(z.string()).max(4).optional(),
-  eventDate: z.string().nullable().optional(),
-});
+type ChatMsg = {
+  role: "user" | "assistant";
+  content: string;
+  itemIds?: string[];
+  choices?: string[];
+  actions?: { type: ActionType; label: string }[];
+  uiOnly?: boolean;
+  eventDate?: string | null;
+};
 
 
-const SAVE_ACTIONS = [
-  { type: "save_canvas" as const, label: "Save to canvas" },
-  { type: "add_calendar" as const, label: "Add to calendar" },
+type MsgUiState = {
+  feedback?: FeedbackType;
+  choice?: string;
+  actionsDone?: ActionType[];
+  calendarStep?: "choose" | "pick_date";
+  pickedDate?: string;
+};
+
+const FEEDBACK_LABELS: Record<FeedbackType, string> = {
+  liked: "❤️ I like this outfit",
+  disliked: "👎 Not for me, suggest something else",
+  saved: "💾 Save this outfit",
+};
+
+const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
+  { type: "save_canvas", label: "Save to canvas" },
+  { type: "add_calendar", label: "Add to calendar" },
 ];
 
-function unwrapIfDoubleEncoded(parsed: z.infer<typeof OutputSchema>): z.infer<typeof OutputSchema> {
-  const trimmed = parsed.reply?.trim() ?? "";
-  if (!trimmed.startsWith("{") || !trimmed.includes('"reply"')) return parsed;
-  try {
-    return parseAiJson(trimmed, OutputSchema);
-  } catch (err) {
-    console.error("[AURA stylist-chat] double-encoding detected but inner unwrap failed — showing fallback instead of leaking raw JSON. Raw reply field:", parsed.reply, err);
-    return { ...parsed, reply: "Sorry, something went wrong on my end — could you try asking that again?" };
-  }
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function errorMessage(e: unknown, fallback: string): string {
+  const detail =
+    e instanceof Error ? e.message
+    : typeof e === "string" ? e
+    : typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message)
+    : null;
+  return detail ? `${fallback}: ${detail}` : fallback;
 }
 
+export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void; initialMessage?: StylistChatInit }) {
+  const { user } = useAuth();
+  const { profile } = useProfile();
+  const { latitude, longitude } = useLocation();
+  const { data: weather } = useWeather(latitude, longitude);
+  const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
+  const [signed, setSigned] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [uiState, setUiState] = useState<Record<number, MsgUiState>>({});
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const speakNextReplyRef = useRef(false);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const transcribe = useServerFn(transcribeVoice);
+  const synthesize = useServerFn(synthesizeVoice);
 
-export const stylistChat = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-    const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-2.5-flash");
+  const patchUi = (i: number, patch: Partial<MsgUiState>) =>
+    setUiState((s) => ({ ...s, [i]: { ...s[i], ...patch } }));
 
-    const wx = data.temperature != null
-      ? `Weather for this occasion: ${Math.round(data.temperature)}°C, ${data.condition ?? "unknown"}.`
-      : "Weather: unknown.";
-
-    const dressPrefs = (data.dressPreferences ?? null) as DressPreferences | null;
-    const dressAllowed = data.items.filter((it) => isItemAllowedByDressPreferences(it, dressPrefs));
-
-    // Server-side, authoritative lookup — never trust a client-supplied
-    // "active location" for this, same principle as never trusting a
-    // client-supplied "what I own" list. The person's active location is
-    // profile state, looked up here directly.
-    const { data: profileRow } = await (context.supabase.from("profiles" as never) as any)
-      .select("active_location_id").eq("id", context.userId).maybeSingle();
-    const activeLocationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
-    let activeLocation: { id: string; is_primary: boolean } | null = null;
-    if (activeLocationId) {
-      const { data: locRow } = await (context.supabase.from("wardrobe_locations" as never) as any)
-        .select("id, is_primary").eq("id", activeLocationId).eq("user_id", context.userId).maybeSingle();
-      if (locRow) activeLocation = locRow as { id: string; is_primary: boolean };
-    }
-    const allowedItems = dressAllowed.filter((it) =>
-      isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
-
-    // Derived from the wardrobe itself — no separate size-tracking table
-    // needed. "Usual size per brand" only means anything with 2+ pieces
-    // from that brand; a single item is one data point, not a pattern.
-    const brandSizeCounts = new Map<string, Map<string, number>>();
-    for (const it of data.items) {
-      const brand = it.brand?.trim();
-      const size = it.size?.trim();
-      if (!brand || !size) continue;
-      const sizes = brandSizeCounts.get(brand) ?? new Map<string, number>();
-      sizes.set(size, (sizes.get(size) ?? 0) + 1);
-      brandSizeCounts.set(brand, sizes);
-    }
-    const brandSizeSummary = [...brandSizeCounts.entries()]
-      .filter(([, sizes]) => [...sizes.values()].reduce((a, b) => a + b, 0) >= 2)
-      .map(([brand, sizes]) => {
-        const [topSize] = [...sizes.entries()].sort((a, b) => b[1] - a[1])[0];
-        return `${brand}: usually ${topSize}`;
-      });
-
-    const catalog = allowedItems.slice(0, 200).map((it) => ({
-      id: it.id,
-      category: it.category ?? "",
-      subcategory: it.subcategory ?? "",
-      colors: it.colors ?? [],
-      style: it.style ?? [],
-      season: it.season ?? "",
-      brand: it.brand ?? "",
-      material: it.material ?? [],
-      size: it.size ?? "",
-      length: it.length ?? "",
-      sleeveLength: it.sleeveLength ?? "",
-      fit: it.fit ?? "",
-      heelHeight: it.heelHeight ?? "",
-      toeShape: it.toeShape ?? "",
-      closure: it.closure ?? "",
-      gender: it.gender ?? "",
-      styleTags: it.styleTags ?? [],
-      formality: it.formality ?? null,
-      dayEvening: it.dayEvening ?? "",
+  const markActionDone = (i: number, type: ActionType) =>
+    setUiState((s) => ({
+      ...s,
+      [i]: { ...s[i], actionsDone: [...(s[i]?.actionsDone ?? []), type] },
     }));
 
-    // Deterministic, verified-in-code eligibility check — computed here
-    // instead of asking the model to work it out by scanning the catalog
-    // itself. An LLM reading a JSON list is not a reliable substitute for
-    // an actual filter: it can (and did) miss items that are right there.
-    // Uses the SAME coversLegs/coversArms functions as the hard filter
-    // above (isItemAllowedByDressPreferences) — one source of truth, so
-    // this can't drift out of sync with what was actually filtered.
-    const legCoveringIds = dressPrefs?.cover_legs
-      ? allowedItems.filter((it) => coversLegs(it)).map((it) => it.id)
-      : [];
-    const armCoveringIds = dressPrefs?.cover_arms
-      ? allowedItems.filter((it) => coversArms(it)).map((it) => it.id)
-      : [];
+    const [itemsError, setItemsError] = useState<string | null>(null);
 
-    // Always present, not tied to any specific preference — this is the
-    // general-case fix for the same failure mode: without a structured
-    // constraint to check (like cover_legs), the model has nothing hard
-    // to anchor on and can fall back to "you have none" even for a plain
-    // "give me an alternative dress" request. A category inventory count
-    // is cheap to compute and applies to every conversation.
-    const categoryCounts = new Map<string, number>();
-    for (const it of allowedItems) {
-      const c = it.category ?? "Uncategorized";
-      categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
-    }
-    const inventorySummary = [...categoryCounts.entries()]
-      .filter(([, n]) => n > 0)
-      .map(([cat, n]) => `${cat}: ${n}`)
-      .join(", ");
-
-    const feedbackInstruction = {
-      liked: "The user just tapped 'I like this outfit' on your PREVIOUS suggestion. Reply with ONE short, warm line: acknowledge their choice and wish them well for whatever occasion was mentioned earlier in the conversation (if none was mentioned, keep it generic, e.g. 'Enjoy!'). Do NOT re-describe or repeat the outfit. Do NOT offer to save it or add it anywhere — that is handled separately. Return an empty item_ids array and empty choices array.",
-      disliked: "The user just tapped 'not for me, suggest an alternative' on your PREVIOUS suggestion. Propose a genuinely DIFFERENT outfit using different pieces than the ones you just suggested (check the conversation history for what you already proposed and avoid repeating those exact item_ids).",
-      saved: "The user just tapped 'save this outfit' on your PREVIOUS suggestion. Reply with a short one-line confirmation only. Do NOT re-describe the outfit again. Return an empty item_ids array and no choices.",
-    } as const;
-
-    const system = [
-      ...(data.dressRules ? [data.dressRules, ""] : []),
-      "You are AURA, a warm, expert personal stylist chatting with the owner of this wardrobe.",
-      ...(brandSizeSummary.length ? [`SIZE HISTORY (derived from the wardrobe, not asked for): ${brandSizeSummary.join("; ")}. If the person asks about buying a piece from one of these brands, or asks what size to get, mention their usual size for that brand as a helpful reference point — but always frame it as "you've usually worn X in [brand]", never as a certainty, since fit varies by cut and style even within the same brand.`] : []),
-      "CRITICAL — NEVER FALSELY CLAIM THE WARDROBE LACKS SOMETHING: before saying anything like 'you don't have X' or 'I don't have a suitable piece', you MUST go through the ENTIRE wardrobe catalog below, item by item, and check each one against every requirement in play (category, length, weather-appropriateness, dress code) — not just skim it. The catalog is JSON; read all of it, not just the first few entries. Getting this wrong — telling the person their own wardrobe is missing something that's actually right there — is the single worst mistake you can make in this conversation, worse than a slightly imperfect outfit. If, after that full check, something genuinely isn't there, say so plainly — but only after actually looking.",
-      ...(inventorySummary ? [`VERIFIED WARDROBE INVENTORY (category counts, already checked in code): ${inventorySummary}. This is always accurate, for every request, not just ones about coverage — if a category shows a nonzero count here, the wardrobe genuinely has that many pieces of that type, and you must never claim otherwise. Go find the specific piece(s) among the catalog entries with that category before concluding there's nothing suitable.`] : []),
-      ...(legCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${legCoveringIds.length} piece(s) satisfying full leg coverage — item ids: ${legCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks a leg-covering piece — that would be factually wrong.`] : []),
-      ...(armCoveringIds.length ? [`VERIFIED FACT (already checked in code, not for you to re-derive): the wardrobe DOES contain ${armCoveringIds.length} piece(s) satisfying full arm coverage — item ids: ${armCoveringIds.join(", ")}. You MUST treat these as available and build the outfit around one of them. Do NOT say the wardrobe lacks an arm-covering piece — that would be factually wrong.`] : []),
-      "Answer styling questions conversationally, in the same language as the user's MOST RECENT message — not necessarily the language the conversation opened in. If the person switches language partway through (e.g. the first message was in English but they now write in Italian), switch with them immediately and stay in the new language until they switch again.",
-      "When you recommend an outfit or specific pieces, use ONLY items from the wardrobe catalog below and put their ids in item_ids (max 6). If no items apply, return an empty item_ids array.",
-    "Never invent items the user does not own. If the wardrobe lacks something for the occasion, say so plainly and directly (e.g. 'I don't have a full-length piece in your wardrobe for this') and only THEN, clearly separated, suggest what kind of piece would fill the gap — never phrase a non-owned item as though it were an actual recommendation from their closet (no 'I'd suggest a silk maxi dress...' with invented color/fabric detail as if it were real). If item_ids is empty, your reply must make it obvious no real outfit was proposed.",
-      "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
-      "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
-      "A 'Running Shoes' subcategory item is built for running, not for everyday city walking — never pick it for a non-Sport occasion unless it is the only shoe available in the catalog. For a Sport/gym/running occasion specifically, it's the right choice.",
-      "Each item also carries separate attribute fields when known: length (garment length, e.g. Mini/Midi/Maxi for dresses and skirts, Short/Mid/Long for coats, Cropped/Regular/Longline for tops), sleeveLength, fit (e.g. Oversized, Slim, Tailored), heelHeight (Flat/Low/Mid/High), toeShape, closure, gender, and styleTags (free-form aesthetic labels like Minimal, Boho, Preppy, Office, Y2K — use these to match the vibe/aesthetic the user asks for). USE THESE DIRECTLY to honor explicit user requests — e.g. 'no long dresses' means excluding items where length is 'Maxi' (or 'Long'); 'only flat shoes' means heelHeight must be 'Flat'; 'oversized sweaters' means fit is 'Oversized'; 'something more minimal/elegant/streetwear' means matching styleTags. These fields are the source of truth for that request, not subcategory.",
-      "If the relevant attribute field is empty for an item (older wardrobe pieces not yet re-classified), you cannot confirm that detail — either avoid proposing that item for a constraint you can't verify, or explicitly say so in your reply (e.g. \"I can't confirm this dress's length from what I have on file\").",
-      "GOVERNING HIERARCHY — every outfit decision follows this order, and a lower level can NEVER compensate for a violation of a higher one: 1) YOU (the person's own hard dress rules above — non-negotiable), 2) EVENT CONTEXT (occasion, dress code, formality, time of day, location), 3) WEATHER (temperature/conditions), 4) OUTFIT COHERENCE (the pieces working together as a complete, structured outfit), 5) COLOR (harmony, pairing, styling polish). A perfect color match never excuses the wrong formality level for the occasion; a beautiful outfit never excuses breaking one of the person's own rules. When items conflict, resolve in this order — don't average them.",
-      "STRUCTURE RULE — ALWAYS propose a COMPLETE outfit when you propose one at all, never a partial one: either (Tops item_id + Bottoms item_id) OR (Dresses item_id OR Jumpsuits item_id), PLUS a Shoes item_id, PLUS a Bags item_id, every single time. Never suggest only a bottom, only shoes, or any partial combination. Accessories (Accessories category) are optional — include one only if it genuinely elevates the look. If the wardrobe is missing a piece needed to complete the outfit (e.g. no bag available), say so honestly in your reply instead of silently omitting that category.",
-      "ACCESSORY REDUNDANCY: for Jumpsuits, Playsuits, Rompers, Wrap Dresses, and Bodycon Dresses, check the fit attribute before proposing a belt. If fit is 'Relaxed' or 'Oversized' (no waist definition), a belt is a genuinely good addition — feel free to propose one. If fit is 'Slim' or 'Tailored', or the piece is a Wrap Dress (waist already defined by the garment's own cut), skip an extra belt — it would be redundant. If fit is empty/unknown, judge from subcategory/silhouette as best you can, and lean toward NOT adding a belt only when the piece is visibly fitted at the waist already.",
-      "WEATHER RULE — this is a HARD constraint, checked for every single outfit, and it is NEVER overridden by how elegant, formal or upscale the occasion sounds: above roughly 26°C, never propose a jacket, blazer, coat, long sleeves, heavy knit, or long/heavy trousers — prefer sleeveless, short-sleeve or lightweight long-sleeve pieces, breathable fabrics, and open shoes if the wardrobe has them, even for a cocktail, gala or black-tie occasion (there is always a lighter way to be elegant — a slip dress, a light jumpsuit, a breezy shirt). Below roughly 10°C, prioritize real warmth (coats, knits, boots, tights) over anything else, even for casual occasions. A fancy event does not excuse ignoring the temperature; if the wardrobe genuinely has nothing weather-appropriate for the occasion, say so honestly instead of proposing something too hot or too cold. This cuts both ways: bad weather (rain, cold) is also never a reason to LOWER the formality of an outfit below what the occasion calls for — e.g. rain at a black-tie event calls for weather-appropriate formal pieces (a coat over the formal outfit, appropriate closed shoes), never a switch to sneakers or casual wear just because it's raining.",
-      "SHOE PREFERENCE — split by occasion type: for ELEGANT/FORMAL evening occasions (a dinner, gala, cocktail, date night, wedding), default to heels (heelHeight Mid or High) over flats — flats are a fallback only if no heeled option exists. In genuinely hot weather (roughly 30°C+) for these same elegant evening occasions, prioritize heeled SANDALS specifically over closed pumps/décolleté — sandals stay elegant while actually suiting the heat; pumps are the next choice after that; flat sandals are the last resort here, only if no heeled sandals or pumps exist. For CASUAL or DAYTIME occasions (errands, casual lunch, sightseeing, everyday wear) — even in the same hot weather — simple flat sandals/slides are the right call, not heels; do not apply the heeled-sandals preference outside the elegant-evening context it's meant for. USER SHOE-TYPE REQUESTS DO NOT OVERRIDE EVENT CONTEXT: if the user asks for a specific shoe type (e.g. 'ciabatte basse', 'flat sandals', 'sneakers') for an evening/formal occasion, only pick items of that type that are NOT day-only — never propose Birkenstocks, slides, or flip-flops (subcategory or styleTags signaling casual/outdoor sandals) for an evening or black-tie occasion just because the user named that shoe type; if the wardrobe has no evening-appropriate option within that type, say so honestly instead of defaulting to the closest casual match.",
-      "FORMALITY: each item may carry a 'formality' score (1-5: 1 very casual/sport, 2 casual, 3 smart casual, 4 elegant, 5 formal/very elegant) and a 'dayEvening' tag (day/evening/both). Match the outfit's overall formality to what the occasion calls for — a dressy evening event (cocktail, gala, wedding, elegant dinner) needs shoes and bags around formality 4-5, not 1-2, even if a lower-formality piece happens to match color perfectly. COLOR CAN NEVER RESCUE THE WRONG FORMALITY: if a color-perfect pairing (e.g. a casual crossbody bag) is available alongside a higher-formality piece that's a weaker color match (e.g. an elegant clutch) for a dressy occasion, the higher-formality piece wins — pick the clutch, not the color-matched crossbody. Only fall back to a lower-formality piece if the wardrobe genuinely has nothing at the right formality level, and say so honestly. When formality is missing (empty) for an item, don't guess a number — reason from category/subcategory/styleTags as you already do, but treat this rule as advisory rather than a hard block in that case.",
-      "SHOES + BAG COLOR PAIRING: when choosing between multiple valid shoe or bag options AT THE SAME FORMALITY LEVEL, prefer an exact color match between shoes and bag first (e.g. both black, both a matching neutral). If no matching pair exists in the wardrobe, prefer a complementary color pairing (opposite-ish tones that read as intentional together) over an arbitrary, unrelated color combination — never mention color theory terms to the user, just make the pairing. Only fall back to a non-matching, non-complementary pairing if the wardrobe genuinely offers nothing better for that outfit. This is always subordinate to the FORMALITY rule above — never let color pairing pull in a piece that's the wrong formality for the occasion.",
-      ...(data.industry || data.workDressCode || data.personalFormality || data.profession ? [
-        [
-          "USER CONTEXT (soft signals only — weigh them together, never as a fixed rule like 'this industry = this outfit'; the user's own words in this conversation always win over these defaults):",
-          data.profession ? `- Profession/role: ${data.profession}` : null,
-          data.industry ? `- Industry: ${data.industry}` : null,
-          data.workDressCode ? `- Usual work dress code: ${data.workDressCode}` : null,
-          data.personalFormality ? `- Personal everyday formality preference: ${data.personalFormality} — this matters MOST when it conflicts with the occasion (e.g. someone 'Molto casual' asked for a client dinner still gets something polished, but leans as relaxed as the occasion allows; never push them more formal than necessary just because their industry sounds serious).` : null,
-          "Never mention this context back to the user unprompted — it's background reasoning, not a topic.",
-        ].filter(Boolean).join("\n")
-      ] : []),
-      "DRESS CODE CHECK: when the user mentions a specific dinner, party, work event, gala, wedding or similarly formal-sounding occasion, FIRST try to work out the likely dress code yourself from context, before considering asking anything — the event's name or description, a brand mentioned (e.g. a jewelry, fashion or luxury brand strongly implies a dressy cocktail-type event), words like 'cena'/'dinner', 'matrimonio'/'wedding', 'riunione'/'meeting', 'festa'/'party' in ANY language, the time of day, or the location. If you can make a reasonable read, propose a COMPLETE outfit directly in that same reply — no separate question turn — and briefly name the assumption you made in one clause (e.g. 'Since this sounds like an evening event, I'd go with...'). Only ask a clarifying question when the occasion is genuinely ambiguous and nothing above gives you a reasonable read (e.g. just 'Event', a person's name with zero other context, or an emoji) — and even then, keep it to ONE short question, written in the user's own language, along the lines of: 'Do you know if there's a specific dress code (e.g. business formal, cocktail, black tie), or should I go for versatile elegance?' with a 'choices' array like [\"No dress code\", \"Business casual\", \"Business formal\", \"Cocktail\", \"Black tie\", \"Not sure\"], returning an empty item_ids array for that turn. Skip this entirely for casual/everyday occasions, and never ask twice about the same occasion in one conversation. If the user picks the 'not sure' option (or says they don't know), do NOT ask a follow-up question — decide yourself using the USER CONTEXT above (industry, usual work dress code, personal formality) and propose a versatile, safely-elegant outfit right away, briefly noting in your reply that you went with something adaptable since the dress code wasn't specified.",
-      "WEDDING GUEST ETIQUETTE: if the user is attending a wedding as a guest (not the couple themselves), avoid recommending white, ivory or cream (reserved for the bride) and avoid an all-red look; avoid all-black unless it's explicitly an evening wedding. This is a social norm, not a hard rule like the dressing rules above — but treat it seriously.",
-      "KEEP-THIS-PIECE REQUESTS: if the person explicitly says to keep a specific piece from your last suggestion (e.g. 'I want to use this dress but with a bolder accessory', 'keep the dress, change the shoes') — that piece's item_id is a HARD constraint for this turn, not a preference to weigh against other options. Re-read your own previous message to find the exact item_id for the piece they mean, and always include that exact item_id again in this reply's item_ids. Only change the category(ies) they actually asked to change; never swap out the piece they explicitly said to keep, even if a different piece would otherwise look better.",
-      ...(data.styleBoldness ? [`BOLDNESS: the person has already told you, in their profile, that they generally like a '${data.styleBoldness}' level of boldness (Classic = safe, harmonious pairings; Balanced = some experimentation without overdoing it; Creative = enjoys unexpected combinations; Bold = wants to be pushed outside their comfort zone). Apply this directly for occasions that aren't strictly formal (weekend, casual work, casual dinners) — do NOT ask the boldness question below, it's already answered. Still let the occasion itself win when it calls for something classic (e.g. a black-tie event stays classic regardless of this preference) — this shapes color/styling choices within what's already appropriate, never overrides YOU/CONTEXT/WEATHER/COHERENCE above it in the hierarchy.`] : []),
-      "BOLDNESS CHECK (only if no boldness preference is known — see above): for occasions that aren't strictly formal (weekend, casual work depending on the person's job, festive/expressive events like a wedding guest, cocktail, gala, party, creative/artsy event — NOT black-tie or strictly formal work), if this hasn't been asked yet in the conversation, ask ONE short question — write it (and the 'choices') in the user's own language, following the same idea as: 'Do you want to keep it classic, or lean bolder?' with 'choices' [\"Classic\", \"Balanced\", \"Creative\", \"Bold\"]. Never use technical color-theory language (e.g. never say 'Itten' or 'color wheel' to the user) — keep it conversational. When the person has instead stated boldness directly in their own words in this message (e.g. 'something bolder', 'più audace', 'surprise me') you already have the answer — do not ask the question, just apply it. Once answered (or stated directly, or skipped because it doesn't apply), calibrate internally: the 'classic'/'balanced' pick → favor analogous, harmonious color pairings from the wardrobe; the 'creative'/'bold' pick → this means REAL cross-item color contrast, not just picking a fancier-looking piece in a similar tone. Concretely: if the anchor piece (e.g. the dress) is a strong or warm color (rust, burgundy, emerald, cobalt), do NOT default to another strong color for the bag/shoes — instead put ONE of bag/shoes in a true neutral (black, nude, camel, or a dark brown) so it reads as a deliberate grounding contrast, and use the OTHER accessory (or jewelry) as the actual pop of boldness (an unexpected color, a statement shape, a mixed metal). Never propose an outfit where every piece sits in the same warm-neutral family — that reads as coordinated, not bold. This is optional flair, never at the expense of the STRUCTURE RULE or any binding dress rule above.",
-      "Keep replies short and practical: 2-4 sentences, no lists unless asked.",
-      "If you explicitly ask the user to pick between two or more specific options (e.g. two color variants of the same piece), ALSO return those exact option labels as short strings in a 'choices' array (max 4, e.g. [\"Powder Pink\", \"Jet Black\"]). Only populate 'choices' when you are asking a direct pick-one question; otherwise omit it or return an empty array.",
-      ...(data.feedbackContext ? [feedbackInstruction[data.feedbackContext]] : []),
-              ...(data.todayDate ? [`EVENT DATE: today's date is ${data.todayDate}. If the person's message clearly implies a specific date for the outfit they're asking about — an explicit date, a weekday name ('Monday', 'lunedì'), a relative expression ('in 3 days', 'tra tre giorni', 'next week') — work out the actual ISO date (YYYY-MM-DD) relative to today's date and return it as 'eventDate' in your JSON response. If no specific date is implied, or the person is just asking generally (not about a specific future occasion), leave eventDate null. Only set this when you're genuinely confident about the date; a wrong guess here is worse than leaving it empty.`] : []),
-      wx,
-
-      `Wardrobe catalog (JSON): ${JSON.stringify(catalog)}`,
-      "",
-      "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-            '{"reply": "your conversational reply, in the user\'s language", "item_ids": ["id1", "id2"], "choices": ["Option A", "Option B"], "eventDate": "2026-08-15"}',
-
-    ].join("\n");
-    try {
-      const history = data.messages.map((m) => ({ role: m.role, content: m.content }));
-
-      let text: string;
-      let firstCallError: string | null = null;
-      try {
-        const r1 = await generateText({ model, system, messages: history });
-        text = r1.text;
-      } catch (err) {
-        console.error("[AURA stylist-chat] first call failed", err);
-        // TEMP DIAGNOSTIC (2026-08-18): every stylist-chat message is
-        // currently falling through to the generic fallback reply, which
-        // means this catch (or the r2 one below) is firing every time —
-        // but the real cause only ever reached console.error, which isn't
-        // visible from the phone. Stash it so the fallback reply below can
-        // surface it directly in the chat. Revert once root-caused.
-        firstCallError = err instanceof Error ? err.message : String(err);
-        text = "";
-      }
-
-      let parsed: z.infer<typeof OutputSchema>;
-      try {
-        parsed = parseAiJson(text, OutputSchema);
-      } catch {
+  useEffect(() => {
+    if (!user) return;
+    (supabase.from("wardrobe_items" as never) as any)
+      .select("*").eq("user_id", user.id).eq("archived", false).order("created_at", { ascending: false })
+      .then(async ({ data, error }: { data: WardrobeItem[] | null; error: { message: string } | null }) => {
+        // itemsLoaded must ALWAYS end up true, even if something below
+        // throws — it's what unblocks the auto-send effect for a chat
+        // opened from a calendar event (see initialMessage effect below).
+        // Without the try/finally here, a thrown error while signing
+        // wardrobe image URLs (e.g. a transient Storage hiccup) would
+        // silently leave itemsLoaded stuck at false forever: the event's
+        // message would never auto-send, and the person would be stuck
+        // staring at the generic empty-chat placeholder with no obvious
+        // error and no indication anything failed.
         try {
-          const r2 = await generateText({
-            model,
-            system,
-            messages: [
-              ...history,
-              { role: "assistant", content: text || "(no response)" },
-              {
-                role: "user",
-                content: "That was not a single valid JSON object matching the required shape. Reply again with ONLY the JSON object, nothing else.",
-              },
-            ],
-          });
-          parsed = parseAiJson(r2.text, OutputSchema);
-                } catch (finalErr) {
-          const looksLikeUnparsedJson = /^\s*\{[\s\S]*"reply"[\s\S]*\}\s*$/.test(text.trim());
-          if (looksLikeUnparsedJson) {
-            console.error("[AURA stylist-chat] both parse attempts failed on JSON-shaped text — showing fallback instead of leaking raw JSON. Raw text:", text, finalErr);
-            parsed = { reply: "Sorry, something went wrong on my end — could you try asking that again?", item_ids: [] };
-          } else {
-            // TEMP DIAGNOSTIC (2026-08-18): surface the real error inline
-            // instead of the generic "didn't quite catch that" — remove
-            // this branch once the root cause is found and fixed.
-            const diagBits = [
-              firstCallError ? `first call: ${firstCallError}` : null,
-              finalErr instanceof Error ? `retry: ${finalErr.message}` : `retry: ${String(finalErr)}`,
-            ].filter(Boolean).join(" | ");
-            parsed = {
-              reply: diagBits
-                ? `⚠️ DEBUG — AI call failed: ${diagBits}`
-                : (text.trim() || "Sorry, I didn't quite catch that — could you rephrase?"),
-              item_ids: [],
-            };
+          if (error) {
+            console.error("[AURA stylist-chat] wardrobe_items load failed", error);
+            setItemsError(error.message);
           }
+          const list = (data ?? []) as WardrobeItem[];
+          setItems(list);
+          setSigned(await resolveWardrobeUrls(list));
+        } catch (e) {
+          console.error("[AURA stylist-chat] wardrobe load/sign failed", e);
+          setItemsError(e instanceof Error ? e.message : "Failed to load wardrobe");
+        } finally {
+          setItemsLoaded(true);
         }
+      });
+  }, [user]);
 
-      }
 
-      const validIds = new Set(catalog.map((c) => c.id));
-      parsed = unwrapIfDoubleEncoded(parsed);
-      let finalItemIds = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
-      let finalReply = parsed.reply;
+    useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, busy]);
 
-      if (finalItemIds.length > 0) {
-        const cats = new Set(
-          finalItemIds.map((id) => catalog.find((c) => c.id === id)?.category).filter(Boolean)
-        );
-        const hasCore = (cats.has("Tops") && cats.has("Bottoms")) || cats.has("Dresses") || cats.has("Jumpsuits");
-        const missing: string[] = [];
-        if (!hasCore) missing.push("a top+bottom pairing OR a dress/jumpsuit");
-        if (!cats.has("Shoes")) missing.push("shoes");
-        if (!cats.has("Bags")) missing.push("a bag");
+  // Set once from a calendar event tap — when present, the WHOLE session
+  // reasons about that day's forecast instead of "today's" weather. A
+  // Friday event browsed on a Tuesday needs Friday's weather, not
+  // Tuesday's — see openStylistChat in AuraApp.tsx. A ref (not state) so
+  // the very first sendMessage call below sees it immediately, without
+  // waiting on a re-render.
+    const eventWeatherRef = useRef<{ temperature: number | null; condition: string | null } | null>(null);
+  const eventDateRef = useRef<string | null>(null);
+  // The calendar event this whole session is about, if it started from a
+  // calendar event tap (see openStylistChat in AuraApp.tsx / askStylistFor
+  // in Planner.tsx). Used so a confirmed outfit is saved into that event's
+  // own outfit_plans slot instead of colliding with the day's general plan.
+  const eventIdRef = useRef<string | null>(null);
 
-        if (missing.length > 0) {
-          try {
-            const r3 = await generateText({
-              model,
-              system,
-              messages: [
-                ...history,
-                { role: "assistant", content: text || "(no response)" },
-                {
-                  role: "user",
-                  content: `Your last outfit was incomplete — it's missing ${missing.join(" and ")}. Complete it now using the wardrobe catalog, keeping the pieces you already picked. Reply again with ONLY the JSON object in the required shape.`,
-                },
-              ],
-            });
-            const repaired = parseAiJson(r3.text, OutputSchema);
-            const repairedIds = repaired.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
-            if (repairedIds.length >= finalItemIds.length) {
-              finalItemIds = repairedIds;
-              finalReply = repaired.reply;
-            }
-          } catch (err) {
-            console.error("[AURA stylist-chat] completeness repair failed, shipping original", err);
-          }
-        }
-      }
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    // Wait for the wardrobe fetch to actually complete first — this was
+    // the real bug: without this guard, the auto-sent message could fire
+    // (and reach the AI) before `items` had loaded, sending an EMPTY
+    // catalog. The AI wasn't wrong that "nothing fit" — it genuinely saw
+    // zero items, because the wardrobe hadn't loaded yet.
+    if (initialMessage && itemsLoaded && !autoSentRef.current) {
+      autoSentRef.current = true;
+            eventWeatherRef.current = { temperature: initialMessage.temperature, condition: initialMessage.condition };
+      eventDateRef.current = initialMessage.date ?? null;
+      eventIdRef.current = initialMessage.eventId ?? null;
 
-      return {
-        ok: true as const,
-                reply: (finalReply ?? "").slice(0, 1200),
-        item_ids: finalItemIds,
-        choices: (parsed.choices ?? []).slice(0, 4),
-        actions: data.feedbackContext === "liked" ? SAVE_ACTIONS : [],
-        eventDate: parsed.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(parsed.eventDate) ? parsed.eventDate : null,
-      };
-
-    } catch (err) {
-      console.error("[AURA stylist-chat] failed", err);
-      return { ok: false as const, error: err instanceof Error ? err.message : "AI failed" };
+      void sendMessage(initialMessage.message);
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage, itemsLoaded]);
+
+
+  const sendMessage = async (text: string, feedbackContext?: FeedbackType, overrideItemIds?: string[]) => {
+    if (!text || busy) return;
+    const history: ChatMsg[] = [...messages, { role: "user", content: text }];
+    setMessages(history);
+    setBusy(true);
+    try {
+      const desc = eventWeatherRef.current?.condition ?? (weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null);
+      const temp = eventWeatherRef.current?.temperature ?? weather?.current.temperature ?? null;
+      const dressRules = await loadDressRules(user?.id);
+      const dressPreferences = await loadDressPreferencesRaw(user?.id);
+      const res = await stylistChat({
+        data: {
+          messages: history.filter((m) => !m.uiOnly).slice(-12).map((m) => ({ role: m.role, content: m.content })),
+          dressRules,
+          dressPreferences,
+          industry: profile?.industry ?? null,
+          workDressCode: profile?.work_dress_code ?? null,
+                    personalFormality: profile?.personal_formality ?? null,
+          styleBoldness: (profile as unknown as { style_boldness?: string })?.style_boldness ?? null,
+          profession: profile?.profession ?? null,
+          temperature: temp,
+          condition: desc,
+                    feedbackContext: feedbackContext ?? null,
+          todayDate: todayIso(),
+          items: items.map((it) => ({
+            id: it.id,
+            category: it.category,
+            subcategory: it.subcategory,
+            colors: it.colors ?? (it.color ? [it.color] : []),
+            style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
+            season: it.season,
+            brand: it.brand,
+            material: Array.isArray(it.material) ? it.material : [],
+            size: it.size,
+            length: it.length,
+            sleeveLength: it.sleeve_length,
+            fit: it.fit,
+            heelHeight: it.heel_height,
+            toeShape: it.toe_shape,
+            closure: it.closure,
+            gender: it.gender,
+                        styleTags: it.style_tags,
+            formality: (it as unknown as { formality?: number | null }).formality ?? null,
+            dayEvening: (it as unknown as { day_evening?: string | null }).day_evening ?? null,
+            locationId: (it as unknown as { location_id?: string | null }).location_id ?? null,
+          })),
+        },
+      });
+
+      if (!res.ok) {
+        setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
+        return;
+      }
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: res.reply,
+                    itemIds: overrideItemIds ?? res.item_ids,
+          choices: res.choices,
+          actions: res.actions,
+          eventDate: (res as { eventDate?: string | null }).eventDate ?? eventDateRef.current,
+        },
+      ]);
+
+      if (speakNextReplyRef.current) {
+        speakNextReplyRef.current = false;
+        void speak(res.reply);
+      }
+    } catch (e) {
+      console.error("[AURA stylist-chat]", e);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = () => {
+    const text = input.trim();
+    setInput("");
+    void sendMessage(text);
+  };
+
+  const speak = async (text: string) => {
+    if (!text.trim()) return;
+    setSpeaking(true);
+    try {
+      const res = await synthesize({ data: { text: text.slice(0, 2000) } });
+      const audio = new Audio(res.audioDataUrl);
+      audioPlayerRef.current = audio;
+      audio.onended = () => setSpeaking(false);
+      audio.onerror = () => setSpeaking(false);
+      await audio.play();
+    } catch (e) {
+      console.error("[AURA voice-synthesize]", e);
+      setSpeaking(false);
+    }
+  };
+
+  const startRecording = async () => {
+    if (recording || transcribing || busy) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const candidates = ["audio/mp4", "audio/webm", "audio/ogg"];
+      const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t));
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        void handleRecordedAudio(blob);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch (e) {
+      console.error("[AURA mic] permission/record failed", e);
+      toast.error("Couldn't access the microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (!recording) return;
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  const handleRecordedAudio = async (blob: Blob) => {
+    setTranscribing(true);
+    try {
+      const audioDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const res = await transcribe({ data: { audioDataUrl } });
+      if (!res.text) {
+        toast.message("Didn't catch that, try again");
+        return;
+      }
+      speakNextReplyRef.current = true;
+      void sendMessage(res.text);
+    } catch (e) {
+      console.error("[AURA voice-transcribe]", e);
+      toast.error(errorMessage(e, "Transcription failed"));
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const thumb = (id: string) => {
+    const it = items.find((x) => x.id === id);
+    if (!it) return null;
+    const path = toStoragePath(it.image_url);
+    const src = path ? signed[path] : null;
+    return (
+      <div key={id} className="w-16 shrink-0">
+        <div className="aspect-square rounded-xl overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+          {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" /> : null}
+        </div>
+        <p className="mt-1 text-[8px] uppercase tracking-wide text-muted-foreground truncate text-center">
+          {it.brand ?? it.category}
+        </p>
+      </div>
+    );
+  };
+
+  const giveFeedback = (index: number, itemIds: string[], feedbackType: FeedbackType) => {
+    if (uiState[index]?.feedback || busy) return;
+    patchUi(index, { feedback: feedbackType });
+    void submitOutfitFeedback({ data: { itemIds, feedbackType } }).catch((e) =>
+      console.error("[AURA outfit-feedback]", e)
+    );
+
+    if (feedbackType === "saved") {
+      setMessages((m) => [
+        ...m,
+        { role: "user", content: FEEDBACK_LABELS.saved, uiOnly: true },
+        {
+          role: "assistant",
+          content: "Want to save it to your canvas, or add it to your calendar?",
+          itemIds,
+          actions: SAVE_ACTIONS,
+          uiOnly: true,
+        },
+      ]);
+      return;
+    }
+
+    if (feedbackType === "liked") {
+      void sendMessage(FEEDBACK_LABELS.liked, "liked", itemIds);
+      return;
+    }
+
+    void sendMessage(FEEDBACK_LABELS.disliked, "disliked");
+  };
+
+  const pickChoice = (index: number, choice: string) => {
+    if (uiState[index]?.choice || busy) return;
+    patchUi(index, { choice });
+    void sendMessage(choice);
+  };
+
+  const takeAction = (index: number, action: { type: ActionType; label: string }, itemIds: string[]) => {
+    if (uiState[index]?.actionsDone?.includes(action.type) || !itemIds.length) return;
+
+    if (action.type === "save_canvas") {
+      markActionDone(index, "save_canvas");
+      openBuilder({ itemIds });
+      return;
+    }
+    if (action.type === "add_calendar") {
+      patchUi(index, { calendarStep: "choose" });
+      return;
+    }
+    markActionDone(index, action.type);
+  };
+
+  const confirmCalendarDate = async (index: number, itemIds: string[], date: string) => {
+    try {
+      await saveOutfitPlan({ data: { itemIds, date, calendarEventId: eventIdRef.current } });
+    } catch (e) {
+      console.error("[AURA add_calendar]", e);
+      toast.error(errorMessage(e, "Couldn't add it to your calendar"));
+      return;
+    }
+    toast.success(
+      date === todayIso()
+        ? "Added to today's calendar"
+        : `Added to your calendar for ${new Date(date).toLocaleDateString("en-US")}`
+    );
+    markActionDone(index, "add_calendar");
+    patchUi(index, { calendarStep: undefined });
+  };
+
+    return (
+    <div className="h-full flex flex-col">
+      
+      <header className="px-6 pt-14 pb-3 flex items-center gap-3 shrink-0">
+        <button onClick={() => go("ai")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
+          <ArrowLeft size={16} />
+        </button>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
+          <p className="font-serif text-lg italic leading-tight">Ask your stylist</p>
+        </div>
+      </header>
+
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 pb-3 space-y-3">
+        {messages.length === 0 && (
+
+          <div className="mt-10 text-center animate-fade-up">
+            <Sparkles size={20} className="mx-auto text-muted-foreground" />
+            <p className="mt-3 font-serif text-xl italic">What are you dressing for?</p>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              Ask anything — "work dinner tonight, what should I wear?" — and I'll style you
+              with pieces you already own.
+            </p>
+          </div>
+        )}
+        {messages.map((m, i) => {
+          const isActionMessage = !!(m.actions && m.actions.length > 0);
+          const ui = uiState[i] ?? {};
+          const remainingActions = (m.actions ?? []).filter((a) => !ui.actionsDone?.includes(a.type));
+          return (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                m.role === "user" ? "bg-foreground text-background" : "bg-secondary/60"
+              }`}>
+                <p className="whitespace-pre-wrap">{m.content}</p>
+
+                {!isActionMessage && m.itemIds && m.itemIds.length > 0 && (
+                  <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
+                    {m.itemIds.map(thumb)}
+                  </div>
+                )}
+
+                {m.choices && m.choices.length > 0 && !ui.choice && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {m.choices.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => pickChoice(i, c)}
+                        className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {remainingActions.length > 0 && !ui.calendarStep && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {remainingActions.map((a) => (
+                      <button
+                        key={a.type}
+                        onClick={() => takeAction(i, a, m.itemIds ?? [])}
+                        className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                                {ui.calendarStep === "choose" && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {m.eventDate && m.eventDate !== todayIso() ? (
+                      <>
+                        <button
+                          onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], m.eventDate!)}
+                          className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                        >
+                          Add for {new Date(`${m.eventDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </button>
+                        <button
+                          onClick={() => patchUi(i, { calendarStep: "pick_date", pickedDate: m.eventDate ?? undefined })}
+                          className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                        >
+                          Choose a different day
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
+                          className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
+                        >
+                          Today
+                        </button>
+                        <button
+                          onClick={() => patchUi(i, { calendarStep: "pick_date" })}
+                          className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
+                        >
+                          Another day
+                        </button>
+                      </>
+                    )}
+
+                  </div>
+                )}
+
+                {ui.calendarStep === "pick_date" && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="date"
+                      min={todayIso()}
+                      value={ui.pickedDate ?? ""}
+                      onChange={(e) => patchUi(i, { pickedDate: e.target.value })}
+                      className="text-xs rounded-lg border border-border bg-background px-2 py-1.5"
+                    />
+                    <button
+                      disabled={!ui.pickedDate}
+                      onClick={() => ui.pickedDate && void confirmCalendarDate(i, m.itemIds ?? [], ui.pickedDate)}
+                      className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                )}
+
+                {!isActionMessage && m.itemIds && m.itemIds.length > 0 && !ui.feedback && (
+                  <div className="mt-2 flex gap-3">
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "liked")}
+                      className="text-xl active:scale-90"
+                      aria-label="Like"
+                    >❤️</button>
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
+                      className="text-xl active:scale-90"
+                      aria-label="Not for me"
+                    >👎</button>
+                    <button
+                      onClick={() => giveFeedback(i, m.itemIds!, "saved")}
+                      className="text-xl active:scale-90"
+                      aria-label="Save"
+                    >💾</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {busy && (
+          <div className="flex justify-start">
+            <div className="rounded-2xl px-4 py-2.5 bg-secondary/60">
+              <Loader2 size={14} className="animate-spin text-muted-foreground" />
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shrink-0 bg-background border-t border-border/60">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={recording ? "Listening…" : transcribing ? "Transcribing…" : "Ask your stylist…"}
+            rows={1}
+            className="flex-1 max-h-28 bg-secondary/60 rounded-2xl px-4 py-3 text-sm outline-none placeholder:text-muted-foreground resize-none"
+          />
+          <button
+            onClick={() => (recording ? stopRecording() : void startRecording())}
+            disabled={busy || transcribing}
+            aria-label={recording ? "Stop recording" : "Record voice message"}
+            className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center active:scale-90 transition disabled:opacity-40 ${
+              recording ? "bg-destructive text-destructive-foreground animate-pulse" : "border border-border"
+            }`}
+          >
+            {transcribing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : recording ? (
+              <Square size={16} />
+            ) : (
+              <Mic size={16} />
+            )}
+          </button>
+          <button
+            onClick={send}
+            disabled={busy || !input.trim()}
+            aria-label="Send"
+            className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 disabled:opacity-40"
+          >
+            <ArrowUp size={16} />
+          </button>
+        </div>
+        {speaking && (
+          <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+            🔊 AURA is speaking…
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
