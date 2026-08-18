@@ -101,14 +101,29 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
     (supabase.from("wardrobe_items" as never) as any)
       .select("*").eq("user_id", user.id).eq("archived", false).order("created_at", { ascending: false })
       .then(async ({ data, error }: { data: WardrobeItem[] | null; error: { message: string } | null }) => {
-        if (error) {
-          console.error("[AURA stylist-chat] wardrobe_items load failed", error);
-          setItemsError(error.message);
+        // itemsLoaded must ALWAYS end up true, even if something below
+        // throws — it's what unblocks the auto-send effect for a chat
+        // opened from a calendar event (see initialMessage effect below).
+        // Without the try/finally here, a thrown error while signing
+        // wardrobe image URLs (e.g. a transient Storage hiccup) would
+        // silently leave itemsLoaded stuck at false forever: the event's
+        // message would never auto-send, and the person would be stuck
+        // staring at the generic empty-chat placeholder with no obvious
+        // error and no indication anything failed.
+        try {
+          if (error) {
+            console.error("[AURA stylist-chat] wardrobe_items load failed", error);
+            setItemsError(error.message);
+          }
+          const list = (data ?? []) as WardrobeItem[];
+          setItems(list);
+          setSigned(await resolveWardrobeUrls(list));
+        } catch (e) {
+          console.error("[AURA stylist-chat] wardrobe load/sign failed", e);
+          setItemsError(e instanceof Error ? e.message : "Failed to load wardrobe");
+        } finally {
+          setItemsLoaded(true);
         }
-        const list = (data ?? []) as WardrobeItem[];
-        setItems(list);
-        setSigned(await resolveWardrobeUrls(list));
-        setItemsLoaded(true);
       });
   }, [user]);
 
