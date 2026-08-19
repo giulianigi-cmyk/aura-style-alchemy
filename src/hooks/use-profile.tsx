@@ -24,10 +24,14 @@ export type Profile = {
   work_dress_code: string | null;
   personal_formality: string | null;
   profession: string | null;
-  setup_complete: boolean;
+    setup_complete: boolean;
   created_at: string;
   updated_at: string;
+  // ISO 639-1 code ("it" | "en" | "es" | "fr") the user picked for the UI
+  // language, or null if never set (falls back to the app default).
+  language: string | null;
 };
+
 
 export function calcAge(birthDate: string | null | undefined): number | null {
   if (!birthDate) return null;
@@ -79,9 +83,10 @@ export function useProfile() {
         .insert({ id: user.id })
         .select("*")
         .maybeSingle();
-      final = created as Profile | null;
+            final = created as unknown as Profile | null;
     } else {
-      final = data as Profile;
+      final = data as unknown as Profile;
+
     }
     setProfile(final);
     await refreshAvatar(final?.profile_image);
@@ -90,16 +95,22 @@ export function useProfile() {
 
   useEffect(() => { load(); }, [load]);
 
-  const update = useCallback(async (patch: Partial<Profile>) => {
+    const update = useCallback(async (patch: Partial<Profile>) => {
     if (!user) return { error: "Not authenticated" };
     const { data, error } = await supabase
       .from("profiles")
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      // Cast needed until the `language` column migration is applied and
+      // supabase types.ts is regenerated — the generated Update type
+      // doesn't know about it yet, even though the column exists at
+      // runtime once the migration below has run. Safe to drop this cast
+      // once types.ts is regenerated post-migration.
+      .update({ ...patch, updated_at: new Date().toISOString() } as never)
+
       .eq("id", user.id)
       .select("*")
       .maybeSingle();
     if (error) return { error: error.message };
-    const next = data as Profile;
+        const next = data as unknown as Profile;
     setProfile(next);
     if ("profile_image" in patch) await refreshAvatar(next?.profile_image);
     return { error: null };
