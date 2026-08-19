@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
+import { outfitThumbSrc } from "@/lib/outfit-thumb";
+import { OutfitThumb } from "../OutfitThumb";
 
 type Outfit = Tables<"outfits">;
 
@@ -30,10 +32,14 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    const list = (data ?? []) as Outfit[];
+        const list = (data ?? []) as Outfit[];
     setOutfits(list);
-    const paths = list.map((o) => o.canvas_image_url).filter(Boolean) as string[];
+    // Sign both the thumbnail (used for display when present) and the
+    // original canvas image (fallback for outfits saved before the
+    // thumbnail pipeline, or if the thumb fails to load).
+    const paths = list.flatMap((o) => [o.thumbnail_path, o.canvas_image_url]).filter(Boolean) as string[];
     if (paths.length) {
+
       const { data: urls } = await supabase.storage.from("outfits").createSignedUrls(paths, 60 * 60);
       const map: Record<string, string> = {};
       urls?.forEach((r, i) => { if (r.signedUrl) map[paths[i]] = r.signedUrl; });
@@ -114,9 +120,11 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
         </section>
       ) : (
         <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
-          {outfits.map((o) => {
-            const url = o.canvas_image_url ? signed[o.canvas_image_url] : null;
+                    {outfits.map((o) => {
+            const url = outfitThumbSrc(o, signed);
+            const imgPath = o.thumbnail_path || o.canvas_image_url;
             const open = () => openBuilder({
+
               itemIds: o.item_ids,
               name: o.name,
               occasion: o.occasion?.[0],
@@ -131,14 +139,12 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
             });
             return (
               <div key={o.id} className="rounded-2xl overflow-hidden border border-border/60 bg-card shadow-soft relative">
-                <button onClick={open} className="block w-full text-left active:scale-[0.98]">
-                  <div className="aspect-square" style={{ background: "#FFFFFF" }}>
-                    {url ? (
-                      <img src={url} alt={o.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">Open canvas</div>
-                    )}
-                  </div>
+                                <button onClick={open} className="block w-full text-left active:scale-[0.98]">
+                  {imgPath ? (
+                    <OutfitThumb path={imgPath} url={url} alt={o.name} signing={loading} className="aspect-square" />
+                  ) : (
+                    <div className="aspect-square flex items-center justify-center text-xs text-muted-foreground">Open canvas</div>
+                  )}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); duplicate(); }}
