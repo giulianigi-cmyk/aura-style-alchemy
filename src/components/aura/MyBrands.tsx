@@ -34,8 +34,9 @@ export function MyBrands() {
   const [open, setOpen] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
-  const [saving, setSaving] = useState(false);
+    const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionRequestId = useRef(0);
 
   useEffect(() => {
     setBrands(profile?.owned_brands ?? []);
@@ -78,10 +79,17 @@ export function MyBrands() {
     !suggestions.some(s => canonicalBrandKey(s) === canonicalBrandKey(query)) &&
     !brands.some(b => canonicalBrandKey(b) === canonicalBrandKey(query));
 
-  const checkWardrobeSuggestion = async () => {
+    const checkWardrobeSuggestion = async () => {
     if (!user) return;
+    // Guard against out-of-order async responses: only the most recently
+    // started request is allowed to update state. Without this, a slow
+    // request kicked off before the profile/brands finished loading can
+    // resolve after a later, correct request and re-show a stale suggestion
+    // for a brand the user already added.
+    const requestId = ++suggestionRequestId.current;
     const { data, error } = await supabase
       .from("wardrobe_items").select("brand").eq("user_id", user.id);
+    if (requestId !== suggestionRequestId.current) return; // stale response, ignore
     if (error || !data || data.length < 3) return;
 
     // Count wardrobe brands by canonical key, keeping the first pretty label seen.
