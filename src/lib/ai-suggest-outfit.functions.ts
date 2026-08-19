@@ -45,6 +45,15 @@ export async function suggestOutfitCore(params: {
   items: SuggestOutfitItem[];
   avoidItemIds?: string[];
   locationIdOverride?: string | null;
+  /**
+   * Items of an outfit that already exists and is being ADAPTED (e.g. the
+   * weather re-check). Soft constraint on purpose: the prompt asks to swap
+   * only what the new weather makes wrong and keep the rest, but nothing
+   * is hard-locked — a 22°C → 5°C swing must still be allowed to rebuild
+   * the look rather than preserve summer pieces at any cost.
+   */
+  baseItemIds?: string[];
+
 }): Promise<{ ok: true; item_ids: string[]; explanation: string } | { ok: false; error: string }> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
@@ -161,6 +170,11 @@ export async function suggestOutfitCore(params: {
     "A 'Running Shoes' subcategory item is built for running, not for everyday city walking — never pick it for a non-Sport occasion unless it is the only shoe available in the catalog. For a Sport/gym/running occasion specifically, it's the right choice.",
     "A gilet or waistcoat (vest) is never worn directly against skin with nothing underneath — always pair it with a shirt, t-shirt, or top layered beneath it. A tailored suit waistcoat additionally expects a blazer/jacket over it for a complete formal look, not worn as the outermost layer on its own.",
     "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
+    ...(params.baseItemIds?.length
+      ? [
+          `This person already planned an outfit made of these items: ${JSON.stringify(params.baseItemIds)}. The weather changed. ADAPT that outfit: keep every piece that still works and replace ONLY the pieces the new weather makes unsuitable, staying on the same occasion, formality and style. Do not redesign the look from scratch. If the temperature change is so large that most pieces no longer make sense, you may rebuild more of it — but always keep as much of the original outfit as the new weather allows.`,
+        ]
+      : []),
     "Explanation: 1-2 short sentences (max 200 chars) on why these pieces work.",
     "",
     "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
@@ -168,6 +182,7 @@ export async function suggestOutfitCore(params: {
   ].join("\n");
 
   const userContent = `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`;
+
   try {
     let text: string;
     try {

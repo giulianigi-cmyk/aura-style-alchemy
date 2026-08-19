@@ -26,7 +26,13 @@ function fmtDate(d: string) {
 
 type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
 
-export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: string }) {
+export function TripDetail({ go, tripId, focusActivityId = null }: {
+  go: (s: Screen) => void;
+  tripId: string;
+  /** Set when arriving from a weather_change notification: that activity's
+   *  card is scrolled to and shows the proposal inline. */
+  focusActivityId?: string | null;
+}) {
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [destinations, setDestinations] = useState<TripDestination[]>([]);

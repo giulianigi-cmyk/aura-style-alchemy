@@ -519,6 +519,7 @@ export type Database = {
           data: Json
           id: string
           read_at: string | null
+          status: string
           title: string
           type: string
           user_id: string
@@ -529,6 +530,7 @@ export type Database = {
           data?: Json
           id?: string
           read_at?: string | null
+          status?: string
           title: string
           type: string
           user_id?: string
@@ -539,6 +541,7 @@ export type Database = {
           data?: Json
           id?: string
           read_at?: string | null
+          status?: string
           title?: string
           type?: string
           user_id?: string
@@ -701,9 +704,13 @@ export type Database = {
           status: string
           trip_activity_id: string | null
           trip_id: string | null
+          updated_at: string
           user_id: string
+          weather_checked_at: string | null
+          weather_code: number | null
           weather_condition: string | null
           weather_estimated: boolean | null
+          weather_precipitation_probability: number | null
           weather_temp: number | null
         }
         Insert: {
@@ -719,9 +726,13 @@ export type Database = {
           status?: string
           trip_activity_id?: string | null
           trip_id?: string | null
+          updated_at?: string
           user_id?: string
+          weather_checked_at?: string | null
+          weather_code?: number | null
           weather_condition?: string | null
           weather_estimated?: boolean | null
+          weather_precipitation_probability?: number | null
           weather_temp?: number | null
         }
         Update: {
@@ -737,9 +748,13 @@ export type Database = {
           status?: string
           trip_activity_id?: string | null
           trip_id?: string | null
+          updated_at?: string
           user_id?: string
+          weather_checked_at?: string | null
+          weather_code?: number | null
           weather_condition?: string | null
           weather_estimated?: boolean | null
+          weather_precipitation_probability?: number | null
           weather_temp?: number | null
         }
         Relationships: [
@@ -2219,6 +2234,7 @@ export type Database = {
           username: string
         }[]
       }
+      recheck_plan_weather_if_needed: { Args: never; Returns: undefined }
       record_scrape_domain_hint: {
         Args: { p_domain: string; p_signal: string }
         Returns: undefined

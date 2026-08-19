@@ -13,6 +13,9 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { PiecePicker } from "../PiecePicker";
 import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolvePlanSlot, validateEventSlot } from "@/lib/outfit-plan-slot";
+import { useServerFn } from "@tanstack/react-start";
+import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
+import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
@@ -64,7 +67,12 @@ function itemMatchesKeywords(it: WardrobeItem, keywords: string[], materials: st
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
 
-export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; openStylistChat: (init: NonNullable<StylistChatInit>) => void }) {
+export function Planner({ go, openStylistChat, focus }: {
+  go: (s: Screen) => void;
+  openStylistChat: (init: NonNullable<StylistChatInit>) => void;
+  /** Deep-link target from a weather_change notification. */
+  focus?: { date: string; planId?: string | null } | null;
+}) {
   const { user } = useAuth();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -76,8 +84,10 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(focus?.date ?? null);
   const [manualCity, setManualCity] = useState("");
+  const [proposals, setProposals] = useState<WeatherProposal[]>([]);
+  const loadProposals = useServerFn(listOpenWeatherProposals);
 
   const reload = useCallback(async () => {
     if (!user) { setLoading(false); return; }
@@ -99,6 +109,21 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
   }, [user]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  // Open weather proposals, so the day sheet can show "planned vs
+  // suggested" for a plan whose forecast moved.
+  const reloadProposals = useCallback(async () => {
+    if (!user) return;
+    try {
+      const rows = await loadProposals({ data: undefined } as never);
+      setProposals((rows ?? []) as unknown as WeatherProposal[]);
+    } catch (e) { console.error("[AURA planner] proposals load failed", e); }
+  }, [user, loadProposals]);
+
+  useEffect(() => { void reloadProposals(); }, [reloadProposals]);
+
+  useEffect(() => { if (focus?.date) setSelectedDate(focus.date); }, [focus?.date]);
+
 
   const eventsByDate = useMemo(() => {
     const m: Record<string, ImportedEvent[]> = {};
@@ -297,6 +322,8 @@ export function Planner({ go, openStylistChat }: { go: (s: Screen) => void; open
           signed={signed}
           weather={dailyByDate[selectedDate] ?? null}
           currentTempC={weather?.current.temperature ?? null}
+          proposals={proposals}
+          onProposalResolved={() => { void reloadProposals(); void reload(); }}
           onClose={() => setSelectedDate(null)}
           onSaved={reload}
         />
@@ -313,7 +340,8 @@ type Slot = { type: "general" } | { type: "event"; event: ImportedEvent };
 const slotKey = (s: Slot) => (s.type === "general" ? "general" : `event:${s.event.id}`);
 
 function DayDetail({
-  date, plans, calendarEvents, openStylistChat, items, signed, weather, currentTempC, onClose, onSaved,
+  date, plans, calendarEvents, openStylistChat, items, signed, weather, currentTempC,
+  proposals, onProposalResolved, onClose, onSaved,
 }: {
   date: string;
   plans: OutfitPlan[];
@@ -323,10 +351,14 @@ function DayDetail({
   signed: Record<string, string>;
   weather: DailyForecast | null;
   currentTempC: number | null;
+  proposals: WeatherProposal[];
+  onProposalResolved: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
+
   const { user } = useAuth();
+  const resolveProposal = useServerFn(resolveWeatherProposal);
   const isPast = date < toISO(new Date());
 
   const eventIdOf = (p: OutfitPlan) => (p as unknown as { calendar_event_id?: string | null }).calendar_event_id ?? null;
@@ -409,6 +441,11 @@ function DayDetail({
       notes: notes || null,
       weather_temp: weather?.tempMax ?? currentTempC ?? null,
       weather_condition: weather ? describeWeather(weather.weatherCode).label : null,
+      // Baseline for the hourly re-check: without a code and a rain
+      // probability, a later forecast has nothing to be compared against.
+      weather_code: weather?.weatherCode ?? null,
+      weather_precipitation_probability: weather?.precipitationProbability ?? null,
+
       status,
       calendar_event_id: activeEventId,
     };
@@ -442,6 +479,15 @@ function DayDetail({
       temperature: weather?.tempMax ?? currentTempC ?? null,
     });
     if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
+
+    // A manual edit resolves any open weather proposal for this plan:
+    // the person has answered it by hand, so the worker must stop
+    // re-raising it.
+    const open = proposals.find((n) => n.data?.plan_id === planId);
+    if (open) {
+      try { await resolveProposal({ data: { notificationId: open.id, status: "dismissed" } }); onProposalResolved(); }
+      catch (e) { console.error("[AURA planner] proposal resolve failed", e); }
+    }
 
     setSaving(false);
     toast.success(plan ? "Outfit updated" : log ? "Outfit logged" : "Outfit planned");
@@ -519,6 +565,9 @@ function DayDetail({
         </div>
         <span className="text-4xl">{describeWeather(weather.weatherCode).icon}</span>
       </div>
+      {suggestion?.umbrellaTip && (
+        <p className="mt-3 text-xs">☔ {suggestion.umbrellaTip}</p>
+      )}
       {suggestion && (
         <div className="mt-3 pt-3 border-t border-border/40">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Suggested</p>
@@ -532,6 +581,14 @@ function DayDetail({
       )}
     </div>
   );
+
+  // A weather_change proposal is always tied to one specific plan, so it
+  // renders inside that plan's slot rather than at day level.
+  const proposalForPlan = (p: OutfitPlan | null) =>
+    (p ? proposals.find((n) => n.data?.plan_id === p.id) : undefined) ?? null;
+  const activeProposal = proposalForPlan(plan);
+  const dayProposals = proposals.filter((n) => n.data?.date === date);
+
 
   const SlotRow = ({ label, sublabel, slotPlan, onOpen, onAsk }: {
     label: string; sublabel: string | null; slotPlan: OutfitPlan | null; onOpen: () => void; onAsk: () => void;
@@ -595,6 +652,16 @@ function DayDetail({
         {!activeSlot ? (
           <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-3">
             {forecastCard}
+            {dayProposals.map((p) => (
+              <WeatherProposalCard
+                key={p.id}
+                proposal={p}
+                items={items}
+                signed={signed}
+                onResolved={onProposalResolved}
+              />
+            ))}
+
             <SlotRow
               label="General"
               sublabel="No specific event"
@@ -620,6 +687,17 @@ function DayDetail({
           <>
             <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-5">
               {forecastCard}
+
+              {activeProposal && (
+                <WeatherProposalCard
+                  proposal={activeProposal}
+                  items={items}
+                  signed={signed}
+                  onResolved={onProposalResolved}
+                  onCustomize={() => { setEditing(true); setSelected(activeProposal.data?.new_item_ids ?? selected); }}
+                />
+              )}
+
 
               {plan && !editing ? (
                 <>
