@@ -1242,21 +1242,15 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       try { return new URL(c, target).toString(); } catch { return null; }
     }).filter((c): c is string => c !== null)]));
 
-    let dl: Awaited<ReturnType<typeof fetchImageAsDataUrl>> | null = null;
+        let dl: Awaited<ReturnType<typeof fetchImageAsDataUrl>> | null = null;
     let lastError = "No product image found on that page.";
-    // TEMP DIAGNOSTIC (2026-08-18): the top-scored candidate (imageUrl) is
-    // tried first, but if ITS download fails, the loop below silently
-    // falls through to the next candidate — which could easily be a
-    // lower-scored, worn/model shot. That fallback was previously only
-    // visible via console.warn (server-side, invisible from the phone).
-    // Tracking it here so we can see, from the client, whether the
-    // top-scored pick actually won or silently lost to a download failure.
-    const downloadAttempts: Array<{ url: string; ok: boolean; error?: string }> = [];
-    let pickedUrl: string | null = null;
+    // The top-ranked candidate can occasionally 404 (e.g. an ephemeral
+    // asset picked up from a challenge/interstitial page) even when
+    // extraction otherwise looked confident — fall through to the
+    // remaining ranked candidates before giving up.
     for (const candidateUrl of downloadOrder) {
       const attempt = await fetchImageAsDataUrl(candidateUrl, target.origin);
-      downloadAttempts.push({ url: candidateUrl, ok: attempt.ok, error: attempt.ok ? undefined : attempt.error });
-      if (attempt.ok) { dl = attempt; pickedUrl = candidateUrl; break; }
+      if (attempt.ok) { dl = attempt; break; }
       lastError = attempt.error;
       console.warn("[AURA import-url] candidate image download failed:", candidateUrl, attempt.error);
     }
