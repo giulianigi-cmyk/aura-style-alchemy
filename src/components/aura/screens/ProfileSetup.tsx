@@ -3,6 +3,7 @@ import { ArrowRight, Camera, Check, Loader2, Sparkles } from "lucide-react";
 import { useProfile } from "@/hooks/use-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { USERNAME_RE } from "@/lib/community";
+import i18n, { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, type SupportedLanguage } from "@/i18n/config";
 
 const STYLES = [
   "Minimal", "Editorial", "Quiet luxury", "Parisian", "Street",
@@ -27,6 +28,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [birthDate, setBirthDate] = useState<string>("");
   const [gender, setGender] = useState<string>("");
+  const [language, setLanguage] = useState<SupportedLanguage | "">("");
   const [styles, setStyles] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [shareLibrary, setShareLibrary] = useState(false);
@@ -50,21 +52,23 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
     setList(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
 
   const steps = [
-    { eyebrow: "01 · Identity", title: "What should we\ncall you?" },
-    { eyebrow: "02 · You", title: "Tell us\nabout you." },
-    { eyebrow: "03 · Aesthetic", title: "Your style\nlanguage." },
-    { eyebrow: "04 · Houses", title: "Brands you\nlove." },
-    { eyebrow: "05 · Portrait", title: "A face to\nthe wardrobe." },
+    { eyebrow: "01 · Language", title: "Choose your\nlanguage." },
+    { eyebrow: "02 · Identity", title: "What should we\ncall you?" },
+    { eyebrow: "03 · You", title: "Tell us\nabout you." },
+    { eyebrow: "04 · Aesthetic", title: "Your style\nlanguage." },
+    { eyebrow: "05 · Houses", title: "Brands you\nlove." },
+    { eyebrow: "06 · Portrait", title: "A face to\nthe wardrobe." },
   ];
   const last = step === steps.length - 1;
 
   const identityComplete = fullName.trim().length > 1 && usernameValid && usernameAvailable === true;
 
   const canAdvance = () => {
-    if (step === 0) return identityComplete;
-    if (step === 1) return birthDate !== "" && gender !== "";
-    if (step === 2) return styles.length > 0;
-    if (step === 3) return brands.length > 0;
+    if (step === 0) return language !== "";
+    if (step === 1) return identityComplete;
+    if (step === 2) return birthDate !== "" && gender !== "";
+    if (step === 3) return styles.length > 0;
+    if (step === 4) return brands.length > 0;
     return true;
   };
 
@@ -75,6 +79,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
       username,
       birth_date: birthDate || null,
       gender: gender || null,
+      language: language || null,
       style_preferences: styles,
       favorite_brands: brands,
       share_wardrobe_to_library: shareLibrary,
@@ -114,6 +119,24 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
         <div className="mt-8">
           {step === 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-4">You can change this anytime in your profile.</p>
+              <div className="flex flex-col gap-2">
+                {SUPPORTED_LANGUAGES.map(code => (
+                  <button
+                    key={code}
+                    onClick={() => { setLanguage(code); void i18n.changeLanguage(code); }}
+                    className={`flex items-center justify-between rounded-2xl px-5 py-4 text-left border transition ${language === code ? "bg-foreground text-background border-foreground" : "border-border bg-card"}`}
+                  >
+                    <span className="font-serif text-lg">{LANGUAGE_LABELS[code]}</span>
+                    {language === code && <Check size={16} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Full name</label>
@@ -149,7 +172,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          {step === 1 && (
+          {step === 2 && (
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</label>
@@ -173,7 +196,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div>
               <p className="text-xs text-muted-foreground mb-4">Pick a few that resonate. We'll tune your styling from here.</p>
               <div className="flex flex-wrap gap-2">
@@ -190,7 +213,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div>
               <p className="text-xs text-muted-foreground mb-4">Houses you already wear, admire, or aspire to.</p>
               <div className="flex flex-wrap gap-2">
@@ -207,7 +230,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <div className="flex flex-col items-center text-center">
               <label className="cursor-pointer">
                 <input type="file" accept="image/*" className="hidden"
