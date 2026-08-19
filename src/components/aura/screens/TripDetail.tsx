@@ -74,8 +74,8 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
   const [proposals, setProposals] = useState<WeatherProposal[]>([]);
   const loadProposals = useServerFn(listOpenWeatherProposals);
   const refreshProposals = useCallback(() => {
-    loadProposals({ data: {} })
-      .then((r) => setProposals((r?.proposals ?? []) as WeatherProposal[]))
+    loadProposals()
+      .then((r) => setProposals((r ?? []) as WeatherProposal[]))
       .catch((e) => console.error("[AURA trip] proposals load failed", e));
   }, [loadProposals]);
   useEffect(() => { refreshProposals(); }, [refreshProposals]);
