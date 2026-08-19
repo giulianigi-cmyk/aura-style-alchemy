@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { Bell, Search, Sparkles, TrendingUp, MapPin, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { useProfile } from "@/hooks/use-profile";
@@ -13,8 +14,10 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { suggestDailyLooks, type DailyLook } from "@/lib/suggest-daily-looks.functions";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import i18n, { type SupportedLanguage } from "@/i18n/config";
 
 function todayISO(): string {
+
   return new Date().toISOString().slice(0, 10);
 }
 
