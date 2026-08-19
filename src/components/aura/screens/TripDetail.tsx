@@ -312,6 +312,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     try {
       await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
       setOutfitPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? { ...p, item_ids: editItemIds } : p)));
+      // A hand-picked answer closes any open weather proposal for this plan.
+      const open = proposals.find((pr) => pr.data?.plan_id === editingPlan.id);
+      if (open) {
+        try { await resolveProposal({ data: { notificationId: open.id, status: "dismissed" } }); refreshProposals(); }
+        catch (e) { console.error("[AURA trip] proposal resolve failed", e); }
+      }
       setEditingPlan(null);
       toast.success("Outfit updated");
     } catch (e) {
