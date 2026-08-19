@@ -1286,11 +1286,8 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       imageCandidates: validatedAltCandidates.length ? validatedAltCandidates : [imageUrl],
       materials: meta.materials,
       composition: meta.composition,
-      colorWarning: meta.colorWarning,
+            colorWarning: meta.colorWarning,
       usedFallback,
-      // TEMP DIAGNOSTIC (2026-08-18): see downloadAttempts comment above.
-      debugTopScoredUrl: imageUrl,
-      debugPickedUrl: pickedUrl,
-      debugDownloadAttempts: downloadAttempts,
     };
   });
+
