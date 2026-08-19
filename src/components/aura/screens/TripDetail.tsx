@@ -775,8 +775,13 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
               .sort((a, b) => a.activity_date.localeCompare(b.activity_date) || (a.day_segment ?? "day").localeCompare(b.day_segment ?? "day"))
               .map((a) => {
                 const op = outfitPlans.find((p) => p.trip_activity_id === a.id);
+                const proposal = proposals.find((pr) => pr.data?.trip_activity_id === a.id);
                 return (
-                  <div key={a.id} className="rounded-2xl bg-secondary/40 p-3">
+                  <div
+                    key={a.id}
+                    id={`trip-activity-${a.id}`}
+                    className={`rounded-2xl bg-secondary/40 p-3 ${focusActivityId === a.id ? "ring-1 ring-foreground/30" : ""}`}
+                  >
                     <div className="flex items-center gap-1.5 mb-2">
                       {(a.day_segment ?? "day") === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
                       <p className="text-[11px] text-muted-foreground flex-1 min-w-0 truncate">
