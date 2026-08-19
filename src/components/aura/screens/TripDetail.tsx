@@ -67,9 +67,26 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
   const [editItemIds, setEditItemIds] = useState<string[]>([]);
   const [savingPlan, setSavingPlan] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  // Open weather proposals for this trip's plans, keyed by activity.
+  const [proposals, setProposals] = useState<WeatherProposal[]>([]);
+  const loadProposals = useServerFn(listOpenWeatherProposals);
+  const refreshProposals = useCallback(() => {
+    loadProposals({ data: {} })
+      .then((r) => setProposals((r?.proposals ?? []) as WeatherProposal[]))
+      .catch((e) => console.error("[AURA trip] proposals load failed", e));
+  }, [loadProposals]);
+  useEffect(() => { refreshProposals(); }, [refreshProposals]);
 
   const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
   const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
+
+  // Scroll the notification's activity into view once its card is mounted.
+  useEffect(() => {
+    if (!focusActivityId || loading) return;
+    const el = document.getElementById(`trip-activity-${focusActivityId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusActivityId, loading, activities.length]);
+
 
 
   const load = () => {
