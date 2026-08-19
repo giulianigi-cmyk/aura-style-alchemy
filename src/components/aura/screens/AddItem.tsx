@@ -370,17 +370,27 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       if (result.colorWarning) {
         toast.message("Check the color", { description: result.colorWarning });
       }
-      // TEMP DIAGNOSTIC (2026-08-18): surfaces what the extraction actually
-      // found, since we have no other visibility into Firecrawl's rendered
-      // output from the client. Remove once the Zara photo-selection issue
-      // is confirmed fixed or root-caused with real data.
+      // TEMP DIAGNOSTIC (2026-08-18): shows whether the top-scored image
+      // (debugTopScoredUrl) is the one that actually got used
+      // (debugPickedUrl) or whether its download silently failed and a
+      // lower-scored candidate won instead. Remove once the Zara
+      // photo-selection issue is confirmed fixed or root-caused.
       {
-        const candList = (result.imageCandidates ?? []).slice(0, 4)
-          .map((u, i) => `${i + 1}. ${u.split("/").pop()?.slice(0, 60)}`)
+        const r = result as unknown as {
+          debugTopScoredUrl?: string;
+          debugPickedUrl?: string;
+          debugDownloadAttempts?: Array<{ url: string; ok: boolean; error?: string }>;
+        };
+        const top = r.debugTopScoredUrl?.split("/").pop()?.slice(0, 50) ?? "?";
+        const picked = r.debugPickedUrl?.split("/").pop()?.slice(0, 50) ?? "?";
+        const sameWon = r.debugTopScoredUrl === r.debugPickedUrl;
+        const failures = (r.debugDownloadAttempts ?? [])
+          .filter((a) => !a.ok)
+          .map((a) => `✗ ${a.url.split("/").pop()?.slice(0, 40)}: ${a.error?.slice(0, 40)}`)
           .join("\n");
-        toast.message(`DEBUG: method=${result.extractionMethod}`, {
-          description: candList || "(no candidates)",
-          duration: 15000,
+        toast.message(sameWon ? "DEBUG: top-scored image WON" : "DEBUG: top-scored image LOST", {
+          description: `top: ${top}\npicked: ${picked}${failures ? `\n\nfailures:\n${failures}` : ""}`,
+          duration: 20000,
         });
       }
     } catch (e) {
