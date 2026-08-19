@@ -22,11 +22,23 @@ function todayISO(): string {
 }
 
 export function Home({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const unreadCount = useUnreadNotifications();
   const { user } = useAuth();
   const { profile } = useProfile();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather, loading: wxLoading } = useWeather(latitude, longitude);
+
+  // Sync the UI language to the user's saved preference once the profile
+  // loads. Defaults to English (see i18n/config.ts) until then, and stays
+  // English if the user never set a preference. This is the only screen
+  // wired up to i18n so far (Phase 1) — once more screens are translated,
+  // this sync belongs in a shared top-level place instead of here.
+  useEffect(() => {
+    const lang = profile?.language as SupportedLanguage | undefined;
+    if (lang && lang !== i18n.language) void i18n.changeLanguage(lang);
+  }, [profile?.language]);
+
   const generateLooks = useServerFn(suggestDailyLooks);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualCity, setManualCity] = useState("");
