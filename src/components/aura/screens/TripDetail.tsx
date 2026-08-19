@@ -815,6 +815,17 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                         {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? " · Estimated" : ""}
                       </p>
                     )}
+                    {proposal && (
+                      <div className="mb-2">
+                        <WeatherProposalCard
+                          proposal={proposal}
+                          items={wardrobeItems}
+                          signed={wardrobeSigned}
+                          onResolved={() => { refreshProposals(); load(); }}
+                          {...(op ? { onCustomize: () => startEditPlan(op) } : {})}
+                        />
+                      </div>
+                    )}
                     {op ? (
                       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                         {op.item_ids.map((id) => {
