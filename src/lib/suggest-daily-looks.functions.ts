@@ -13,11 +13,16 @@ const ItemSchema = z.object({
   season: z.string().nullable().optional(),
   brand: z.string().nullable().optional(),
   formality: z.number().nullable().optional(),
-  dayEvening: z.string().nullable().optional(),
+    dayEvening: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
+  // Skirt/dress length ("Mini" | "Midi" | "Maxi"), needed to hard-enforce
+  // the "no short skirts for Work" rule below — without it, a Mini skirt
+  // and a Maxi skirt are indistinguishable to both the model and the code.
+  length: z.string().nullable().optional(),
 });
 
 const InputSchema = z.object({
+
   temperature: z.number().nullable().optional(),
   condition: z.string().nullable().optional(),
   dressRules: z.string().nullable().optional(),
@@ -71,9 +76,11 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       season: it.season ?? "",
       brand: it.brand ?? "",
       formality: it.formality ?? null,
-      dayEvening: it.dayEvening ?? "",
+            dayEvening: it.dayEvening ?? "",
       styleTags: it.styleTags ?? [],
+      length: it.length ?? "",
     }));
+
 
     const system = [
       ...(data.dressRules ? [data.dressRules, ""] : []),
@@ -101,10 +108,12 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       "",
       "   Formality and day/evening context outrank color or style match — a",
       "   great color pairing never justifies the wrong occasion.",
-      "   \"Work\" must EXCLUDE: off-shoulder or bare-shoulder tops, strappy or",
+            "   \"Work\" must EXCLUDE: off-shoulder or bare-shoulder tops, strappy or",
       "   embellished/rhinestone/metallic heeled sandals, clutches or evening bags,",
-      "   cocktail-style dresses, anything overtly evening-coded. Prefer covered",
-      "   shoulders, closed-toe or block-heel shoes, structured bags for Work.",
+      "   cocktail-style dresses, anything overtly evening-coded, shorts of any",
+      "   kind, and mini or above-the-knee skirts/dresses (length \"Mini\") — use",
+      "   knee-length or longer only. Prefer covered shoulders, closed-toe or",
+      "   block-heel shoes, structured bags for Work.",
       "   \"Evening\" is where those bare-shoulder or dressy-sandal pieces belong",
       "   instead — reserve them for that occasion, not Work.",
       "",
@@ -167,9 +176,27 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         if (!item) return false;
         const text = `${item.subcategory} ${(item.styleTags ?? []).join(" ")}`;
         if (EVENING_SIGNAL.test(text)) return true;
-        if (item.dayEvening === "evening" && (item.formality ?? 0) >= 4) return true;
+                if (item.dayEvening === "evening" && (item.formality ?? 0) >= 4) return true;
         return false;
       });
+
+    const SHORTS_SUBCATEGORIES = new Set(["Shorts", "Bermuda Shorts"]);
+    /** Hard exclusion for "Work": shorts and mini/above-the-knee skirts or
+     *  dresses never pass, enforced in code — not just requested in the
+     *  prompt, since the LLM can otherwise ignore a text-only instruction.
+     *  Mirrors the "cover legs" logic in dress-preferences.ts, but scoped
+     *  to the Work occasion specifically rather than as a global rule. */
+    const violatesWorkModesty = (ids: string[]): boolean =>
+      ids.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        if (!item) return false;
+        if (item.category === "Bottoms" && SHORTS_SUBCATEGORIES.has(item.subcategory)) return true;
+        const isSkirtBottom = item.category === "Bottoms" && item.subcategory === "Skirt";
+        const isDressOrSkirt = item.category === "Dresses" || isSkirtBottom;
+        if (isDressOrSkirt && item.length === "Mini") return true;
+        return false;
+      });
+
 
     // Weather is a hard constraint for EVERY look (today + all curated
     // occasions), not just "today" — enforced in code, mirroring
@@ -222,14 +249,22 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         ...r.today,
         item_ids: todayIds.filter((id) => !violatesWeather([id]) && !violatesStylingFootwear([id])),
       };
-      const seen = [today.item_ids];
+            const seen = [today.item_ids];
       const curated = r.curated
-        .map((l) => ({ ...l, item_ids: l.item_ids.filter((id) => validIds.has(id)) }))
+        // Reject the WHOLE look if it references any item id that isn't
+        // real (a model hallucination), rather than silently truncating
+        // it: truncating leaves a stale explanation that still describes
+        // the dropped piece (e.g. "a breezy shift dress" with no dress
+        // actually shown), which is worse than skipping the occasion.
+        .filter((l) => l.item_ids.every((id) => validIds.has(id)))
         .filter((l) => l.item_ids.length >= 2)
         // Structural coherence: no duplicate slots (e.g. two Bottoms).
         .filter((l) => !hasSlotViolation(l.item_ids))
         // Hard occasion exclusion: evening-coded pieces never pass for Work.
         .filter((l) => !(l.occasion === "Work" && violatesWorkFormality(l.item_ids)))
+        // Hard occasion exclusion: shorts / mini skirts never pass for Work.
+        .filter((l) => !(l.occasion === "Work" && violatesWorkModesty(l.item_ids)))
+
         // Hard weather exclusion: applies to EVERY occasion, not just Work —
         // a wool coat is wrong for Weekend/Evening at 39°C just as much.
         .filter((l) => !violatesWeather(l.item_ids))
