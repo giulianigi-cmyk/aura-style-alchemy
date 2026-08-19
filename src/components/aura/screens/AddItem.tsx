@@ -367,6 +367,22 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           description: "We couldn't verify this image against the product page — make sure it's the right piece.",
         });
       }
+      if (result.colorWarning) {
+        toast.message("Check the color", { description: result.colorWarning });
+      }
+      // TEMP DIAGNOSTIC (2026-08-18): surfaces what the extraction actually
+      // found, since we have no other visibility into Firecrawl's rendered
+      // output from the client. Remove once the Zara photo-selection issue
+      // is confirmed fixed or root-caused with real data.
+      {
+        const candList = (result.imageCandidates ?? []).slice(0, 4)
+          .map((u, i) => `${i + 1}. ${u.split("/").pop()?.slice(0, 60)}`)
+          .join("\n");
+        toast.message(`DEBUG: method=${result.extractionMethod}`, {
+          description: candList || "(no candidates)",
+          duration: 15000,
+        });
+      }
     } catch (e) {
       console.error("[AURA import-url]", e);
       toast.error("Could not import from that URL");
