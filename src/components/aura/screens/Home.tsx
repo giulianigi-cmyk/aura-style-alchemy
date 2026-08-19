@@ -40,8 +40,18 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   const [looksLoading, setLooksLoading] = useState(true);
   const [looksError, setLooksError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
+    useEffect(() => {
+    if (!user || allItems.length === 0) return;
+    // Wait for weather to settle before generating: allItems is usually
+    // ready before the weather fetch (geolocation + Open-Meteo round trip)
+    // completes. Generating immediately would run this effect twice —
+    // once with temperature: null, once with the real reading — and the
+    // cache validity check below (cacheStillValid) only compares date +
+    // wardrobe fingerprint, not weather, so the first "weatherless" run
+    // gets cached and silently blocks the correctly weather-aware one for
+    // the rest of the day. If no location is set at all, weather will
+    // never arrive, so don't wait forever in that case.
+    if (latitude != null && longitude != null && wxLoading) return;
     void (async () => {
       const [itemsRes, outfitsCountRes] = await Promise.all([
         supabase.from("wardrobe_items")
@@ -184,7 +194,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         setLooksLoading(false);
       }
     })();
-  }, [user, allItems, weather]);
+  }, [user, allItems, weather, wxLoading, latitude, longitude]);
+
 
   const itemById = useMemo(() => {
     const map: Record<string, WardrobeItem> = {};
