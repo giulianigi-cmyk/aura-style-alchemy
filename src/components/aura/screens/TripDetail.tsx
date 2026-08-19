@@ -73,6 +73,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
   // Open weather proposals for this trip's plans, keyed by activity.
   const [proposals, setProposals] = useState<WeatherProposal[]>([]);
   const loadProposals = useServerFn(listOpenWeatherProposals);
+  const resolveProposal = useServerFn(resolveWeatherProposal);
   const refreshProposals = useCallback(() => {
     loadProposals()
       .then((r) => setProposals((r ?? []) as WeatherProposal[]))
