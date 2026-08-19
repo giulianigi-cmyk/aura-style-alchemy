@@ -233,22 +233,23 @@ export function Home({ go }: { go: (s: Screen) => void }) {
     }
   }, [profile, city, status, detect, autoTried]);
 
-    const greetingName = profile?.full_name?.trim() || "there";
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+      const fullName = profile?.full_name?.trim();
+  const greeting = fullName ? t("home.greetingWithName", { name: fullName }) : t("home.greetingNoName");
+  const today = new Date().toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
       <header className="px-6 pt-14 pb-4 flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{today}</p>
-          <h1 className="font-serif text-3xl mt-1">Your Wardrobe Intelligence</h1>
-          <p className="font-serif text-lg italic text-muted-foreground mt-1">Good morning, {greetingName}</p>
+          <h1 className="font-serif text-3xl mt-1">{t("home.title")}</h1>
+          <p className="font-serif text-lg italic text-muted-foreground mt-1">{greeting}</p>
         </div>
         <div className="flex gap-2">
-          <button aria-label="Search your wardrobe" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition">
+          <button aria-label={t("home.searchAria")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition">
             <Search size={16} />
           </button>
-          <button onClick={() => go("notifications")} aria-label="Notifications" className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
+          <button onClick={() => go("notifications")} aria-label={t("home.notificationsAria")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-95 transition relative">
             <Bell size={16} />
             {unreadCount > 0 && (
               <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-[var(--champagne)]" />
@@ -256,6 +257,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           </button>
         </div>
       </header>
+
 
       {/* Weather / location strip */}
       <div className="mx-6 mt-2 rounded-2xl bg-secondary/60 px-4 py-3">
