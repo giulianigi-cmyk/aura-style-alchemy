@@ -77,6 +77,8 @@ function Inner() {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [userProfileBack, setUserProfileBack] = useState<Screen>("community");
   const [wardrobeGapFilter, setWardrobeGapFilter] = useState<"price" | "purchase_date" | null>(null);
+  const [plannerFocus, setPlannerFocus] = useState<{ date: string; planId: string | null } | null>(null);
+  const [tripFocusActivityId, setTripFocusActivityId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
   );
@@ -115,6 +117,20 @@ function Inner() {
     setUserProfileBack((prev) => (screen === "user-profile" ? prev : screen));
     setScreen("user-profile");
   }, [screen]);
+
+  // Weather-change proposals deep-link into whichever surface owns the
+  // plan: the Planner day sheet, or the trip activity that plan dresses.
+  const openPlanner = useCallback((date: string, planId?: string | null) => {
+    setPlannerFocus({ date, planId: planId ?? null });
+    setScreen("planner");
+  }, []);
+
+  const openTripActivity = useCallback((tripId: string, activityId: string) => {
+    setActiveTripId(tripId);
+    setTripFocusActivityId(activityId);
+    setScreen("trip-detail");
+  }, []);
+
 
   useChatNotifications(openConversation);
 
@@ -210,11 +226,11 @@ function Inner() {
           {screen === "outfit-scan" && <OutfitScan go={go} />}
           {screen === "batch-scan" && <BatchScan go={go} openReview={openBatchReview} />}
                     {screen === "batch-review" && reviewScanId && <BatchReview go={go} scanId={reviewScanId} />}
-          {screen === "trips" && <Trips go={go} openTrip={(id) => { setActiveTripId(id); setScreen("trip-detail"); }} />}
+          {screen === "trips" && <Trips go={go} openTrip={(id) => { setActiveTripId(id); setTripFocusActivityId(null); setScreen("trip-detail"); }} />}
           {screen === "trip-create" && <TripCreate go={go} onCreated={(id) => { setActiveTripId(id); setScreen("trip-detail"); }} />}
-          {screen === "trip-detail" && activeTripId && <TripDetail go={go} tripId={activeTripId} />}
+          {screen === "trip-detail" && activeTripId && <TripDetail go={go} tripId={activeTripId} focusActivityId={tripFocusActivityId} />}
           {screen === "essential-presets" && <EssentialPresets go={go} />}
-          {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} />}
+          {screen === "planner" && <Planner go={go} openStylistChat={openStylistChat} focus={plannerFocus} />}
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
@@ -222,7 +238,9 @@ function Inner() {
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
-          {screen === "notifications" && <Notifications go={go} openThread={openConversation} />}
+          {screen === "notifications" && (
+            <Notifications go={go} openThread={openConversation} openPlanner={openPlanner} openTripActivity={openTripActivity} />
+          )}
           {screen === "invite" && <Invite go={go} />}
           {screen === "storage-debug" && <StorageDebug go={go} />}
           {screen === "chats" && <Chats go={go} openThread={openConversation} />}

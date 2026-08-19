@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
+import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
 import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil } from "lucide-react";
 import { PiecePicker } from "../PiecePicker";
 import { toast } from "sonner";
@@ -26,7 +29,13 @@ function fmtDate(d: string) {
 
 type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
 
-export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: string }) {
+export function TripDetail({ go, tripId, focusActivityId = null }: {
+  go: (s: Screen) => void;
+  tripId: string;
+  /** Set when arriving from a weather_change notification: that activity's
+   *  card is scrolled to and shows the proposal inline. */
+  focusActivityId?: string | null;
+}) {
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [destinations, setDestinations] = useState<TripDestination[]>([]);
@@ -61,9 +70,27 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
   const [editItemIds, setEditItemIds] = useState<string[]>([]);
   const [savingPlan, setSavingPlan] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  // Open weather proposals for this trip's plans, keyed by activity.
+  const [proposals, setProposals] = useState<WeatherProposal[]>([]);
+  const loadProposals = useServerFn(listOpenWeatherProposals);
+  const resolveProposal = useServerFn(resolveWeatherProposal);
+  const refreshProposals = useCallback(() => {
+    loadProposals()
+      .then((r) => setProposals((r ?? []) as WeatherProposal[]))
+      .catch((e) => console.error("[AURA trip] proposals load failed", e));
+  }, [loadProposals]);
+  useEffect(() => { refreshProposals(); }, [refreshProposals]);
 
   const culturalNotes = useMemo(() => matchCulturalDressNotes(destinations.map((d) => d.destination_name)), [destinations]);
   const visibleCulturalNotes = culturalNotes.filter((n) => !dismissedNotes.includes(n.countryKeywords[0]));
+
+  // Scroll the notification's activity into view once its card is mounted.
+  useEffect(() => {
+    if (!focusActivityId || loading) return;
+    const el = document.getElementById(`trip-activity-${focusActivityId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusActivityId, loading, activities.length]);
+
 
 
   const load = () => {
@@ -286,6 +313,12 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
     try {
       await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
       setOutfitPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? { ...p, item_ids: editItemIds } : p)));
+      // A hand-picked answer closes any open weather proposal for this plan.
+      const open = proposals.find((pr) => pr.data?.plan_id === editingPlan.id);
+      if (open) {
+        try { await resolveProposal({ data: { notificationId: open.id, status: "dismissed" } }); refreshProposals(); }
+        catch (e) { console.error("[AURA trip] proposal resolve failed", e); }
+      }
       setEditingPlan(null);
       toast.success("Outfit updated");
     } catch (e) {
@@ -749,8 +782,13 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
               .sort((a, b) => a.activity_date.localeCompare(b.activity_date) || (a.day_segment ?? "day").localeCompare(b.day_segment ?? "day"))
               .map((a) => {
                 const op = outfitPlans.find((p) => p.trip_activity_id === a.id);
+                const proposal = proposals.find((pr) => pr.data?.trip_activity_id === a.id);
                 return (
-                  <div key={a.id} className="rounded-2xl bg-secondary/40 p-3">
+                  <div
+                    key={a.id}
+                    id={`trip-activity-${a.id}`}
+                    className={`rounded-2xl bg-secondary/40 p-3 ${focusActivityId === a.id ? "ring-1 ring-foreground/30" : ""}`}
+                  >
                     <div className="flex items-center gap-1.5 mb-2">
                       {(a.day_segment ?? "day") === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
                       <p className="text-[11px] text-muted-foreground flex-1 min-w-0 truncate">
@@ -783,6 +821,17 @@ export function TripDetail({ go, tripId }: { go: (s: Screen) => void; tripId: st
                       <p className="text-[10px] text-muted-foreground mb-2 -mt-1">
                         {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? " · Estimated" : ""}
                       </p>
+                    )}
+                    {proposal && (
+                      <div className="mb-2">
+                        <WeatherProposalCard
+                          proposal={proposal}
+                          items={wardrobeItems}
+                          signed={wardrobeSigned}
+                          onResolved={() => { refreshProposals(); load(); }}
+                          {...(op ? { onCustomize: () => startEditPlan(op) } : {})}
+                        />
+                      </div>
                     )}
                     {op ? (
                       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">

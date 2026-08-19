@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Bell, Loader2, MessageCircle, X } from "lucide-react";
+import { ArrowLeft, Bell, CloudRain, Loader2, MessageCircle, X } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,12 +13,26 @@ type Notification = {
   body: string | null;
   read_at: string | null;
   created_at: string;
-  data: { conversation_id?: string } | null;
+  data: {
+    conversation_id?: string;
+    plan_id?: string;
+    date?: string;
+    trip_id?: string | null;
+    trip_activity_id?: string | null;
+  } | null;
 };
 
-export function Notifications({ go, openThread }: { go: (s: Screen) => void; openThread?: (id: string) => void }) {
+export function Notifications({ go, openThread, openPlanner, openTripActivity }: {
+  go: (s: Screen) => void;
+  openThread?: (id: string) => void;
+  /** weather_change on a general/event plan → Planner day sheet. */
+  openPlanner?: (date: string, planId?: string | null) => void;
+  /** weather_change on a trip plan → TripDetail, focused on the activity. */
+  openTripActivity?: (tripId: string, activityId: string) => void;
+}) {
   const { user } = useAuth();
   const markRead = useServerFn(markNotificationsRead);
+
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -85,20 +99,36 @@ export function Notifications({ go, openThread }: { go: (s: Screen) => void; ope
         <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-card border border-border/60 overflow-hidden animate-fade-up">
           {items.map((n) => {
             const conversationId = n.data?.conversation_id;
-            const clickable = Boolean(conversationId && openThread);
+            // A weather proposal points at either the Planner day sheet or,
+            // for a trip plan, the activity it dresses inside TripDetail.
+            const isWeather = n.type === "weather_change";
+            const tripId = n.data?.trip_id ?? null;
+            const activityId = n.data?.trip_activity_id ?? null;
+            const weatherTarget = isWeather
+              ? (tripId && activityId && openTripActivity)
+                ? () => openTripActivity(tripId, activityId)
+                : (n.data?.date && openPlanner)
+                  ? () => openPlanner(n.data!.date!, n.data?.plan_id ?? null)
+                  : null
+              : null;
+            const open = conversationId && openThread
+              ? () => openThread(conversationId)
+              : weatherTarget;
+            const clickable = Boolean(open);
             return (
             <div key={n.id} className="px-5 py-4 flex gap-3">
               <div className="h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center shrink-0">
-                {clickable ? <MessageCircle size={14} /> : <Bell size={14} />}
+                {isWeather ? <CloudRain size={14} /> : clickable ? <MessageCircle size={14} /> : <Bell size={14} />}
               </div>
               <button
                 type="button"
                 disabled={!clickable}
-                onClick={() => { if (conversationId && openThread) openThread(conversationId); }}
+                onClick={() => open?.()}
                 className={`flex-1 min-w-0 text-left ${clickable ? "active:opacity-70" : "cursor-default"}`}
               >
                 <p className="text-sm">{n.title}</p>
-                {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}
+                {n.body && <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">{n.body}</p>}
+
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-2">
                   {new Date(n.created_at).toLocaleString("en-US")}
                 </p>

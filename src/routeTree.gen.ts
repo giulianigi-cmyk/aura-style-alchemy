@@ -20,6 +20,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as ApiPublicHooksGoogleCalendarCallbackRouteImport } from './routes/api/public/hooks/google-calendar-callback'
 import { Route as ApiPublicHooksOutlookCalendarCallbackRouteImport } from './routes/api/public/hooks/outlook-calendar-callback'
 import { Route as ApiPublicHooksProcessScanJobsRouteImport } from './routes/api/public/hooks/process-scan-jobs'
+import { Route as ApiPublicHooksRecheckPlanWeatherRouteImport } from './routes/api/public/hooks/recheck-plan-weather'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,12 @@ const ApiPublicHooksProcessScanJobsRoute =
     path: '/api/public/hooks/process-scan-jobs',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksRecheckPlanWeatherRoute =
+  ApiPublicHooksRecheckPlanWeatherRouteImport.update({
+    id: '/api/public/hooks/recheck-plan-weather',
+    path: '/api/public/hooks/recheck-plan-weather',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
   '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
+  '/api/public/hooks/recheck-plan-weather': typeof ApiPublicHooksRecheckPlanWeatherRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
   '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
+  '/api/public/hooks/recheck-plan-weather': typeof ApiPublicHooksRecheckPlanWeatherRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -122,6 +131,7 @@ export interface FileRoutesById {
   '/api/public/hooks/google-calendar-callback': typeof ApiPublicHooksGoogleCalendarCallbackRoute
   '/api/public/hooks/outlook-calendar-callback': typeof ApiPublicHooksOutlookCalendarCallbackRoute
   '/api/public/hooks/process-scan-jobs': typeof ApiPublicHooksProcessScanJobsRoute
+  '/api/public/hooks/recheck-plan-weather': typeof ApiPublicHooksRecheckPlanWeatherRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/google-calendar-callback'
     | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
+    | '/api/public/hooks/recheck-plan-weather'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/google-calendar-callback'
     | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
+    | '/api/public/hooks/recheck-plan-weather'
   id:
     | '__root__'
     | '/'
@@ -163,6 +175,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/google-calendar-callback'
     | '/api/public/hooks/outlook-calendar-callback'
     | '/api/public/hooks/process-scan-jobs'
+    | '/api/public/hooks/recheck-plan-weather'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -177,6 +190,7 @@ export interface RootRouteChildren {
   ApiPublicHooksGoogleCalendarCallbackRoute: typeof ApiPublicHooksGoogleCalendarCallbackRoute
   ApiPublicHooksOutlookCalendarCallbackRoute: typeof ApiPublicHooksOutlookCalendarCallbackRoute
   ApiPublicHooksProcessScanJobsRoute: typeof ApiPublicHooksProcessScanJobsRoute
+  ApiPublicHooksRecheckPlanWeatherRoute: typeof ApiPublicHooksRecheckPlanWeatherRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -258,6 +272,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProcessScanJobsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/recheck-plan-weather': {
+      id: '/api/public/hooks/recheck-plan-weather'
+      path: '/api/public/hooks/recheck-plan-weather'
+      fullPath: '/api/public/hooks/recheck-plan-weather'
+      preLoaderRoute: typeof ApiPublicHooksRecheckPlanWeatherRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -276,6 +297,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksOutlookCalendarCallbackRoute:
     ApiPublicHooksOutlookCalendarCallbackRoute,
   ApiPublicHooksProcessScanJobsRoute: ApiPublicHooksProcessScanJobsRoute,
+  ApiPublicHooksRecheckPlanWeatherRoute: ApiPublicHooksRecheckPlanWeatherRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

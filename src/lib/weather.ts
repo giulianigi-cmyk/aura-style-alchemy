@@ -1,4 +1,7 @@
+import { isRainyCode, UMBRELLA_PRECIPITATION_THRESHOLD } from "./weather-constants";
+
 // Open-Meteo weather client (no API key required) + outfit recommendation logic.
+
 // Structured to allow future premium features (advanced outfit gen, color analysis,
 // shopping recommendations, weekly planning) to consume the same shapes.
 
@@ -104,9 +107,14 @@ export type OutfitSuggestion = {
   tips: string[];
   categories: string[];
   materials: string[];
+  /** Present only when the chance of rain clears the shared threshold.
+   *  Every surface (Home, Planner, WeatherPanel, builder, stylist) reads
+   *  this instead of knowing the threshold itself. */
+  umbrellaTip: string | null;
 };
 
-const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> = {
+
+const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy" | "umbrellaTip">> = {
   cold: {
     headline: "Wrap up — layered tailoring weather",
     tips: ["Wool coat", "Cashmere knit", "Boots", "Scarf", "Wool trousers", "Leather gloves"],
@@ -144,18 +152,34 @@ const baseByBand: Record<WeatherBand, Omit<OutfitSuggestion, "band" | "rainy">> 
   },
 };
 
-export function suggestOutfit(current: CurrentWeather | { temperature: number; weatherCode: number }): OutfitSuggestion {
+/**
+ * The single composition point for weather-driven advice. Callers pass
+ * whatever weather shape they hold (current conditions or a daily
+ * forecast); the umbrella line and the rain classification are decided
+ * here, from the shared constants — no screen knows the thresholds.
+ */
+export function suggestOutfit(
+  current: CurrentWeather | { temperature: number; weatherCode: number; precipitationProbability?: number },
+): OutfitSuggestion {
   const tempC = current.temperature;
   const code = current.weatherCode;
+  const precipitationProbability = "precipitationProbability" in current
+    ? Number(current.precipitationProbability ?? 0)
+    : 0;
   const band = classifyTemp(tempC);
   const base = baseByBand[band];
-  const rainy = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code);
+  const rainy = isRainyCode(code);
+  const umbrellaTip = precipitationProbability > UMBRELLA_PRECIPITATION_THRESHOLD
+    ? `${Math.round(precipitationProbability)}% chance of rain — don't forget your umbrella`
+    : null;
   return {
     band,
     rainy,
+    umbrellaTip,
     headline: rainy ? `${base.headline} · rain-ready` : base.headline,
     tips: rainy ? [...base.tips, "Trench or waterproof layer", "Weatherproof boots"] : base.tips,
     categories: rainy ? [...base.categories, "trench", "boots"] : base.categories,
     materials: rainy ? [...base.materials, "Waterproof"] : base.materials,
   };
 }
+
