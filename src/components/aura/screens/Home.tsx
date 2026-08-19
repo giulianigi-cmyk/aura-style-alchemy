@@ -259,7 +259,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       </header>
 
 
-      {/* Weather / location strip */}
+           {/* Weather / location strip */}
       <div className="mx-6 mt-2 rounded-2xl bg-secondary/60 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -271,13 +271,13 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                 {city
                   ? weather
                     ? `${city} · ${Math.round(weather.current.temperature)}${weather.units.temp}`
-                    : wxLoading ? `${city} · loading…` : city
-                  : "Set your location"}
+                    : wxLoading ? `${city} · ${t("home.loading")}` : city
+                  : t("home.setLocation")}
               </p>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
                 {weather
                   ? `${describeWeather(weather.current.weatherCode, weather.current.isDay).label} · ${suggestOutfit(weather.current).headline}`
-                  : city ? "for tailored daily edits" : "for weather-aware styling"}
+                  : city ? t("home.forTailoredEdits") : t("home.forWeatherStyling")}
               </p>
             </div>
           </div>
@@ -286,7 +286,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
             className="shrink-0 ml-2 h-8 px-3 rounded-full bg-background border border-border text-[10px] uppercase tracking-widest flex items-center gap-1.5 active:scale-95"
           >
             {status === "loading" ? <Loader2 size={11} className="animate-spin" /> : <MapPin size={11} />}
-            {city ? "Change" : "Use location"}
+            {city ? t("home.change") : t("home.useLocation")}
           </button>
         </div>
         {(manualOpen || status === "denied" || status === "unsupported" || status === "error") && (
@@ -296,20 +296,22 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           >
             <input
               value={manualCity} onChange={e => setManualCity(e.target.value)}
-              placeholder="Enter your city"
+              placeholder={t("home.cityPlaceholder")}
               className="flex-1 bg-background border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-foreground"
             />
-            <button type="submit" className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95">Save</button>
+            <button type="submit" className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95">{t("home.save")}</button>
           </form>
         )}
       </div>
 
-      {/* Today's edit */}
+
+            {/* Today's edit */}
       <section className="px-6 mt-8 animate-fade-up">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-serif text-2xl italic">Today's edit</h2>
-          <button onClick={() => go("ai")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Style a look</button>
+          <h2 className="font-serif text-2xl italic">{t("home.todaysEdit")}</h2>
+          <button onClick={() => go("ai")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{t("home.styleALook")}</button>
         </div>
+
        {looksLoading ? (
           <div className="rounded-[2rem] gradient-warm aspect-[4/5] flex items-center justify-center">
             <Loader2 className="animate-spin text-muted-foreground" />
@@ -327,50 +329,52 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   );
                 })}
               </div>
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5">
+                           <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-3 py-1.5">
                 <Sparkles size={11} />
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{todayLook.occasion || "Today"}</span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{todayLook.occasion || t("home.todayFallback")}</span>
               </div>
+
               <p className="mt-2 text-sm text-foreground/80 leading-relaxed">{todayLook.explanation}</p>
             </div>
           </button>
         ) : (
-          <div className="rounded-[2rem] gradient-warm p-6 text-center">
+                    <div className="rounded-[2rem] gradient-warm p-6 text-center">
             <p className="font-serif text-lg italic">
-              {looksError ?? (stats.pieces < 3 ? "Add a few more pieces first" : "No look yet")}
+              {looksError ?? (stats.pieces < 3 ? t("home.addMorePiecesFirst") : t("home.noLookYet"))}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {stats.pieces < 3
-                ? "AURA needs at least 3 wardrobe pieces to compose a real outfit."
-                : "Tap Style a look to build one with AI."}
+                ? t("home.needThreePieces")
+                : t("home.tapStyleALook")}
             </p>
           </div>
+
         )}
       </section>
 
-    {/* Quick nav */}
+        {/* Quick nav */}
       <section className="px-6 mt-7 grid grid-cols-2 gap-3" aria-labelledby="home-quick-nav">
-        <h2 id="home-quick-nav" className="sr-only col-span-2">Quick nav</h2>
+        <h2 id="home-quick-nav" className="sr-only col-span-2">{t("home.quickNav")}</h2>
         <button onClick={() => go("shop")} className="text-left rounded-2xl bg-[var(--champagne)]/30 border border-[var(--champagne)]/50 p-4 active:scale-[0.98] transition">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The edit</p>
-          <p className="font-serif text-lg mt-1">Shop your gaps</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("home.theEdit")}</p>
+          <p className="font-serif text-lg mt-1">{t("home.shopYourGaps")}</p>
         </button>
         <button onClick={() => go("community")} className="text-left rounded-2xl bg-secondary/60 p-4 active:scale-[0.98] transition">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
-          <p className="font-serif text-lg mt-1">Community</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("home.atelier")}</p>
+          <p className="font-serif text-lg mt-1">{t("home.community")}</p>
         </button>
       </section>
 
       {/* Color Lab */}
       <section className="px-6 mt-3" aria-labelledby="home-color-lab">
-        <h2 id="home-color-lab" className="sr-only">Color Lab</h2>
+        <h2 id="home-color-lab" className="sr-only">{t("home.colorLab")}</h2>
         <button
           onClick={() => go("color-lab")}
           className="w-full text-left rounded-2xl p-4 active:scale-[0.98] transition border border-border/60"
           style={{ background: "linear-gradient(135deg, #F2C6C2 0%, #B0E0E6 50%, #F6E27A 100%)" }}
         >
-          <p className="text-[10px] uppercase tracking-[0.3em] text-background/80 mix-blend-difference">Color Lab</p>
-          <p className="font-serif text-lg mt-1 text-background mix-blend-difference">Color Harmony</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-background/80 mix-blend-difference">{t("home.colorLab")}</p>
+          <p className="font-serif text-lg mt-1 text-background mix-blend-difference">{t("home.colorHarmony")}</p>
         </button>
       </section>
 
@@ -378,10 +382,11 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       <section className="px-6 mt-5 grid grid-cols-3 gap-3" aria-labelledby="home-stats">
         <h2 id="home-stats" className="sr-only col-span-3">Stats</h2>
         {[
-          { n: String(stats.pieces), l: "Pieces", to: "wardrobe" as Screen },
-          { n: String(stats.outfits), l: "Outfits", to: "saved-outfits" as Screen },
-          { n: `${stats.wearRate}%`, l: "Wear rate", to: "insights" as Screen | null },
+          { n: String(stats.pieces), l: t("home.pieces"), to: "wardrobe" as Screen },
+          { n: String(stats.outfits), l: t("home.outfits"), to: "saved-outfits" as Screen },
+          { n: `${stats.wearRate}%`, l: t("home.wearRate"), to: "insights" as Screen | null },
         ].map(s => (
+
           <button
             key={s.l}
             onClick={() => s.to && go(s.to)}
@@ -394,11 +399,11 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         ))}
       </section>
 
-      {/* Curated for you */}
+            {/* Curated for you */}
       <section className="mt-10 animate-fade-up" style={{ animationDelay: "0.1s" }}>
         <div className="flex items-baseline justify-between px-6 mb-3">
-          <h2 className="font-serif text-2xl italic">Curated for you</h2>
-          <button onClick={() => go("saved-outfits")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">See all</button>
+          <h2 className="font-serif text-2xl italic">{t("home.curatedForYou")}</h2>
+          <button onClick={() => go("saved-outfits")} className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{t("home.seeAll")}</button>
         </div>
         {looksLoading ? (
           <div className="mx-6 rounded-2xl bg-secondary/40 h-44 flex items-center justify-center">
@@ -408,11 +413,12 @@ export function Home({ go }: { go: (s: Screen) => void }) {
           <div className="mx-6 rounded-2xl bg-secondary/40 p-5">
             <p className="text-sm text-muted-foreground leading-relaxed">
               {stats.pieces < 3
-                ? "Add a few more wardrobe pieces and AURA will curate real looks from them."
-                : "Couldn't curate looks right now — try again shortly."}
+                ? t("home.addMoreForCurated")
+                : t("home.curateRetry")}
             </p>
           </div>
         ) : (
+
           <div className="flex gap-3 overflow-x-auto no-scrollbar px-6">
             {curatedLooks.map((look, i) => (
               <button key={i} onClick={() => go("ai")} className="shrink-0 w-40 text-left active:scale-[0.98] transition">
@@ -426,7 +432,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                     );
                   })}
                 </div>
-                <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{look.occasion || "Look"}</p>
+                               <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{look.occasion || t("home.lookFallback")}</p>
                 <p className="text-xs text-muted-foreground truncate">{look.explanation}</p>
               </button>
             ))}
@@ -434,18 +440,19 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         )}
       </section>
 
-      {/* From your wardrobe */}
+            {/* From your wardrobe */}
       <section className="px-6 mt-10 animate-fade-up" style={{ animationDelay: "0.15s" }}>
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-serif text-2xl italic">From your wardrobe</h2>
+          <h2 className="font-serif text-2xl italic">{t("home.fromYourWardrobe")}</h2>
           <TrendingUp size={14} className="text-muted-foreground" />
         </div>
         {recent.length === 0 ? (
           <button
             onClick={() => go("wardrobe")}
             className="w-full text-left rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"
-          >Add your first pieces to see them here.</button>
+          >{t("home.addFirstPieces")}</button>
         ) : (
+
           <div className="grid grid-cols-3 gap-2">
             {recent.map((it) => {
               const path = toStoragePath(it.image_url);
@@ -460,7 +467,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   {src ? (
                     <img src={src} alt={it.category ?? "wardrobe item"} className="h-full w-full object-contain p-1.5" loading="lazy" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">No image</div>
+                                       <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">{t("home.noImage")}</div>
                   )}
                 </button>
               );
