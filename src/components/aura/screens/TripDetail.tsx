@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { listOpenWeatherProposals } from "@/lib/plan-weather.functions";
+import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
 import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil } from "lucide-react";
 import { PiecePicker } from "../PiecePicker";
