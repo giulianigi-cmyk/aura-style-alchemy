@@ -724,7 +724,42 @@ function MyUsername({ userId }: { userId: string | undefined }) {
   );
 }
 
+function LanguageSection() {
+  const { t } = useTranslation();
+  const { profile, update } = useProfile();
+  const [saving, setSaving] = useState<SupportedLanguage | null>(null);
+  const current = (profile?.language as SupportedLanguage | null) ?? i18n.language;
+
+  const choose = async (code: SupportedLanguage) => {
+    if (code === current) return;
+    setSaving(code);
+    void i18n.changeLanguage(code);
+    const { error } = await update({ language: code });
+    setSaving(null);
+    if (error) toast.error(error);
+  };
+
+  return (
+    <section className="mx-6 mt-6 animate-fade-up">
+      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("profile.languageLabel")}</p>
+      <div className="flex flex-wrap gap-2">
+        {SUPPORTED_LANGUAGES.map((code) => (
+          <button
+            key={code}
+            onClick={() => choose(code)}
+            disabled={saving !== null}
+            className={`rounded-full px-4 py-2 text-xs border transition disabled:opacity-60 ${current === code ? "bg-foreground text-background border-foreground" : "border-border bg-card"}`}
+          >
+            {saving === code ? <Loader2 size={12} className="animate-spin" /> : LANGUAGE_LABELS[code]}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MySizes({ userId }: { userId: string | undefined }) {
+
   const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
   const [values, setValues] = useState<Record<SizeKey, string>>(empty);
   const [snapshot, setSnapshot] = useState<Record<SizeKey, string>>(empty);
