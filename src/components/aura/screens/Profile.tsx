@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -17,6 +18,7 @@ import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
 import { QrFullscreen } from "../MyQrCode";
 import { ProfileSocial } from "../ProfileSocial";
+import i18n, { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, type SupportedLanguage } from "@/i18n/config";
 
 
 const STYLES = [
@@ -530,10 +532,11 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
               </div>
             </section>
           )}
-          <MyBrands />
+                   <MyBrands />
           <WardrobeLocationsSection />
           <MySizes userId={user?.id} />
           <DressPreferencesSection userId={user?.id} />
+          <LanguageSection />
 
           {/* Color analysis */}
           <button
