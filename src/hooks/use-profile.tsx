@@ -35,8 +35,12 @@ export type Profile = {
   updated_at: string;
   // ISO 639-1 code ("it" | "en" | "es" | "fr") the user picked for the UI
   // language, or null if never set (falls back to the app default).
-  language: string | null;
+    language: string | null;
+  // In-app notification toggles by type. Defaulted in the DB (see
+  // migration), always present once the column exists.
+  notification_preferences: { outfit_share: boolean; weather_change: boolean; system: boolean } | null;
 };
+
 
 
 export function calcAge(birthDate: string | null | undefined): number | null {
