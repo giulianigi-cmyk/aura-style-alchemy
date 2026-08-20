@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Bell, CloudRain, Loader2, MessageCircle, X } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { markNotificationsRead } from "@/lib/notifications.functions";
+import i18n from "@/i18n/config";
 
 type Notification = {
   id: string;
@@ -30,6 +32,7 @@ export function Notifications({ go, openThread, openPlanner, openTripActivity }:
   /** weather_change on a trip plan → TripDetail, focused on the activity. */
   openTripActivity?: (tripId: string, activityId: string) => void;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const markRead = useServerFn(markNotificationsRead);
 
@@ -79,7 +82,7 @@ export function Notifications({ go, openThread, openPlanner, openTripActivity }:
         <button onClick={() => go("home")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={15} />
         </button>
-        <p className="font-serif text-lg italic">Notifications</p>
+        <p className="font-serif text-lg italic">{t("notifications.title")}</p>
         <span className="w-10" />
       </header>
 
@@ -91,7 +94,7 @@ export function Notifications({ go, openThread, openPlanner, openTripActivity }:
 
       {!loading && items.length === 0 && (
         <p className="mx-6 mt-10 text-sm text-muted-foreground text-center">
-          Nothing here yet. Start by adding a few wardrobe pieces.
+          {t("notifications.empty")}
         </p>
       )}
 
@@ -130,12 +133,12 @@ export function Notifications({ go, openThread, openPlanner, openTripActivity }:
                 {n.body && <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">{n.body}</p>}
 
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-2">
-                  {new Date(n.created_at).toLocaleString("en-US")}
+                  {new Date(n.created_at).toLocaleString(i18n.language)}
                 </p>
               </button>
               <button
                 onClick={() => void deleteNotification(n.id)}
-                aria-label="Delete notification"
+                aria-label={t("notifications.deleteAria")}
                 className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90 self-start"
               ><X size={12} /></button>
             </div>
@@ -145,7 +148,7 @@ export function Notifications({ go, openThread, openPlanner, openTripActivity }:
       )}
 
       {!loading && (
-        <p className="text-center mt-8 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">You're all caught up</p>
+        <p className="text-center mt-8 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("notifications.allCaughtUp")}</p>
       )}
     </div>
   );
