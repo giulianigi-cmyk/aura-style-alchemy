@@ -22,6 +22,16 @@ import { ColorLab } from "./screens/ColorLab";
 import { Community } from "./screens/Community";
 import { Profile } from "./screens/Profile";
 import { Insights } from "./screens/Insights";
+import { Settings } from "./screens/Settings";
+import { PersonalInfo } from "./screens/PersonalInfo";
+import { StylePreferences } from "./screens/StylePreferences";
+import { SettingsSizes } from "./screens/SettingsSizes";
+import { SettingsLanguage } from "./screens/SettingsLanguage";
+import { SettingsWardrobeLocations } from "./screens/SettingsWardrobeLocations";
+import { SettingsDressPreferences } from "./screens/SettingsDressPreferences";
+import { NotificationSettings } from "./screens/NotificationSettings";
+import { SettingsCalendar } from "./screens/SettingsCalendar";
+import { PrivacySettings } from "./screens/PrivacySettings";
 import { Notifications } from "./screens/Notifications";
 import { Invite } from "./screens/Invite";
 import { StorageDebug } from "./screens/StorageDebug";
@@ -43,7 +53,10 @@ export type Screen =
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
       | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
       | "trips" | "trip-create" | "trip-detail" | "essential-presets"
-      | "chats" | "chat-thread" | "user-profile";
+            | "chats" | "chat-thread" | "user-profile"
+      | "settings" | "settings-personal" | "settings-sizes" | "settings-style-prefs" | "settings-language"
+      | "settings-wardrobe-locations" | "settings-dress-preferences" | "settings-notifications" | "settings-calendar" | "settings-privacy";
+
 
 
 
@@ -234,7 +247,18 @@ function Inner() {
           {screen === "shop" && <Shop go={go} />}
           {screen === "color-lab" && <ColorLab go={go} />}
           {screen === "community" && <Community go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
-          {screen === "profile" && <Profile go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
+                    {screen === "profile" && <Profile go={go} openConversation={openConversation} openUserProfile={openUserProfile} />}
+          {screen === "settings" && <Settings go={go} />}
+          {screen === "settings-personal" && <PersonalInfo go={go} />}
+          {screen === "settings-style-prefs" && <StylePreferences go={go} />}
+          {screen === "settings-sizes" && <SettingsSizes go={go} />}
+          {screen === "settings-language" && <SettingsLanguage go={go} />}
+          {screen === "settings-wardrobe-locations" && <SettingsWardrobeLocations go={go} />}
+          {screen === "settings-dress-preferences" && <SettingsDressPreferences go={go} />}
+          {screen === "settings-notifications" && <NotificationSettings go={go} />}
+          {screen === "settings-calendar" && <SettingsCalendar go={go} />}
+          {screen === "settings-privacy" && <PrivacySettings go={go} />}
+
                     {screen === "insights" && <Insights go={go} openWardrobeGap={(f) => { setWardrobeGapFilter(f); go("wardrobe"); }} />}
 
                         {screen === "saved-outfits" && <AIStylist go={go} openBuilder={openBuilder} />}
