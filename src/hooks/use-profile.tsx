@@ -20,10 +20,16 @@ export type Profile = {
   undertone: string | null;
   value: string | null;
   clarity: string | null;
-  industry: string | null;
+    industry: string | null;
   work_dress_code: string | null;
   personal_formality: string | null;
+  style_boldness: string | null;
+  work_days: string[] | null;
+  work_start_time: string | null;
+  work_end_time: string | null;
+  share_wardrobe_to_library: boolean | null;
   profession: string | null;
+
     setup_complete: boolean;
   created_at: string;
   updated_at: string;
