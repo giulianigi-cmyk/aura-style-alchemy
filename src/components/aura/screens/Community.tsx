@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Heart, MessageCircle, Loader2, Search, UserPlus, Check, X, Trash2, Send } from "lucide-react";
 import type { Screen } from "../AuraApp";
@@ -24,6 +25,7 @@ function Avatar({ url, username, size = 36 }: { url?: string | null; username?: 
 /* ---------------------------------------------------------------- username */
 
 function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [checking, setChecking] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -45,24 +47,24 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
     setSaving(true);
     const { data: userData } = await supabase.auth.getUser();
     const me = userData.user?.id;
-    if (!me) { setSaving(false); toast.error("You are signed out"); return; }
+    if (!me) { setSaving(false); toast.error(t("community.toastSignedOut")); return; }
     const { error } = await supabase.from("profiles").upsert({ id: me, username: value }, { onConflict: "id" });
     setSaving(false);
     if (error) {
-      if (error.code === "23505") { setAvailable(false); toast.error("Username is no longer available."); }
+      if (error.code === "23505") { setAvailable(false); toast.error(t("community.toastUsernameTaken")); }
       else toast.error(error.message);
       return;
     }
-    toast.success("Username saved");
+    toast.success(t("community.toastUsernameSaved"));
     onSaved(value);
   };
 
     return createPortal(
     <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur flex items-end">
       <div className="w-full bg-card rounded-t-3xl border-t border-border p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] space-y-3">
-        <p className="font-serif italic text-2xl">Choose a username</p>
+        <p className="font-serif italic text-2xl">{t("community.chooseUsername")}</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          3–20 characters. Lowercase letters, numbers and underscores only.
+          {t("community.usernameHint")}
         </p>
         <input
           value={value}
@@ -70,21 +72,21 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          placeholder="yourname"
+          placeholder={t("community.usernamePlaceholder")}
           className="w-full bg-secondary/60 rounded-full px-4 py-3 text-sm outline-none"
         />
         <p className="text-[11px] h-4 text-muted-foreground">
           {value.length === 0 ? "" :
-            !valid ? "Invalid format." :
-            checking ? "Checking…" :
-            available === true ? "Available" :
-            available === false ? "Already taken" : ""}
+            !valid ? t("community.invalidFormat") :
+            checking ? t("community.checking") :
+            available === true ? t("community.available") :
+            available === false ? t("community.alreadyTaken") : ""}
         </p>
         <button
           onClick={() => void save()}
           disabled={!valid || available !== true || saving}
           className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50"
-        >{saving ? "Saving…" : "Save"}</button>
+        >{saving ? t("community.saving") : t("community.save")}</button>
             </div>
     </div>,
         document.body,
@@ -93,11 +95,11 @@ function UsernameSheet({ onSaved }: { onSaved: (u: string) => void }) {
 
 /* ------------------------------------------------------------------ feed */
 
-
 function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
   row: FeedRow; avatar?: string | null; image?: string | null;
   onChanged: () => void; meId: string; onOpenProfile?: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [liked, setLiked] = useState(row.liked_by_me);
   const [likes, setLikes] = useState(Number(row.like_count));
   const [openComments, setOpenComments] = useState(false);
@@ -116,14 +118,14 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
       : await supabase.from("outfit_likes").delete().eq("share_id", row.share_id).eq("user_id", meId);
     if (error) {
       setLiked(!next); setLikes((n) => n + (next ? -1 : 1));
-      toast.error(error.code === "23505" ? "Already liked" : error.message);
+      toast.error(error.code === "23505" ? t("community.toastAlreadyLiked") : error.message);
     }
   };
 
   const loadComments = useCallback(async () => {
     setLoadingComments(true);
     try { setComments(await getComments(row.share_id)); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Could not load comments"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("community.toastCouldNotLoadComments")); }
     finally { setLoadingComments(false); }
   }, [row.share_id]);
 
@@ -162,7 +164,7 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
           <div>
             <p className="text-sm font-medium">{row.other_username ?? "—"}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {row.direction === "outgoing" ? "You shared" : "Shared with you"}
+              {row.direction === "outgoing" ? t("community.youShared") : t("community.sharedWithYou")}
             </p>
           </div>
         </button>
@@ -178,7 +180,7 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
           />
         ) : (
           <div className="aspect-[4/5] w-full flex items-center justify-center text-xs text-muted-foreground">
-            {row.canvas_image_url ? "Image unavailable" : "No canvas image"}
+            {row.canvas_image_url ? t("community.imageUnavailable") : t("community.noCanvasImage")}
           </div>
         )}
       </div>
@@ -204,7 +206,7 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
           {loadingComments ? (
             <Loader2 size={14} className="animate-spin" />
           ) : comments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No comments yet.</p>
+            <p className="text-xs text-muted-foreground">{t("community.noCommentsYet")}</p>
           ) : comments.map((c) => (
             <div key={c.id} className="flex items-start gap-2">
               <p className="text-sm flex-1">
@@ -212,7 +214,7 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
                 <span className="text-foreground/80">{c.body}</span>
               </p>
               {c.user_id === meId && (
-                <button onClick={() => void removeComment(c.id)} aria-label="Delete comment" className="text-muted-foreground active:scale-90">
+                <button onClick={() => void removeComment(c.id)} aria-label={t("community.deleteCommentAria")} className="text-muted-foreground active:scale-90">
                   <Trash2 size={13} />
                 </button>
               )}
@@ -222,13 +224,13 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
             <input
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Add a comment…"
+              placeholder={t("community.addCommentPlaceholder")}
               className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
             />
             <button
               onClick={() => void addComment()}
               disabled={!body.trim()}
-              aria-label="Send comment"
+              aria-label={t("community.sendCommentAria")}
               className="h-9 w-9 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-40 active:scale-90"
             ><Send size={14} /></button>
           </div>
@@ -241,6 +243,7 @@ function FeedCard({ row, avatar, image, onChanged, meId, onOpenProfile }: {
 /* ------------------------------------------------------------------ main */
 
 export function Community({ go, openConversation, openUserProfile }: { go: (s: Screen) => void; openConversation?: (id: string) => void; openUserProfile?: (id: string) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [tab, setTab] = useState<"feed" | "chat" | "friends">("feed");
   const [username, setUsername] = useState<string | null>(null);
@@ -288,7 +291,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
       setFeedImages(imgs);
       setFeedAvatars(avs);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load the feed");
+      toast.error(e instanceof Error ? e.message : t("community.toastCouldNotLoadFeed"));
     } finally {
       setLoadingFeed(false);
     }
@@ -302,7 +305,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
       setFriends(list);
       setFriendAvatars(await signPaths("avatars", list.filter((f) => f.status === "accepted").map((f) => f.profile_image)));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load friends");
+      toast.error(e instanceof Error ? e.message : t("community.toastCouldNotLoadFriends"));
     } finally {
       setLoadingFriends(false);
     }
@@ -330,8 +333,8 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
   const sendRequest = async (id: string) => {
     if (!user) return;
     const { error } = await supabase.from("friends").insert({ requester_id: user.id, addressee_id: id });
-    if (error) { toast.error(error.code === "23505" ? "Request already sent" : error.message); return; }
-    toast.success("Request sent");
+    if (error) { toast.error(error.code === "23505" ? t("community.toastRequestAlreadySent") : error.message); return; }
+    toast.success(t("community.toastRequestSent"));
     setResults((prev) => prev.map((r) => (r.id === id ? { ...r, relation: "outgoing" } : r)));
     await loadFriends();
   };
@@ -339,7 +342,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
   const accept = async (f: Friendship) => {
     const { error } = await supabase.from("friends").update({ status: "accepted" }).eq("id", f.friendship_id);
     if (error) { toast.error(error.message); return; }
-    toast.success(`You and ${f.username ?? "they"} are now friends`);
+    toast.success(t("community.toastNowFriends", { name: f.username ?? t("community.someone") }));
     await Promise.all([loadFriends(), loadFeed()]);
   };
 
@@ -355,7 +358,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
   if (!user) {
     return (
       <div className="h-full flex items-center justify-center px-10 text-center">
-        <p className="text-sm text-muted-foreground">Sign in to use the community.</p>
+        <p className="text-sm text-muted-foreground">{t("community.signInToUse")}</p>
       </div>
     );
   }
@@ -368,8 +371,8 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-3 flex items-end justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The atelier</p>
-          <h1 className="font-serif text-4xl mt-1">Community</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("community.atelier")}</p>
+          <h1 className="font-serif text-4xl mt-1">{t("community.title")}</h1>
         </div>
         <div className="flex items-center gap-3">
           {username && <p className="text-xs text-muted-foreground">@{username}</p>}
@@ -382,7 +385,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
             key={c}
             onClick={() => setTab(c)}
             className={`shrink-0 rounded-full px-4 py-2 text-xs transition ${tab === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-          >{c === "feed" ? "Feed" : c === "chat" ? "Chat" : "Friends"}</button>
+          >{c === "feed" ? t("community.tabFeed") : c === "chat" ? t("community.tabChat") : t("community.tabFriends")}</button>
         ))}
       </div>
 
@@ -402,7 +405,7 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="Search by username"
+                placeholder={t("community.searchByUsername")}
                 className="flex-1 bg-transparent text-sm outline-none"
               />
               {searching && <Loader2 size={13} className="animate-spin text-muted-foreground" />}
@@ -415,21 +418,21 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
                     <span className="text-sm flex-1">{r.username}</span>
                   </button>
                   {r.relation === "friends" ? (
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Friends</span>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("community.friends")}</span>
                   ) : r.relation === "outgoing" ? (
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Pending</span>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("community.pending")}</span>
                   ) : r.relation === "incoming" ? (
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Requested you</span>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("community.requestedYou")}</span>
                   ) : (
                     <button
                       onClick={() => void sendRequest(r.id)}
                       className="h-8 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] active:scale-95 inline-flex items-center gap-1.5"
-                    ><UserPlus size={11} /> Add</button>
+                    ><UserPlus size={11} /> {t("community.add")}</button>
                   )}
                 </div>
               ))}
               {query.trim().length >= 2 && !searching && results.length === 0 && (
-                <p className="text-xs text-muted-foreground py-2">No one found.</p>
+                <p className="text-xs text-muted-foreground py-2">{t("community.noOneFound")}</p>
               )}
             </div>
           </section>
@@ -440,15 +443,15 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
             <>
               {incoming.length > 0 && (
                 <section>
-                  <h2 className="font-serif text-2xl italic mb-2">Requests</h2>
+                  <h2 className="font-serif text-2xl italic mb-2">{t("community.requests")}</h2>
                   {incoming.map((f) => (
                     <div key={f.friendship_id} className="flex items-center gap-3 py-2">
                       <button type="button" onClick={() => openUserProfile?.(f.other_id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
                         <Avatar username={f.username} />
                         <span className="text-sm flex-1">{f.username ?? "—"}</span>
                       </button>
-                      <button onClick={() => void accept(f)} aria-label="Accept" className="h-8 w-8 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"><Check size={13} /></button>
-                      <button onClick={() => void removeFriendship(f, "Request declined")} aria-label="Decline" className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"><X size={13} /></button>
+                      <button onClick={() => void accept(f)} aria-label={t("community.acceptAria")} className="h-8 w-8 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"><Check size={13} /></button>
+                      <button onClick={() => void removeFriendship(f, t("community.toastRequestDeclined"))} aria-label={t("community.declineAria")} className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"><X size={13} /></button>
                     </div>
                   ))}
                 </section>
@@ -456,28 +459,28 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
 
               {outgoing.length > 0 && (
                 <section>
-                  <h2 className="font-serif text-2xl italic mb-2">Sent</h2>
+                  <h2 className="font-serif text-2xl italic mb-2">{t("community.sent")}</h2>
                   {outgoing.map((f) => (
                     <div key={f.friendship_id} className="flex items-center gap-3 py-2">
                       <button type="button" onClick={() => openUserProfile?.(f.other_id)} className="flex items-center gap-3 flex-1 text-left active:scale-[0.98] transition">
                         <Avatar username={f.username} />
                         <span className="text-sm flex-1">{f.username ?? "—"}</span>
                       </button>
-                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Pending</span>
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("community.pending")}</span>
                       <button
-                        onClick={() => void removeFriendship(f, "Request cancelled")}
+                        onClick={() => void removeFriendship(f, t("community.toastRequestCancelled"))}
                         className="h-8 px-3 rounded-full border border-border text-[10px] uppercase tracking-[0.2em] active:scale-95"
-                      >Cancel</button>
+                      >{t("community.cancel")}</button>
                     </div>
                   ))}
                 </section>
               )}
 
               <section>
-                <h2 className="font-serif text-2xl italic mb-2">My friends</h2>
+                <h2 className="font-serif text-2xl italic mb-2">{t("community.myFriends")}</h2>
                 {accepted.length === 0 ? (
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    No friends yet. Search a username above to send your first request.
+                    {t("community.noFriendsYet")}
                   </p>
                 ) : accepted.map((f) => (
                   <div key={f.friendship_id} className="flex items-center gap-3 py-2">
@@ -486,9 +489,9 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
                       <span className="text-sm flex-1">{f.username ?? "—"}</span>
                     </button>
                     <button
-                      onClick={() => void removeFriendship(f, "Friend removed")}
+                      onClick={() => void removeFriendship(f, t("community.toastFriendRemoved"))}
                       className="h-8 px-3 rounded-full border border-border text-[10px] uppercase tracking-[0.2em] active:scale-95"
-                    >Remove</button>
+                    >{t("community.remove")}</button>
                   </div>
                 ))}
               </section>
@@ -502,14 +505,14 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
           <div className="mx-auto h-14 w-14 rounded-full bg-secondary/60 flex items-center justify-center mb-4">
             <Heart size={20} />
           </div>
-          <h2 className="font-serif text-2xl italic">Nothing shared yet</h2>
+          <h2 className="font-serif text-2xl italic">{t("community.nothingSharedYet")}</h2>
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            Your feed shows the looks friends choose to share with you. Add people to get started.
+            {t("community.feedEmptyDesc")}
           </p>
           <button
             onClick={() => setTab("friends")}
             className="mt-6 h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98]"
-          >Find friends</button>
+          >{t("community.findFriends")}</button>
         </section>
       ) : (
         <section className="mt-6 space-y-8">
@@ -531,3 +534,4 @@ export function Community({ go, openConversation, openUserProfile }: { go: (s: S
     </div>
   );
 }
+
