@@ -16,6 +16,7 @@ import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCrop
 import { compressImageForUpload } from "@/lib/image-compress";
 import { trimWhiteMargins } from "@/lib/auto-crop";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { syncMySharedLibrary } from "@/lib/shared-library.functions";
@@ -47,6 +48,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   gapFilter?: "price" | "purchase_date" | null;
   onClearGapFilter?: () => void;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -130,7 +132,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     setSavingEdit(true);
     try {
       const priceNum = edit.price.trim() === "" ? null : Number(edit.price);
-      if (priceNum != null && !Number.isFinite(priceNum)) throw new Error("Invalid price");
+      if (priceNum != null && !Number.isFinite(priceNum)) throw new Error(t("wardrobe.invalidPrice"));
 
       // Only the fields AI ever classifies get tracked here — price,
       // size and purchase date are never AI-assigned, so there's nothing
@@ -175,11 +177,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
       setDetail(updated);
       setEditing(false);
-      toast.success("Item updated");
+      toast.success(t("wardrobe.toastItemUpdated"));
       void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] update", e);
-      toast.error(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastUpdateFailed"));
     } finally {
       setSavingEdit(false);
     }
@@ -213,7 +215,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         attempt++;
       }
       if (!bg.ok) {
-        toast.error("Couldn't remove the background — try again in a moment.");
+        toast.error(t("wardrobe.toastBgRemoveFailed"));
         return;
       }
 
@@ -260,11 +262,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         setSigned((prev) => ({ ...prev, ...additions }));
       }
 
-      toast.success("Background removed");
+      toast.success(t("wardrobe.toastBgRemoved"));
       void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] bg removal failed", e);
-      toast.error(e instanceof Error ? e.message : "Background removal failed");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastBgRemovalGenericFailed"));
     } finally {
       setRemovingBg(false);
     }
@@ -308,11 +310,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         setSigned((prev) => ({ ...prev, ...additions }));
       }
 
-      toast.success("Crop updated");
+      toast.success(t("wardrobe.toastCropUpdated"));
       void syncMySharedLibrary().catch(() => {});
     } catch (e) {
       console.error("[AURA wardrobe] manual crop save failed", e);
-      toast.error(e instanceof Error ? e.message : "Couldn't save that crop");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastCropFailed"));
     } finally {
       setAdjustingCrop(false);
     }
@@ -324,7 +326,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     setTidying(true);
     let changed = 0, checked = 0, failed = 0;
     try {
-      toast.loading("Checking photos…", { id: toastId });
+      toast.loading(t("wardrobe.toastCheckingPhotos"), { id: toastId });
       for (const it of items) {
         const path = toStoragePath(it.image_url);
         const src = path ? signed[path] : "";
@@ -349,7 +351,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           failed++;
         }
         if (checked % 5 === 0 || checked === items.length) {
-          toast.loading(`Checking photos… ${checked}/${items.length}`, { id: toastId });
+          toast.loading(t("wardrobe.toastCheckingPhotosProgress", { checked, total: items.length }), { id: toastId });
         }
       }
 
@@ -358,9 +360,9 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           .select("*").eq("user_id", user.id).order("created_at", { ascending: false });
         setItems((data ?? []) as WardrobeItem[]);
       }
-      const failNote = failed ? ` · ${failed} skipped (couldn't process)` : "";
+      const failNote = failed ? ` · ${t("wardrobe.toastSkippedCount", { count: failed })}` : "";
       toast.success(
-        changed > 0 ? `${changed} photo${changed === 1 ? "" : "s"} tidied${failNote}` : `All photos already tight${failNote}`,
+        changed > 0 ? `${t("wardrobe.toastPhotosTidied", { count: changed })}${failNote}` : `${t("wardrobe.toastAllPhotosTight")}${failNote}`,
         { id: toastId },
       );
     } finally {
@@ -379,13 +381,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         await supabase.storage.from("wardrobe").remove([path]).catch(() => { /* ignore */ });
       }
       setItems((prev) => prev.filter((it) => it.id !== detail.id));
-      toast.success("Item deleted");
+      toast.success(t("wardrobe.toastItemDeleted"));
       void syncMySharedLibrary().catch(() => {});
       setConfirmDelete(false);
       setDetail(null);
     } catch (e) {
       console.error("[AURA wardrobe] delete", e);
-      toast.error(e instanceof Error ? e.message : "Delete failed");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastDeleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -397,7 +399,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, archived } as WardrobeItem : it)));
     setDetail((d) => (d && d.id === item.id ? ({ ...d, archived } as WardrobeItem) : d));
     void syncMySharedLibrary().catch(() => {});
-    toast.success(archived ? "Archived — hidden from styling suggestions until you restore it" : "Restored to your active closet");
+    toast.success(archived ? t("wardrobe.toastArchived") : t("wardrobe.toastRestored"));
   };
 
   const moveDetailItem = async (locationId: string) => {
@@ -406,9 +408,9 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       await moveItems({ data: { itemIds: [detail.id], locationId } });
       setItems((prev) => prev.map((it) => (it.id === detail.id ? { ...it, location_id: locationId } as WardrobeItem : it)));
       setDetail((d) => (d ? ({ ...d, location_id: locationId } as WardrobeItem) : d));
-      toast.success("Moved");
+      toast.success(t("wardrobe.toastMoved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't move item");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastMoveItemFailed"));
     }
   };
 
@@ -433,10 +435,10 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       const ids = Array.from(selectedIds);
       await moveItems({ data: { itemIds: ids, locationId } });
       setItems((prev) => prev.map((it) => (selectedIds.has(it.id) ? { ...it, location_id: locationId } as WardrobeItem : it)));
-      toast.success(`Moved ${ids.length} piece${ids.length === 1 ? "" : "s"}`);
+      toast.success(t("wardrobe.toastMovedCount", { count: ids.length }));
       exitSelectMode();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't move those pieces");
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastMoveSelectionFailed"));
     } finally {
       setMovingSelection(false);
     }
@@ -453,14 +455,14 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
 
       let totalUpdated = 0;
       let round = 0;
-      toast.loading("Updating your wardrobe…", { id: toastId });
+      toast.loading(t("wardrobe.toastUpdatingWardrobe"), { id: toastId });
       while (true) {
         const batch = await reanalyzeBatch({ data: undefined });
         totalUpdated += batch.updated;
         round++;
         if (batch.processed > 0) {
           toast.loading(
-            `Updating — ${totalUpdated} pieces re-analyzed, ${batch.remaining} left…`,
+            t("wardrobe.toastUpdatingProgress", { updated: totalUpdated, remaining: batch.remaining }),
             { id: toastId }
           );
         }
@@ -471,8 +473,8 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       const grandTotal = legacy.updated + totalUpdated;
       toast.success(
         grandTotal > 0
-          ? `Wardrobe updated: ${grandTotal} pieces with new details`
-          : "Your wardrobe is already up to date",
+          ? t("wardrobe.toastWardrobeUpdatedCount", { count: grandTotal })
+          : t("wardrobe.toastAlreadyUpToDate"),
         { id: toastId }
       );
       if (grandTotal > 0) {
@@ -482,7 +484,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       }
     } catch (e) {
       console.error("[AURA wardrobe] update failed", e);
-      toast.error("Update failed", { id: toastId });
+      toast.error(t("wardrobe.toastUpdateFailed"), { id: toastId });
     } finally {
       setMigrating(false);
     }
@@ -513,14 +515,14 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     return Promise.race([query, timeout]).then((result) => {
       if (result === "timeout") {
         console.error("[AURA wardrobe] load timed out after 10s");
-        toast.error("Loading your closet is taking too long — check your connection and retry.");
+        toast.error(t("wardrobe.toastLoadTimeout"));
         setLoading(false);
         return;
       }
       const { data, error } = result;
       if (error) {
         console.error("[AURA wardrobe] load error", error);
-        toast.error(`Couldn't load your closet — ${error.message}`);
+        toast.error(`${t("wardrobe.toastLoadFailed")} — ${error.message}`);
         setLoading(false);
         return;
       }
@@ -583,8 +585,8 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-2 flex items-end justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{items.length} pieces</p>
-          <h1 className="font-serif text-4xl mt-1">Your closet</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.piecesCount", { count: items.length })}</p>
+          <h1 className="font-serif text-4xl mt-1">{t("wardrobe.title")}</h1>
         </div>
                 <div className="flex gap-2">
           {(() => {
@@ -594,13 +596,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
               <button
                 onClick={() => void runLegacyMigration()}
                 disabled={migrating}
-                aria-label="Update wardrobe compatibility — re-analyze existing pieces with AI so outfit and trip generation can use them (may take a while for large wardrobes)"
+                aria-label={t("wardrobe.updateCompatibilityAria")}
                 className={`h-12 rounded-full border border-border flex items-center gap-1.5 active:scale-90 transition disabled:opacity-50 shrink-0 ${hasPending ? "pl-3.5 pr-4" : "w-12 justify-center"}`}
               >
                 {migrating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
                 {hasPending && (
                   <span className="text-[10px] uppercase tracking-[0.2em] whitespace-nowrap">
-                    {migrating ? "Updating…" : `Update ${unclassifiedCount}`}
+                    {migrating ? t("wardrobe.updating") : t("wardrobe.updateCount", { count: unclassifiedCount })}
                   </span>
                 )}
               </button>
@@ -609,7 +611,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
 
           <button
             onClick={() => setAddSheetOpen(true)}
-            aria-label="Add pieces"
+            aria-label={t("wardrobe.addPiecesAria")}
             className="h-12 w-12 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 transition shadow-luxe"
           >
             <Plus size={20} />
@@ -621,12 +623,14 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       {gapFilter && (
         <div className="mx-6 mt-2 flex items-center justify-between gap-2 rounded-2xl bg-[var(--champagne)]/20 border border-[var(--champagne)]/40 px-4 py-2.5">
           <p className="text-xs">
-            Showing {filtered.length} piece{filtered.length === 1 ? "" : "s"} without a {gapFilter === "price" ? "price" : "purchase date"} — tap one to add it.
+            {gapFilter === "price"
+              ? t("wardrobe.gapFilterPrice", { count: filtered.length })
+              : t("wardrobe.gapFilterDate", { count: filtered.length })}
           </p>
           <button
             onClick={() => onClearGapFilter?.()}
             className="shrink-0 text-[10px] uppercase tracking-widest underline text-muted-foreground"
-          >Show all</button>
+          >{t("wardrobe.showAll")}</button>
         </div>
       )}
 
@@ -636,7 +640,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           disabled={tidying || items.length === 0}
           className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground disabled:opacity-40"
         >
-          {tidying ? <Loader2 size={11} className="animate-spin" /> : "🔲"} Tidy all photos
+          {tidying ? <Loader2 size={11} className="animate-spin" /> : "🔲"} {t("wardrobe.tidyAllPhotos")}
         </button>
       </div>
 
@@ -647,20 +651,19 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       />
 
 
-
       {/* Weather / season banner */}
       <div className="mx-6 mt-4 rounded-2xl bg-card border border-border/60 p-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{season} · {city ?? "your area"}</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{season} · {city ?? t("wardrobe.yourArea")}</p>
           {w ? (
             <p className="font-serif text-xl mt-0.5">
               {Math.round(w.temperature)}° · {wLabel?.label}
             </p>
           ) : (
-            <p className="font-serif text-lg mt-0.5 italic text-muted-foreground">Weather unavailable</p>
+            <p className="font-serif text-lg mt-0.5 italic text-muted-foreground">{t("wardrobe.weatherUnavailable")}</p>
           )}
           <p className="text-[11px] text-muted-foreground mt-1">
-            {seasonOnly ? `Showing pieces tagged for ${season.toLowerCase()}` : "Showing every piece"}
+            {seasonOnly ? t("wardrobe.showingTaggedForSeason", { season: season.toLowerCase() }) : t("wardrobe.showingEveryPiece")}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
@@ -671,7 +674,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
               seasonOnly ? "bg-foreground text-background" : "border border-border"
             }`}
           >
-            {seasonOnly ? "This season" : "All seasons"}
+            {seasonOnly ? t("wardrobe.thisSeason") : t("wardrobe.allSeasons")}
           </button>
         </div>
       </div>
@@ -680,7 +683,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         <Search size={15} className="text-muted-foreground" />
         <input
           value={q} onChange={e => setQ(e.target.value)}
-          placeholder="Search by color, fabric, brand…"
+          placeholder={t("wardrobe.searchPlaceholder")}
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
         />
         <Filter size={15} className="text-muted-foreground" />
@@ -693,7 +696,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
             className={`shrink-0 rounded-full px-4 py-2 text-xs tracking-wide transition ${
               cat === c ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
             }`}
-          >{c}</button>
+          >{c === "All" ? t("wardrobe.allCategory") : c}</button>
         ))}
       </div>
 
@@ -702,7 +705,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           onClick={() => setShowArchived((v) => !v)}
           className="mx-6 mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
         >
-          {showArchived ? <><X size={11} /> Back to closet</> : <><Archive size={11} /> Archived ({archivedCount})</>}
+          {showArchived ? <><X size={11} /> {t("wardrobe.backToCloset")}</> : <><Archive size={11} /> {t("wardrobe.archivedCount", { count: archivedCount })}</>}
         </button>
       )}
       {locations.length > 1 && !showArchived && (
@@ -711,7 +714,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
             <button
               onClick={() => setViewLocationId("all")}
               className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest ${viewLocationId === "all" ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
-            >All</button>
+            >{t("wardrobe.allCategory")}</button>
             {locations.map((loc) => (
               <button
                 key={loc.id}
@@ -723,7 +726,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
           <button
             onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
             className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-widest border ${selectMode ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground"}`}
-          >{selectMode ? "Cancel" : "Select"}</button>
+          >{selectMode ? t("wardrobe.cancel") : t("wardrobe.select")}</button>
         </div>
       )}
       {loading ? (
@@ -731,39 +734,39 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       ) : filtered.length === 0 ? (
         <div className="px-6 mt-16 text-center animate-fade-up">
                     <p className="font-serif text-2xl italic">
-            {gapFilter && items.length === 0 ? "Couldn't load your closet" : gapFilter ? "All set — nothing left here" : showArchived ? "Nothing archived" : items.length === 0 ? "Your closet is empty" : `Nothing for ${season.toLowerCase()} yet`}
+            {gapFilter && items.length === 0 ? t("wardrobe.emptyLoadErrorTitle") : gapFilter ? t("wardrobe.emptyGapDoneTitle") : showArchived ? t("wardrobe.emptyArchivedTitle") : items.length === 0 ? t("wardrobe.emptyClosetTitle") : t("wardrobe.emptySeasonTitle", { season: season.toLowerCase() })}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            {gapFilter && items.length === 0 ? "Something went wrong loading your pieces — try again." : gapFilter ? `Every piece now has a ${gapFilter === "price" ? "price" : "purchase date"} on file.` : showArchived ? "Archive a piece that's out of rotation but still worth keeping." : items.length === 0 ? "Add your first piece to begin styling." : "Turn off the season filter to see everything."}
+            {gapFilter && items.length === 0 ? t("wardrobe.emptyLoadErrorSub") : gapFilter ? (gapFilter === "price" ? t("wardrobe.emptyGapDoneSubPrice") : t("wardrobe.emptyGapDoneSubDate")) : showArchived ? t("wardrobe.emptyArchivedSub") : items.length === 0 ? t("wardrobe.emptyClosetSub") : t("wardrobe.emptySeasonSub")}
           </p>
           {gapFilter && items.length === 0 ? (
             <button
               onClick={() => user && void loadItems(user.id)}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
-            >Retry</button>
+            >{t("wardrobe.retry")}</button>
           ) : gapFilter ? (
             <button
               onClick={() => onClearGapFilter?.()}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
-            >Back to closet</button>
+            >{t("wardrobe.backToCloset")}</button>
           ) : items.length === 0 ? (
 
             <button
               onClick={() => go("add")}
               className="mt-6 h-12 px-6 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs"
-            >Add a piece</button>
+            >{t("wardrobe.addAPiece")}</button>
           ) : (
             <button
               onClick={() => setSeasonOnly(false)}
               className="mt-6 h-12 px-6 rounded-full border border-border uppercase tracking-[0.3em] text-xs"
-            >Show all seasons</button>
+            >{t("wardrobe.showAllSeasons")}</button>
           )}
         </div>
       ) : (
         <div className="px-6 mt-6 grid grid-cols-2 gap-x-3 gap-y-5">
           {filtered.map((it, i) => {
             const src = thumbSrc(it, signed);
-            const label = (it.colors?.[0] ?? it.color ?? it.category ?? "Wardrobe piece");
+            const label = (it.colors?.[0] ?? it.color ?? it.category ?? t("wardrobe.wardrobePieceFallback"));
             const isSelected = selectedIds.has(it.id);
             return (
             <button
@@ -1190,5 +1193,3 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     </div>
   );
 }
-
-          
