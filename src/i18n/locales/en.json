@@ -322,4 +322,34 @@
     "moveSelectionTitle_one": "Move {{count}} piece to…",
     "moveSelectionTitle_other": "Move {{count}} pieces to…"
   }
-}
+},
+  "addItem": {
+    "toastSelectImage": "Please select an image",
+    "toastInvalidUrl": "Please enter a valid URL",
+    "toastDoubleCheckPhotoTitle": "Double-check the photo",
+    "toastDoubleCheckPhotoDesc": "We couldn't verify this image against the product page — make sure it's the right piece.",
+    "toastCheckColorTitle": "Check the color",
+    "toastImportUrlFailed": "Could not import from that URL",
+    "toastAddBrandFirst": "Add a brand or category first so we know what to search for.",
+    "toastTakePhotoFirst": "Take or choose a photo first.",
+    "errSignInSearchPhoto": "You must be signed in to search by photo.",
+    "errCouldNotSignUrl": "Could not sign the image URL.",
+    "toastPhotoSearchFailed": "Could not start the photo search. Please try again.",
+    "toastNoPhotoYetManual": "This entry has no photo yet — add the item manually.",
+    "toastLoadedFromLibraryTitle": "Loaded from the AURA Library",
+    "toastDoubleCheckDetails": "Double-check the details before saving.",
+    "toastCouldNotLoadProduct": "Could not load that product",
+    "toastNoPhotoAvailable": "This entry has no photo available.",
+    "toastLoadedFromSharedTitle": "Loaded from the shared library",
+    "toastLoadedFromSharedDesc": "Details are yours to edit before saving.",
+    "toastCouldNotLoadPiece": "Could not load that piece",
+    "toastCouldNotLoadPhoto": "Could not load that photo",
+    "errSignInAddPiece": "You must be signed in to add a piece.",
+    "toastBgNotRemovedTitle": "Background not removed",
+    "toastAddedToCloset": "Added to your closet",
+    "errFailedToSave": "Failed to save wardrobe item.",
+    "stageCleaningUp": "Cleaning up image…",
+    "stageAnalyzing": "Analyzing your item…",
+    "stageReady": "AI suggestions ready · edit anything"
+  }
+
