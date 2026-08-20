@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Check } from "lucide-react";
 import type { Screen } from "../AuraApp";
@@ -19,6 +20,7 @@ function Avatar({ url, label, size = 44 }: { url?: string | null; label?: string
 }
 
 function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const { t } = useTranslation();
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
@@ -34,7 +36,7 @@ function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: 
         setFriends(list);
         setAvatars(await signPaths("avatars", list.map((f) => f.profile_image)));
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Impossibile caricare gli amici");
+        toast.error(e instanceof Error ? e.message : t("chats.toastCouldNotLoadFriends"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -54,7 +56,7 @@ function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: 
         : await createGroup(selected);
       onCreated(id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Impossibile creare la conversazione");
+      toast.error(e instanceof Error ? e.message : t("chats.toastCouldNotCreate"));
     } finally {
       setBusy(false);
     }
@@ -66,16 +68,16 @@ function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: 
         onClick={(e) => e.stopPropagation()}
         className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 max-h-[82vh] overflow-y-auto overscroll-contain"
       >
-        <p className="font-serif italic text-lg">Nuova conversazione</p>
+        <p className="font-serif italic text-lg">{t("chats.newConversation")}</p>
         <p className="text-xs text-muted-foreground">
-          Seleziona un amico per una chat 1:1, o più amici per creare un gruppo.
+          {t("chats.selectFriendHint")}
         </p>
 
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={18} /></div>
         ) : friends.length === 0 ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Non hai ancora amici. Vai su Community → Friends per aggiungerne.
+            {t("chats.noFriendsYet")}
           </p>
         ) : (
           <>
@@ -103,7 +105,7 @@ function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: 
               className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
               {busy && <Loader2 size={12} className="animate-spin" />}
-              {selected.length > 1 ? "Crea gruppo" : "Apri chat"}
+              {selected.length > 1 ? t("chats.createGroup") : t("chats.openChat")}
             </button>
           </>
         )}
@@ -114,13 +116,14 @@ function NewChatSheet({ onClose, onCreated }: { onClose: () => void; onCreated: 
 }
 
 export function Chats({ go, openThread }: { go: (s: Screen) => void; openThread: (id: string) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [newChat, setNewChat] = useState(false);
 
   if (!user) {
     return (
       <div className="h-full flex items-center justify-center px-10 text-center">
-        <p className="text-sm text-muted-foreground">Accedi per usare la chat.</p>
+        <p className="text-sm text-muted-foreground">{t("chats.signInToUse")}</p>
       </div>
     );
   }
@@ -131,10 +134,10 @@ export function Chats({ go, openThread }: { go: (s: Screen) => void; openThread:
         <button onClick={() => go("community")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={15} />
         </button>
-        <p className="font-serif text-lg italic">Chat</p>
+        <p className="font-serif text-lg italic">{t("chats.title")}</p>
         <button
           onClick={() => setNewChat(true)}
-          aria-label="Nuova conversazione"
+          aria-label={t("chats.newConversation")}
           className="h-10 w-10 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"
         ><Plus size={15} /></button>
       </header>
