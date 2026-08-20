@@ -1,6 +1,7 @@
 import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -185,6 +186,7 @@ function materialOf(it: ProductLibraryItem | SharedLibraryItem): string | null {
 }
 
 export function AddItem({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { loading: authLoading } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
   const fetchLocations = useServerFn(listLocations);
@@ -331,7 +333,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const onPick = async (f: File | null) => {
     if (!f) return;
-    if (!isImageFile(f)) { toast.error("Please select an image"); return; }
+    if (!isImageFile(f)) { toast.error(t("addItem.toastSelectImage")); return; }
     setAltImages([]);
     await runPipeline(f);
   };
@@ -340,7 +342,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (!raw) return;
     let parsed: URL;
     try { parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`); }
-    catch { toast.error("Please enter a valid URL"); return; }
+    catch { toast.error(t("addItem.toastInvalidUrl")); return; }
 
     setImporting(true);
     try {
@@ -363,17 +365,17 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       });
       if (result.title) toast.message(result.title, { description: result.price ?? undefined });
       if (result.confidence === "low") {
-        toast.message("Double-check the photo", {
-          description: "We couldn't verify this image against the product page — make sure it's the right piece.",
+        toast.message(t("addItem.toastDoubleCheckPhotoTitle"), {
+          description: t("addItem.toastDoubleCheckPhotoDesc"),
         });
       }
             if (result.colorWarning) {
-        toast.message("Check the color", { description: result.colorWarning });
+        toast.message(t("addItem.toastCheckColorTitle"), { description: result.colorWarning });
       }
     } catch (e) {
 
       console.error("[AURA import-url]", e);
-      toast.error("Could not import from that URL");
+      toast.error(t("addItem.toastImportUrlFailed"));
     } finally {
       setImporting(false);
     }
@@ -394,7 +396,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       category,
       color: colors[0],
     });
-    if (!query) { toast.error("Add a brand or category first so we know what to search for."); return; }
+    if (!query) { toast.error(t("addItem.toastAddBrandFirst")); return; }
     window.open(buildGoogleSearchUrl(query), "_blank", "noopener,noreferrer");
   };
 
@@ -404,11 +406,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
    *  scadenza (mai il path permanente, per non lasciare in giro link
    *  validi a lungo termine a una foto privata dell'utente). */
   const handleSearchByPhoto = async () => {
-    if (!file) { toast.error("Take or choose a photo first."); return; }
+    if (!file) { toast.error(t("addItem.toastTakePhotoFirst")); return; }
     setSearchingByPhoto(true);
     try {
       const { data: auth, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !auth?.user?.id) throw new Error("You must be signed in to search by photo.");
+      if (authErr || !auth?.user?.id) throw new Error(t("addItem.errSignInSearchPhoto"));
       const uid = auth.user.id;
 
       const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
@@ -424,12 +426,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       const { data: signed, error: signErr } = await supabase.storage
         .from("wardrobe")
         .createSignedUrl(tmpPath, 600);
-      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("Could not sign the image URL.");
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error(t("addItem.errCouldNotSignUrl"));
 
       window.open(buildGoogleLensUrl(signed.signedUrl), "_blank", "noopener,noreferrer");
     } catch (e) {
       console.error("[AURA search-by-photo]", e);
-      toast.error("Could not start the photo search. Please try again.");
+      toast.error(t("addItem.toastPhotoSearchFailed"));
     } finally {
       setSearchingByPhoto(false);
     }
@@ -437,7 +439,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
 
   const handleSelectProduct = async (p: ProductLibraryItem) => {
     if (libraryLoadingId) return;
-    if (!p.canonical_image_url) { toast.error("This entry has no photo yet — add the item manually."); return; }
+    if (!p.canonical_image_url) { toast.error(t("addItem.toastNoPhotoYetManual")); return; }
     setLibraryLoadingId(p.id);
     try {
       const res = await downloadImage({ data: { url: p.canonical_image_url } });
@@ -454,10 +456,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         season: p.season || undefined,
         materials: p.material ? [p.material] : undefined,
       });
-      toast.message("Loaded from the AURA Library", { description: "Double-check the details before saving." });
+      toast.message(t("addItem.toastLoadedFromLibraryTitle"), { description: t("addItem.toastDoubleCheckDetails") });
     } catch (e) {
       console.error("[AURA product-library] select failed", e);
-      toast.error("Could not load that product");
+      toast.error(t("addItem.toastCouldNotLoadProduct"));
     } finally {
       setLibraryLoadingId(null);
     }
@@ -469,7 +471,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
    *  default. Price/size arrivano pre-compilati ma restano editabili. */
   const handleSelectShared = async (s: SharedLibraryItem) => {
     if (libraryLoadingId) return;
-    if (!s.signed_url) { toast.error("This entry has no photo available."); return; }
+    if (!s.signed_url) { toast.error(t("addItem.toastNoPhotoAvailable")); return; }
     setLibraryLoadingId(s.id);
     try {
       const res = await downloadImage({ data: { url: s.signed_url } });
@@ -488,10 +490,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         currency: s.currency || undefined,
       });
       if (s.size) setSize(s.size);
-      toast.message("Loaded from the shared library", { description: "Details are yours to edit before saving." });
+      toast.message(t("addItem.toastLoadedFromSharedTitle"), { description: t("addItem.toastLoadedFromSharedDesc") });
     } catch (e) {
       console.error("[AURA shared-library] select failed", e);
-      toast.error("Could not load that piece");
+      toast.error(t("addItem.toastCouldNotLoadPiece"));
     } finally {
       setLibraryLoadingId(null);
     }
@@ -571,7 +573,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       });
     } catch (e) {
       console.error("[AURA import-alt]", e);
-      toast.error("Could not load that photo");
+      toast.error(t("addItem.toastCouldNotLoadPhoto"));
     } finally {
       setAltLoading(null);
     }
@@ -623,7 +625,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
             setPreview(URL.createObjectURL(cleanFile));
             setTransparent(isTransparent);
           } else {
-            toast.message("Background not removed", { description: bg.error });
+            toast.message(t("addItem.toastBgNotRemovedTitle"), { description: bg.error });
           }
         } catch (e) {
           console.warn("[AURA] bg removal failed", e);
@@ -633,7 +635,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       }
 
       const { data: auth, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !auth?.user?.id) throw new Error("You must be signed in to add a piece.");
+      if (authErr || !auth?.user?.id) throw new Error(t("addItem.errSignInAddPiece"));
       const uid = auth.user.id;
 
       const trimmedFile = await trimFileMargins(fileToSave);
@@ -706,12 +708,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
           .from("wardrobe_items").insert(payload as never).select("*").single());
       }
       if (insErr) throw insErr;
-      toast.success("Added to your closet");
+      toast.success(t("addItem.toastAddedToCloset"));
       void syncMySharedLibrary().catch(() => {});
       window.dispatchEvent(new CustomEvent("aura:wardrobe-item-created", { detail: inserted }));
       onClose();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : (typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : "Failed to save wardrobe item.");
+      const msg = e instanceof Error ? e.message : (typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : t("addItem.errFailedToSave"));
       console.error("[AURA wardrobe] save failed", e);
       setErr(msg);
       toast.error(msg);
@@ -721,9 +723,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   };
 
   const stageLabel =
-    stage === "bgremove" ? "Cleaning up image…" :
-    stage === "analyze"  ? "Analyzing your item…" :
-    "AI suggestions ready · edit anything";
+    stage === "bgremove" ? t("addItem.stageCleaningUp") :
+    stage === "analyze"  ? t("addItem.stageAnalyzing") :
+    t("addItem.stageReady");
+
 
   return (
     <div className="absolute inset-0 z-50 bg-background animate-slide-up flex flex-col">
@@ -1145,6 +1148,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               options={categories}
               value={category}
               onChange={(c) => {
+                setCategory(c); setSubcategory("");
                 setCategory(c); setSubcategory("");
                 setLength(""); setSleeveLength(""); setFit("");
                 setHeelHeight(""); setToeShape(""); setClosure("");
