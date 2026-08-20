@@ -960,8 +960,10 @@ export type Database = {
           gender: string | null
           id: string
           industry: string | null
+          language: string | null
           latitude: number | null
           longitude: number | null
+          notification_preferences: Json
           owned_brands: string[]
           personal_formality: string | null
           profession: string | null
@@ -995,8 +997,10 @@ export type Database = {
           gender?: string | null
           id?: string
           industry?: string | null
+          language?: string | null
           latitude?: number | null
           longitude?: number | null
+          notification_preferences?: Json
           owned_brands?: string[]
           personal_formality?: string | null
           profession?: string | null
@@ -1030,8 +1034,10 @@ export type Database = {
           gender?: string | null
           id?: string
           industry?: string | null
+          language?: string | null
           latitude?: number | null
           longitude?: number | null
+          notification_preferences?: Json
           owned_brands?: string[]
           personal_formality?: string | null
           profession?: string | null
