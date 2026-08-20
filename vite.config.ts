@@ -28,7 +28,6 @@ export default defineConfig({
         "react-dom/client",
         "@tanstack/react-router",
         "@tanstack/react-query",
-        "@tanstack/react-start",
       ],
     },
   },

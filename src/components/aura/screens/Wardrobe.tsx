@@ -12,7 +12,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
-import { ItemCropAdjuster, type FractionalBox } from "@/components/aura/ItemCropAdjuster";
+import { ItemCropAdjuster } from "@/components/aura/ItemCropAdjuster";
+import type { FractionalBox } from "@/components/aura/ItemCropAdjuster";
 import { compressImageForUpload } from "@/lib/image-compress";
 import { trimWhiteMargins } from "@/lib/auto-crop";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -53,7 +54,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
-    const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [items, setItems] = useState<WardrobeItem[]>([]);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
