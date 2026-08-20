@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   ArrowLeft, Loader2, Send, ImagePlus, Heart, ThumbsDown, MessageCircle,
@@ -28,6 +29,7 @@ function OutfitBubble({
 }: {
   m: ChatMessage; meId: string; imageUrl: string | null; onChanged: () => void;
 }) {
+  const { t } = useTranslation();
   const [openComments, setOpenComments] = useState(false);
   const [comments, setComments] = useState<MessageComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -36,7 +38,7 @@ function OutfitBubble({
   const loadComments = useCallback(async () => {
     setLoadingComments(true);
     try { setComments(await listMessageComments(m.id)); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Commenti non disponibili"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("chatThread.toastCommentsUnavailable")); }
     finally { setLoadingComments(false); }
   }, [m.id]);
 
@@ -44,7 +46,7 @@ function OutfitBubble({
     try {
       await toggleReaction(m.id, meId, type, m.my_reaction);
       onChanged();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Reazione non riuscita"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("chatThread.toastReactionFailed")); }
   };
 
   const submitComment = async () => {
@@ -55,7 +57,7 @@ function OutfitBubble({
       setBody("");
       await loadComments();
       onChanged();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Commento non riuscito"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("chatThread.toastCommentFailed")); }
   };
 
   const ev = (m.event_snapshot ?? null) as { title?: string; date?: string; location?: string } | null;
@@ -67,7 +69,7 @@ function OutfitBubble({
           <img src={imageUrl} alt="Outfit" className="aspect-[4/5] w-full object-contain" />
         ) : (
           <div className="aspect-[4/5] flex items-center justify-center text-xs text-muted-foreground">
-            Immagine non disponibile
+            {t("chatThread.imageUnavailable")}
           </div>
         )}
       </div>
@@ -105,7 +107,7 @@ function OutfitBubble({
           {loadingComments ? (
             <Loader2 size={14} className="animate-spin" />
           ) : comments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nessun commento.</p>
+            <p className="text-xs text-muted-foreground">{t("chatThread.noComments")}</p>
           ) : comments.map((c) => (
             <p key={c.id} className="text-sm">
               <span className="font-medium">{c.username ?? "—"}</span>{" "}
@@ -116,13 +118,13 @@ function OutfitBubble({
             <input
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Aggiungi un commento…"
+              placeholder={t("chatThread.addCommentPlaceholder")}
               className="flex-1 bg-secondary/60 rounded-full px-3 py-2 text-sm outline-none"
             />
             <button
               onClick={() => void submitComment()}
               disabled={!body.trim()}
-              aria-label="Invia commento"
+              aria-label={t("chatThread.sendCommentAria")}
               className="h-8 w-8 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-40 active:scale-90"
             ><Send size={13} /></button>
           </div>
@@ -143,6 +145,7 @@ function GroupSheet({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useTranslation();
   const [friends, setFriends] = useState<Friendship[]>([]);
   const isAdmin = conversation.my_role === "admin";
   const active = participants.filter((p) => !p.left_at);
@@ -155,7 +158,7 @@ function GroupSheet({
 
   const run = async (fn: () => Promise<void>, ok: string) => {
     try { await fn(); toast.success(ok); onChanged(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Operazione non riuscita"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("chatThread.toastOperationFailed")); }
   };
 
   const addable = friends.filter((f) => !active.some((p) => p.user_id === f.other_id));
@@ -166,7 +169,7 @@ function GroupSheet({
         onClick={(e) => e.stopPropagation()}
         className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4 max-h-[82vh] overflow-y-auto overscroll-contain"
       >
-        <p className="font-serif italic text-lg">Partecipanti</p>
+        <p className="font-serif italic text-lg">{t("chatThread.participants")}</p>
 
         <div className="space-y-1">
           {active.map((p) => (
@@ -175,21 +178,21 @@ function GroupSheet({
                 {initials(p.username)}
               </div>
               <span className="text-sm flex-1">
-                {p.username ?? "—"}{p.user_id === meId ? " (tu)" : ""}
+                {p.username ?? "—"}{p.user_id === meId ? ` ${t("chatThread.youSuffix")}` : ""}
               </span>
-              {p.role === "admin" && <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground">Admin</span>}
+              {p.role === "admin" && <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{t("chatThread.admin")}</span>}
               {isAdmin && p.user_id !== meId && (
                 <>
                   {p.role !== "admin" && (
                     <button
-                      onClick={() => void run(() => promoteToAdmin(conversation.conversation_id, p.user_id), "Promosso ad admin")}
-                      aria-label="Promuovi ad admin"
+                      onClick={() => void run(() => promoteToAdmin(conversation.conversation_id, p.user_id), t("chatThread.toastPromoted"))}
+                      aria-label={t("chatThread.promoteAria")}
                       className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"
                     ><Crown size={12} /></button>
                   )}
                   <button
-                    onClick={() => void run(() => removeParticipant(conversation.conversation_id, p.user_id), "Partecipante rimosso")}
-                    aria-label="Rimuovi partecipante"
+                    onClick={() => void run(() => removeParticipant(conversation.conversation_id, p.user_id), t("chatThread.toastParticipantRemoved"))}
+                    aria-label={t("chatThread.removeParticipantAria")}
                     className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"
                   ><UserMinus size={12} /></button>
                 </>
@@ -200,23 +203,23 @@ function GroupSheet({
 
         {addable.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Aggiungi amici</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("chatThread.addFriends")}</p>
             {addable.map((f) => (
               <div key={f.other_id} className="flex items-center gap-3 py-2">
                 <span className="text-sm flex-1">{f.username ?? "—"}</span>
                 <button
-                  onClick={() => void run(() => addParticipant(conversation.conversation_id, f.other_id), "Aggiunto al gruppo")}
+                  onClick={() => void run(() => addParticipant(conversation.conversation_id, f.other_id), t("chatThread.toastAddedToGroup"))}
                   className="h-8 px-3 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] active:scale-95 inline-flex items-center gap-1.5"
-                ><UserPlus size={11} /> Aggiungi</button>
+                ><UserPlus size={11} /> {t("chatThread.add")}</button>
               </div>
             ))}
           </div>
         )}
 
         <button
-          onClick={() => void run(async () => { await leaveConversation(conversation.conversation_id); onClose(); }, "Hai lasciato il gruppo")}
+          onClick={() => void run(async () => { await leaveConversation(conversation.conversation_id); onClose(); }, t("chatThread.toastLeftGroup"))}
           className="w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
-        ><LogOut size={12} /> Esci dal gruppo</button>
+        ><LogOut size={12} /> {t("chatThread.leaveGroup")}</button>
       </div>
     </div>,
     document.body,
@@ -232,6 +235,7 @@ export function ChatThread({
   conversationId: string;
   onBack: () => void;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -261,7 +265,7 @@ export function ChatThread({
       setImages(await signPaths("outfits", msgs.map((m) => m.snapshot_image_url)));
       await markRead(conversationId);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Impossibile aprire la conversazione");
+      toast.error(e instanceof Error ? e.message : t("chatThread.toastCouldNotOpen"));
     } finally {
       setLoading(false);
     }
@@ -287,7 +291,7 @@ export function ChatThread({
   }, [messages.length]);
 
   const nameOf = useCallback(
-    (id: string) => participants.find((p) => p.user_id === id)?.username ?? "qualcuno",
+    (id: string) => participants.find((p) => p.user_id === id)?.username ?? t("chatThread.someone"),
     [participants],
   );
 
@@ -304,7 +308,7 @@ export function ChatThread({
       setText("");
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Messaggio non inviato");
+      toast.error(e instanceof Error ? e.message : t("chatThread.toastMessageFailed"));
     } finally {
       setSending(false);
     }
@@ -333,7 +337,7 @@ export function ChatThread({
       setText("");
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Outfit non condiviso");
+      toast.error(e instanceof Error ? e.message : t("chatThread.toastOutfitFailed"));
     } finally {
       setSending(false);
     }
@@ -343,20 +347,20 @@ export function ChatThread({
   const toggleBlock = async () => {
     if (!user || !otherId) return;
     try {
-      if (isBlockedByMe) { await unblockUser(user.id, otherId); toast.success("Utente sbloccato"); }
-      else { await blockUser(user.id, otherId); toast.success("Utente bloccato — la chat è in sola lettura"); }
+      if (isBlockedByMe) { await unblockUser(user.id, otherId); toast.success(t("chatThread.toastUserUnblocked")); }
+      else { await blockUser(user.id, otherId); toast.success(t("chatThread.toastUserBlocked")); }
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Operazione non riuscita");
+      toast.error(e instanceof Error ? e.message : t("chatThread.toastOperationFailed"));
     }
   };
 
-  const header = useMemo(() => conversation?.title ?? "Chat", [conversation]);
+  const header = useMemo(() => conversation?.title ?? t("chatThread.title"), [conversation]);
 
   if (!user) {
     return (
       <div className="h-full flex items-center justify-center px-10 text-center">
-        <p className="text-sm text-muted-foreground">Accedi per usare la chat.</p>
+        <p className="text-sm text-muted-foreground">{t("chatThread.signInToUse")}</p>
       </div>
     );
   }
@@ -371,20 +375,20 @@ export function ChatThread({
           <p className="text-sm truncate">{header}</p>
           {conversation?.is_group && (
             <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              {conversation.member_count} partecipanti
+              {t("chatThread.membersCount", { count: conversation.member_count })}
             </p>
           )}
         </div>
         {conversation?.is_group ? (
           <button
             onClick={() => setGroupSheet(true)}
-            aria-label="Gestisci gruppo"
+            aria-label={t("chatThread.manageGroupAria")}
             className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
           ><Users size={15} /></button>
         ) : otherId ? (
           <button
             onClick={() => void toggleBlock()}
-            aria-label={isBlockedByMe ? "Sblocca" : "Blocca"}
+            aria-label={isBlockedByMe ? t("chatThread.unblockAria") : t("chatThread.blockAria")}
             className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
           >{isBlockedByMe ? <ShieldOff size={15} /> : <Shield size={15} />}</button>
         ) : null}
@@ -395,7 +399,7 @@ export function ChatThread({
           <div className="flex justify-center py-16"><Loader2 className="animate-spin" /></div>
         ) : messages.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground mt-10">
-            Nessun messaggio. Scrivi qualcosa o condividi un outfit.
+            {t("chatThread.noMessages")}
           </p>
         ) : messages.map((m) => {
           if (m.content_type === "system") {
@@ -420,7 +424,7 @@ export function ChatThread({
                 />
               ) : (
                 <div className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm ${mine ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                  {m.deleted_at ? <span className="italic opacity-60">Messaggio eliminato</span> : m.body}
+                  {m.deleted_at ? <span className="italic opacity-60">{t("chatThread.messageDeleted")}</span> : m.body}
                 </div>
               )}
               <span className="text-[9px] text-muted-foreground mt-1 px-1">{formatTime(m.created_at)}</span>
@@ -434,28 +438,28 @@ export function ChatThread({
         {!canSend ? (
           <p className="text-center text-xs text-muted-foreground py-3">
             {isBlockedByMe
-              ? "Hai bloccato questa persona: la conversazione è in sola lettura."
-              : "Questa conversazione è in sola lettura."}
+              ? t("chatThread.readOnlyBlocked")
+              : t("chatThread.readOnlyGeneric")}
           </p>
         ) : (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPicker(true)}
-              aria-label="Allega outfit"
+              aria-label={t("chatThread.attachOutfitAria")}
               className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90 shrink-0"
             ><ImagePlus size={16} /></button>
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
-              placeholder="Scrivi un messaggio…"
+              placeholder={t("chatThread.messagePlaceholder")}
               maxLength={2000}
               className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
             />
             <button
               onClick={() => void send()}
               disabled={!text.trim() || sending}
-              aria-label="Invia"
+              aria-label={t("chatThread.sendAria")}
               className="h-10 w-10 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-40 active:scale-90 shrink-0"
             >{sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}</button>
           </div>
