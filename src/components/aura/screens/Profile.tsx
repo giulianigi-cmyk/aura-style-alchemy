@@ -1,24 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Settings, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info, QrCode } from "lucide-react";
+import { Settings as SettingsIcon, Share2, ChevronRight, LogOut, Pencil, Check, X, Camera, Loader2, User, Info, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { useAuth } from "@/hooks/use-auth";
-import { useProfile, calcAge } from "@/hooks/use-profile";
+import { useProfile } from "@/hooks/use-profile";
 import { WeatherPanel } from "../WeatherPanel";
-import { CalendarConnectionSection, AppleCalendarConnectionSection, OutlookCalendarConnectionSection } from "../CalendarConnectionSection";
 import { MyBrands } from "../MyBrands";
-import { WardrobeLocationsSection } from "../WardrobeLocationsSection";
 import { supabase } from "@/integrations/supabase/client";
-import { syncMySharedLibrary } from "@/lib/shared-library.functions";
-import { sizeEquivalences } from "@/lib/size-conversion";
 import { AvatarCropper } from "../AvatarCropper";
-import { DressPreferencesSection } from "../DressPreferencesSection";
 import { USERNAME_RE } from "@/lib/community";
 import { AURA_APP_URL, nativeShareText } from "@/lib/aura-share";
 import { QrFullscreen } from "../MyQrCode";
 import { ProfileSocial } from "../ProfileSocial";
-import i18n, { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, type SupportedLanguage } from "@/i18n/config";
 
 
 const STYLES = [
@@ -92,21 +85,10 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
 
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [birthDate, setBirthDate] = useState<string>("");
-  const [gender, setGender] = useState<string>("");
-  const [industry, setIndustry] = useState<string>("");
-  const [workDressCode, setWorkDressCode] = useState<string>("");
-    const [personalFormality, setPersonalFormality] = useState<string>("");
-    const [styleBoldness, setStyleBoldness] = useState<string>("");
-  const [workDays, setWorkDays] = useState<string[]>(["MO", "TU", "WE", "TH", "FR"]);
-  const [workStartTime, setWorkStartTime] = useState("09:00");
-  const [workEndTime, setWorkEndTime] = useState("18:00");
-
-  const [infoPopup, setInfoPopup] = useState<"work" | "formality" | "style" | "sharing" | null>(null);
+  const [infoPopup, setInfoPopup] = useState<"style" | null>(null);
   const [profession, setProfession] = useState<string>("");
   const [bio, setBio] = useState<string>("");
     const [styles, setStyles] = useState<string[]>([]);
-  const [shareLibrary, setShareLibrary] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -115,20 +97,9 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
   useEffect(() => {
     if (!profile) return;
     setFullName(profile.full_name ?? "");
-    setBirthDate(profile.birth_date ?? "");
-    setGender(profile.gender ?? "");
-    setIndustry(profile.industry ?? "");
-    setWorkDressCode(profile.work_dress_code ?? "");
-        setPersonalFormality(profile.personal_formality ?? "");
-        setStyleBoldness((profile as unknown as { style_boldness?: string }).style_boldness ?? "");
-        setWorkDays((profile as unknown as { work_days?: string[] }).work_days ?? ["MO", "TU", "WE", "TH", "FR"]);
-        setWorkStartTime((profile as unknown as { work_start_time?: string }).work_start_time ?? "09:00");
-        setWorkEndTime((profile as unknown as { work_end_time?: string }).work_end_time ?? "18:00");
-
     setProfession(profile.profession ?? "");
     setBio(profile.bio ?? "");
         setStyles(profile.style_preferences ?? []);
-    setShareLibrary(Boolean((profile as unknown as { share_wardrobe_to_library?: boolean }).share_wardrobe_to_library));
   }, [profile]);
 
   const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
@@ -138,26 +109,13 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
     setSaving(true); setErr(null);
     const { error } = await update({
       full_name: fullName.trim() || null,
-      birth_date: birthDate || null,
-      gender: gender || null,
-      industry: industry || null,
-      work_dress_code: workDressCode || null,
-      personal_formality: personalFormality || null,
-            style_boldness: styleBoldness || null,
-      work_days: workDays,
-      work_start_time: workStartTime,
-      work_end_time: workEndTime,
-
       profession: profession.trim() || null,
       bio: bio.trim() || null,
             style_preferences: styles,
-      share_wardrobe_to_library: shareLibrary,
       setup_complete: true,
     } as never);
     setSaving(false);
     if (error) { setErr(error); toast.error("Couldn't save profile"); return; }
-    // Il consenso può essere appena cambiato: riallinea (o svuota) la libreria condivisa.
-    void syncMySharedLibrary().catch(() => {});
     toast.success("Profile updated");
     setEditing(false);
   };
@@ -236,6 +194,11 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
             aria-label="My QR code"
             className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
           ><QrCode size={15} /></button>
+          <button
+            onClick={() => _go("settings")}
+            aria-label="Settings"
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          ><SettingsIcon size={15} /></button>
         </div>
       </header>
 
@@ -287,183 +250,6 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
       {editing && (
         <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-5 space-y-5 animate-fade-up">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</p>
-            <input
-              type="date" max={new Date().toISOString().slice(0, 10)}
-              value={birthDate} onChange={e => setBirthDate(e.target.value)}
-              className="mt-1 w-full bg-transparent border-b border-border py-1.5 font-serif text-xl outline-none focus:border-foreground transition"
-            />
-            {birthDate && (
-              <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                Age · {calcAge(birthDate) ?? "—"}
-              </p>
-            )}
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Gender</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {GENDERS.map(g => (
-                <button key={g} onClick={() => setGender(g)}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${gender === g ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {g}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Industry</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Optional — soft context AURA weighs alongside your work dress code and personal style, never a fixed rule.</p>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {INDUSTRIES.map(i => (
-                <button key={i} onClick={() => setIndustry(i)}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${industry === i ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {i}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Usual work dress code</p>
-              <button onClick={() => setInfoPopup("work")} aria-label="What do these terms mean?" className="text-muted-foreground active:scale-90">
-                <Info size={12} />
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {WORK_DRESS_CODES.map(w => (
-                <button key={w} onClick={() => setWorkDressCode(w)}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${workDressCode === w ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your everyday formality</p>
-              <button onClick={() => setInfoPopup("formality")} aria-label="What do these terms mean?" className="text-muted-foreground active:scale-90">
-                <Info size={12} />
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">So AURA never suggests a blazer to someone who hates them, even when "technically correct".</p>
-            <div className="mt-1 flex flex-wrap gap-2">
-                           {PERSONAL_FORMALITY.map(f => (
-                <button key={f} onClick={() => setPersonalFormality(f)}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${personalFormality === f ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">How much do you like to experiment?</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">For occasions that aren't strictly formal (weekend, work depending on your job, casual dinners) — AURA will lean toward this instead of asking each time. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.</p>
-            <div className="mt-1 flex flex-wrap gap-2">
-                            {STYLE_BOLDNESS.map(b => (
-                <button key={b} onClick={() => setStyleBoldness(styleBoldness === b ? "" : b)}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${styleBoldness === b ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Work days</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Used when generating a week of work outfits at once.</p>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {WEEKDAYS.map(d => {
-                const on = workDays.includes(d.code);
-                return (
-                  <button key={d.code} onClick={() => setWorkDays(on ? workDays.filter(c => c !== d.code) : [...workDays, d.code])}
-                    className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                    {d.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="flex-1">
-                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">From</p>
-                <input
-                  type="time"
-                  value={workStartTime}
-                  onChange={(e) => setWorkStartTime(e.target.value)}
-                  className="w-full bg-background border border-border rounded-full px-3 py-2 text-sm outline-none"
-                />
-              </div>
-              <div className="flex-1">
-                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">To</p>
-                <input
-                  type="time"
-                  value={workEndTime}
-                  onChange={(e) => setWorkEndTime(e.target.value)}
-                  className="w-full bg-background border border-border rounded-full px-3 py-2 text-sm outline-none"
-                />
-              </div>
-            </div>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
-              An evening event outside these hours won't stop AURA from also planning your work outfit for that day.
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Shared library</p>
-              <button onClick={() => setInfoPopup("sharing")} aria-label="How does the shared library work?" className="text-muted-foreground active:scale-90">
-                <Info size={12} />
-              </button>
-            </div>
-            <button
-              role="switch"
-              aria-checked={shareLibrary}
-              onClick={() => setShareLibrary((v) => !v)}
-              className="mt-2 w-full flex items-start gap-3 rounded-2xl border border-border bg-background p-3 text-left active:scale-[0.99] transition"
-            >
-              <span className={`mt-0.5 h-5 w-9 shrink-0 rounded-full transition ${shareLibrary ? "bg-foreground" : "bg-border"}`}>
-                <span className={`block h-4 w-4 mt-0.5 rounded-full bg-background transition-transform ${shareLibrary ? "translate-x-[1.15rem]" : "translate-x-0.5"}`} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm">Share my wardrobe in the common library</span>
-                <span className="block text-[11px] text-muted-foreground mt-0.5">
-                  Your pieces (brand, price, tags, photo) become searchable by other members, anonymously — nobody can see they are yours.
-                  Turning it off removes them from future searches, but pieces others already imported stay in their own closet.
-                </span>
-              </span>
-            </button>
-          </div>
-
-          {infoPopup && (
-            <div
-
-              className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
-              onClick={() => setInfoPopup(null)}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-luxe max-h-[70vh] overflow-y-auto"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="font-serif text-lg italic">
-                    {infoPopup === "work" ? "Dress code terms" : infoPopup === "formality" ? "Formality terms" : infoPopup === "sharing" ? "Shared library" : "Style terms"}
-                  </p>
-                  <button
-                    onClick={() => setInfoPopup(null)}
-                    aria-label="Close"
-                    className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-                  ><X size={14} /></button>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : infoPopup === "formality" ? FORMALITY_DEFINITIONS : infoPopup === "sharing" ? SHARING_DEFINITIONS : STYLE_DEFINITIONS).map((d) => (
-                    <div key={d.term}>
-                      <p className="text-sm font-medium">{d.term}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-          <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Profession / role</p>
             <input
               value={profession} onChange={e => setProfession(e.target.value)}
@@ -509,6 +295,35 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             <span className="text-[10px] uppercase tracking-[0.3em]">Save changes</span>
           </button>
+
+          {infoPopup && (
+            <div
+              className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+              onClick={() => setInfoPopup(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-luxe max-h-[70vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-serif text-lg italic">Style terms</p>
+                  <button
+                    onClick={() => setInfoPopup(null)}
+                    aria-label="Close"
+                    className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+                  ><X size={14} /></button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {STYLE_DEFINITIONS.map((d) => (
+                    <div key={d.term}>
+                      <p className="text-sm font-medium">{d.term}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -532,11 +347,7 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
               </div>
             </section>
           )}
-                   <MyBrands />
-          <WardrobeLocationsSection />
-          <MySizes userId={user?.id} />
-          <DressPreferencesSection userId={user?.id} />
-          <LanguageSection />
+          <MyBrands />
 
           {/* Color analysis */}
           <button
@@ -565,9 +376,6 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
           </button>
 
                     <WeatherPanel />
-                    <CalendarConnectionSection />
-          <AppleCalendarConnectionSection />
-          <OutlookCalendarConnectionSection />
 
 
           {/* Menu */}
@@ -611,13 +419,6 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
   );
 }
 
-type SizeKey = "tops" | "bottoms" | "dresses" | "shoes";
-const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean; wardrobeCategory: string }[] = [
-  { key: "tops", label: "Tops", wardrobeCategory: "Tops" },
-  { key: "bottoms", label: "Bottoms", wardrobeCategory: "Bottoms" },
-  { key: "dresses", label: "Dresses", wardrobeCategory: "Dresses" },
-  { key: "shoes", label: "Shoes", shoes: true, wardrobeCategory: "Shoes" },
-];
 function MyUsername({ userId }: { userId: string | undefined }) {
   const [username, setUsername] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -721,178 +522,5 @@ function MyUsername({ userId }: { userId: string | undefined }) {
         </div>
       )}
     </div>
-  );
-}
-
-function LanguageSection() {
-  const { t } = useTranslation();
-  const { profile, update } = useProfile();
-  const [saving, setSaving] = useState<SupportedLanguage | null>(null);
-  const current = (profile?.language as SupportedLanguage | null) ?? i18n.language;
-
-  const choose = async (code: SupportedLanguage) => {
-    if (code === current) return;
-    setSaving(code);
-    void i18n.changeLanguage(code);
-    const { error } = await update({ language: code });
-    setSaving(null);
-    if (error) toast.error(error);
-  };
-
-  return (
-    <section className="mx-6 mt-6 animate-fade-up">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("profile.languageLabel")}</p>
-      <div className="flex flex-wrap gap-2">
-        {SUPPORTED_LANGUAGES.map((code) => (
-          <button
-            key={code}
-            onClick={() => choose(code)}
-            disabled={saving !== null}
-            className={`rounded-full px-4 py-2 text-xs border transition disabled:opacity-60 ${current === code ? "bg-foreground text-background border-foreground" : "border-border bg-card"}`}
-          >
-            {saving === code ? <Loader2 size={12} className="animate-spin" /> : LANGUAGE_LABELS[code]}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function MySizes({ userId }: { userId: string | undefined }) {
-
-  const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
-  const [values, setValues] = useState<Record<SizeKey, string>>(empty);
-  const [snapshot, setSnapshot] = useState<Record<SizeKey, string>>(empty);
-  const [inferred, setInferred] = useState<Record<SizeKey, string>>(empty);
-  const [editing, setEditing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const [{ data, error }, { data: items }] = await Promise.all([
-        supabase.from("profiles").select("sizes").eq("id", userId).maybeSingle(),
-        supabase.from("wardrobe_items").select("category, size").eq("user_id", userId),
-      ]);
-      if (cancelled) return;
-      if (error) console.error("[AURA sizes] load", error);
-      const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
-      const loaded = {
-        tops: s.tops ?? "",
-        bottoms: s.bottoms ?? "",
-        dresses: s.dresses ?? "",
-        shoes: s.shoes ?? "",
-      };
-      setValues(loaded);
-      setSnapshot(loaded);
-
-      const counts: Record<SizeKey, Map<string, number>> = { tops: new Map(), bottoms: new Map(), dresses: new Map(), shoes: new Map() };
-      for (const it of (items ?? []) as { category: string | null; size: string | null }[]) {
-        const size = it.size?.trim();
-        if (!size) continue;
-        const field = SIZE_FIELDS.find((f) => f.wardrobeCategory === it.category);
-        if (!field) continue;
-        const m = counts[field.key];
-        m.set(size, (m.get(size) ?? 0) + 1);
-      }
-      const nextInferred = { ...empty };
-      (Object.keys(counts) as SizeKey[]).forEach((k) => {
-        const m = counts[k];
-        const total = [...m.values()].reduce((a, b) => a + b, 0);
-        if (total < 2) return;
-        const [topSize] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
-        nextInferred[k] = topSize;
-      });
-      setInferred(nextInferred);
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  const dirty = (Object.keys(values) as SizeKey[]).some((k) => values[k] !== snapshot[k]);
-
-  const startEdit = () => { setSnapshot(values); setEditing(true); };
-  const cancelEdit = () => { setValues(snapshot); setEditing(false); };
-
-  const save = async () => {
-    if (!userId) return;
-    setSaving(true);
-    const payload: Record<string, string> = {};
-    (Object.keys(values) as SizeKey[]).forEach((k) => {
-      const v = values[k].trim();
-      if (v) payload[k] = v;
-    });
-    const { error } = await supabase
-      .from("profiles")
-      .update({ sizes: payload, updated_at: new Date().toISOString() })
-      .eq("id", userId);
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    setSnapshot(values);
-    setEditing(false);
-    toast.success("Sizes saved");
-  };
-
-  return (
-    <section className="mx-6 mt-4 rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My sizes</p>
-        {editing ? (
-          <button
-            onClick={cancelEdit}
-            aria-label="Cancel editing sizes"
-            className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><X size={12} /></button>
-        ) : (
-          <button
-            onClick={startEdit}
-            aria-label="Edit sizes"
-            className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
-          ><Pencil size={12} /></button>
-        )}
-      </div>
-      <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2">
-        {SIZE_FIELDS.map((f) => {
-          const v = values[f.key];
-          const usingInferred = !v && !!inferred[f.key];
-          const shown = v || inferred[f.key];
-          const hint = sizeEquivalences(shown, f.shoes ? { shoes: true } : undefined);
-          return (
-            <div key={f.key} className="min-w-0 border-b border-border/60 pb-1.5">
-              <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{f.label}</p>
-              {editing ? (
-                <input
-                  value={v}
-                  onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  placeholder={inferred[f.key] || (f.shoes ? "38" : "42 / M")}
-                  className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-sm outline-none placeholder:text-muted-foreground/50"
-               />
-              ) : (
-                <>
-                  <p className="mt-0.5 text-sm truncate">
-                    <span className="font-serif">{loading ? "…" : shown || "—"}</span>
-                    {shown && hint && <span className="text-[10px] text-muted-foreground"> · {hint}</span>}
-                  </p>
-                  {usingInferred && <p className="text-[9px] text-muted-foreground italic truncate">(From your wardrobe)</p>}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {editing && (
-        <button
-          onClick={save}
-          disabled={saving || !dirty}
-          className="mt-4 w-full h-11 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
-        >
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          <span className="text-[10px] uppercase tracking-[0.3em]">Save sizes</span>
-        </button>
-      )}
-    </section>
   );
 }
