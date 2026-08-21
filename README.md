@@ -1,11 +1,12 @@
- > # AURA — AI Wardrobe Intelligence
+# AURA — AI Wardrobe Intelligence
 
 AURA is an independent AI-powered product currently under development, designed to help people understand, organize and make better use of the clothes they already own.
 
 The product combines wardrobe intelligence, computer vision, personalized recommendations and contextual styling to turn a digital wardrobe into an intelligent decision-support system.
 
 > Independent product · Currently under development
-> ## The Problem
+
+## The Problem
 
 Most digital wardrobe experiences focus primarily on cataloguing clothes.
 
@@ -30,20 +31,21 @@ AURA is being developed around several interconnected capabilities:
 - Batch wardrobe ingestion
 - Product and purchase data integration
 
-  ## Product Development Approach
+## Product Development Approach
 
-AURA is developed iteratively, starting from user problems and translating them into product requirements, workflows and technical implementations.
+AURA is developed iteratively, starting from real user problems and translating them into product requirements, user flows and technical solutions.
 
 The development process combines:
 
-- Problem definition
-- User experience design
-- Product requirements
+- Problem definition and user needs
+- Product requirements and prioritization
+- User experience and workflow design
 - Technical feasibility assessment
-- AI experimentation
-- Implementation
-- Testing
-- Iteration
+- AI experimentation and evaluation
+- Implementation and integration
+- Testing and iteration
+- Continuous refinement based on product and technical learnings
+
 ## AI & Technology
 
 AURA integrates AI and computer vision into the product experience to transform unstructured garment images and user preferences into structured wardrobe data and personalized recommendations.
@@ -58,7 +60,8 @@ The product development work includes:
 - Personalized recommendation logic
 - AI-powered product experiences
 - Evaluation and integration of AI capabilities into application workflows
-  ## Product & Engineering Decisions
+
+## Product & Engineering Decisions
 
 AURA involves evaluating different technical approaches based on user experience, product requirements, feasibility and scalability.
 
