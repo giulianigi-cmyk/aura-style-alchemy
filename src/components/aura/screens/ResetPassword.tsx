@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Sparkles, Check, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export function ResetPassword({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
   const { updatePassword, clearRecovery } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -13,8 +15,8 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (password.length < 6) { setError(t("resetPassword.errTooShort")); return; }
+    if (password !== confirm) { setError(t("resetPassword.errMismatch")); return; }
     setLoading(true);
     const { error } = await updatePassword(password);
     setLoading(false);
@@ -33,9 +35,9 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
           <Sparkles size={14} />
           <span className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">AURA</span>
         </div>
-        <h1 className="font-serif text-4xl italic leading-tight">Set a new password</h1>
+        <h1 className="font-serif text-4xl italic leading-tight">{t("resetPassword.title")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Choose something private and memorable.
+          {t("resetPassword.subtitle")}
         </p>
 
         {success ? (
@@ -43,13 +45,13 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
             <div className="h-14 w-14 rounded-full bg-foreground text-background flex items-center justify-center">
               <Check size={20} />
             </div>
-            <p className="mt-4 font-serif text-xl italic">Password updated</p>
-            <p className="mt-1 text-xs text-muted-foreground">Taking you home…</p>
+            <p className="mt-4 font-serif text-xl italic">{t("resetPassword.updated")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("resetPassword.takingYouHome")}</p>
           </div>
         ) : (
           <form onSubmit={submit} className="mt-8 space-y-4">
             <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">New password</label>
+              <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("resetPassword.newPassword")}</label>
               <input
                 type="password" required minLength={6} value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -57,7 +59,7 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Confirm password</label>
+              <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("resetPassword.confirmPassword")}</label>
               <input
                 type="password" required minLength={6} value={confirm}
                 onChange={e => setConfirm(e.target.value)}
@@ -71,7 +73,7 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
               type="submit" disabled={loading}
               className="mt-4 w-full h-14 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs disabled:opacity-50 active:scale-[0.98] transition shadow-luxe flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : "Update password"}
+              {loading ? <Loader2 size={14} className="animate-spin" /> : t("resetPassword.updateButton")}
             </button>
           </form>
         )}
