@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Loader2, Plus } from "lucide-react";
 import type { Screen } from "../AuraApp";
@@ -16,6 +17,7 @@ const COLOR_HEX: Record<string, string> = {
 };
 
 export function Shop({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const analyzeGap = useServerFn(analyzeWardrobeGap);
   const [loading, setLoading] = useState(true);
@@ -54,7 +56,7 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
         const matching = items.filter((it) => res.suggestion.pairsWithIds.includes(it.id));
         setSigned(await resolveWardrobeUrls(matching));
       } else {
-        setError(res.error ?? "Couldn't analyze your wardrobe.");
+        setError(res.error ?? t("shop.couldNotAnalyze"));
       }
       setLoading(false);
     })();
@@ -63,8 +65,8 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The edit</p>
-        <h1 className="font-serif text-4xl mt-1">Pieces to complete <span className="italic">your story</span></h1>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("shop.theEdit")}</p>
+        <h1 className="font-serif text-4xl mt-1">{t("shop.headerPrefix")} <span className="italic">{t("shop.headerEmphasis")}</span></h1>
       </header>
 
       <section className="px-6 mt-6">
@@ -74,25 +76,25 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
           </div>
         ) : itemCount < 5 ? (
           <div className="rounded-[2rem] bg-secondary/40 p-6 text-center">
-            <p className="font-serif text-lg italic">Not enough pieces yet</p>
+            <p className="font-serif text-lg italic">{t("shop.notEnoughPieces")}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Add at least 5 pieces to your wardrobe and AURA will spot what's genuinely missing.
+              {t("shop.notEnoughPiecesHint")}
             </p>
             <button
               onClick={() => go("add")}
               className="mt-4 h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center gap-2"
-            ><Plus size={12} /> Add a piece</button>
+            ><Plus size={12} /> {t("shop.addAPiece")}</button>
           </div>
         ) : error || !suggestion ? (
           <div className="rounded-[2rem] bg-secondary/40 p-6 text-center">
-            <p className="text-sm text-muted-foreground">{error ?? "Couldn't analyze your wardrobe right now."}</p>
+            <p className="text-sm text-muted-foreground">{error ?? t("shop.couldNotAnalyzeRightNow")}</p>
           </div>
         ) : (
           <>
             <div className="relative rounded-[2rem] overflow-hidden shadow-luxe gradient-warm p-6">
               <div className="inline-flex items-center gap-1.5 rounded-full bg-background/60 px-3 py-1.5">
                 <Sparkles size={11} />
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Your wardrobe is missing</span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("shop.wardrobeIsMissing")}</span>
               </div>
               <p className="font-serif text-2xl italic mt-4">
                 {suggestion.colors[0] ? `A ${suggestion.colors[0].toLowerCase()} ` : "A "}
@@ -112,13 +114,13 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
               <button
                 onClick={() => go("add")}
                 className="mt-5 h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center gap-2"
-              ><Plus size={12} /> Add this piece</button>
+              ><Plus size={12} /> {t("shop.addThisPiece")}</button>
             </div>
 
             {suggestion.pairsWithIds.length > 0 && (
               <div className="mt-6">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">
-                  Would pair with {suggestion.pairsWithIds.length} piece{suggestion.pairsWithIds.length === 1 ? "" : "s"} you already own
+                  {t("shop.wouldPairWith", { count: suggestion.pairsWithIds.length })}
                 </p>
                 <div className="flex gap-2 overflow-x-auto no-scrollbar">
                   {suggestion.pairsWithIds.map((id) => {
@@ -140,8 +142,7 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
       </section>
 
       <p className="px-6 mt-6 text-[11px] text-muted-foreground leading-relaxed">
-        This is a wardrobe gap estimate based on what you already own — not a live product catalog.
-        Real shopping recommendations with actual products and links are coming soon.
+        {t("shop.disclaimer")}
       </p>
     </div>
   );
