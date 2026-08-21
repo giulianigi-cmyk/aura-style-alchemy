@@ -321,8 +321,7 @@
     "moveToButton": "Move to…",
     "moveSelectionTitle_one": "Move {{count}} piece to…",
     "moveSelectionTitle_other": "Move {{count}} pieces to…"
-  }
-},
+  },
   "addItem": {
     "toastSelectImage": "Please select an image",
     "toastInvalidUrl": "Please enter a valid URL",
@@ -352,4 +351,4 @@
     "stageAnalyzing": "Analyzing your item…",
     "stageReady": "AI suggestions ready · edit anything"
   }
-
+}
