@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowUp, Loader2, Sparkles, Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import type { BuilderInit, Screen, StylistChatInit } from "../AuraApp";
@@ -40,15 +41,15 @@ type MsgUiState = {
   pickedDate?: string;
 };
 
-const FEEDBACK_LABELS: Record<FeedbackType, string> = {
-  liked: "❤️ I like this outfit",
-  disliked: "👎 Not for me, suggest something else",
-  saved: "💾 Save this outfit",
-};
+const getFeedbackLabels = (t: (k: string) => string): Record<FeedbackType, string> => ({
+  liked: `❤️ ${t("stylistChat.feedbackLiked")}`,
+  disliked: `👎 ${t("stylistChat.feedbackDisliked")}`,
+  saved: `💾 ${t("stylistChat.feedbackSaved")}`,
+});
 
-const SAVE_ACTIONS: { type: ActionType; label: string }[] = [
-  { type: "save_canvas", label: "Save to canvas" },
-  { type: "add_calendar", label: "Add to calendar" },
+const getSaveActions = (t: (k: string) => string): { type: ActionType; label: string }[] => [
+  { type: "save_canvas", label: t("stylistChat.saveToCanvas") },
+  { type: "add_calendar", label: t("stylistChat.addToCalendar") },
 ];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -63,6 +64,9 @@ function errorMessage(e: unknown, fallback: string): string {
 }
 
 export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void; initialMessage?: StylistChatInit }) {
+  const { t, i18n } = useTranslation();
+  const FEEDBACK_LABELS = getFeedbackLabels(t);
+  const SAVE_ACTIONS = getSaveActions(t);
   const { user } = useAuth();
   const { profile } = useProfile();
   const { latitude, longitude } = useLocation();
@@ -215,7 +219,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       });
 
       if (!res.ok) {
-        setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || "Unknown error"}` }]);
+        setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${res.error || t("stylistChat.unknownError")}` }]);
         return;
       }
       setMessages((m) => [
@@ -236,7 +240,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       }
     } catch (e) {
       console.error("[AURA stylist-chat]", e);
-      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Request failed"}` }]);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : t("stylistChat.requestFailed")}` }]);
     } finally {
       setBusy(false);
     }
@@ -285,7 +289,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       setRecording(true);
     } catch (e) {
       console.error("[AURA mic] permission/record failed", e);
-      toast.error("Couldn't access the microphone");
+      toast.error(t("stylistChat.micAccessFailed"));
     }
   };
 
@@ -306,14 +310,14 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       });
       const res = await transcribe({ data: { audioDataUrl } });
       if (!res.text) {
-        toast.message("Didn't catch that, try again");
+        toast.message(t("stylistChat.didntCatchThat"));
         return;
       }
       speakNextReplyRef.current = true;
       void sendMessage(res.text);
     } catch (e) {
       console.error("[AURA voice-transcribe]", e);
-      toast.error(errorMessage(e, "Transcription failed"));
+      toast.error(errorMessage(e, t("stylistChat.transcriptionFailed")));
     } finally {
       setTranscribing(false);
     }
@@ -349,7 +353,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
         { role: "user", content: FEEDBACK_LABELS.saved, uiOnly: true },
         {
           role: "assistant",
-          content: "Want to save it to your canvas, or add it to your calendar?",
+          content: t("stylistChat.saveOrCalendarPrompt"),
           itemIds,
           actions: SAVE_ACTIONS,
           uiOnly: true,
@@ -392,13 +396,13 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
       await saveOutfitPlan({ data: { itemIds, date, calendarEventId: eventIdRef.current } });
     } catch (e) {
       console.error("[AURA add_calendar]", e);
-      toast.error(errorMessage(e, "Couldn't add it to your calendar"));
+      toast.error(errorMessage(e, t("stylistChat.couldNotAddToCalendar")));
       return;
     }
     toast.success(
       date === todayIso()
-        ? "Added to today's calendar"
-        : `Added to your calendar for ${new Date(date).toLocaleDateString("en-US")}`
+        ? t("stylistChat.addedToTodayCalendar")
+        : t("stylistChat.addedToCalendarFor", { date: new Date(date).toLocaleDateString(i18n.language) })
     );
     markActionDone(index, "add_calendar");
     patchUi(index, { calendarStep: undefined });
@@ -412,8 +416,8 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
-          <p className="font-serif text-lg italic leading-tight">Ask your stylist</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("stylistChat.atelier")}</p>
+          <p className="font-serif text-lg italic leading-tight">{t("stylistChat.askYourStylist")}</p>
         </div>
       </header>
 
@@ -422,10 +426,9 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
 
           <div className="mt-10 text-center animate-fade-up">
             <Sparkles size={20} className="mx-auto text-muted-foreground" />
-            <p className="mt-3 font-serif text-xl italic">What are you dressing for?</p>
+            <p className="mt-3 font-serif text-xl italic">{t("stylistChat.whatDressingFor")}</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-              Ask anything — "work dinner tonight, what should I wear?" — and I'll style you
-              with pieces you already own.
+              {t("stylistChat.emptyStateHint")}
             </p>
           </div>
         )}
@@ -482,13 +485,13 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
                           onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], m.eventDate!)}
                           className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
                         >
-                          Add for {new Date(`${m.eventDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                          {t("stylistChat.addForDate", { date: new Date(`${m.eventDate}T00:00:00`).toLocaleDateString(i18n.language, { weekday: "short", month: "short", day: "numeric" }) })}
                         </button>
                         <button
                           onClick={() => patchUi(i, { calendarStep: "pick_date", pickedDate: m.eventDate ?? undefined })}
                           className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
                         >
-                          Choose a different day
+                          {t("stylistChat.chooseDifferentDay")}
                         </button>
                       </>
                     ) : (
@@ -497,13 +500,13 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
                           onClick={() => void confirmCalendarDate(i, m.itemIds ?? [], todayIso())}
                           className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95"
                         >
-                          Today
+                          {t("stylistChat.today")}
                         </button>
                         <button
                           onClick={() => patchUi(i, { calendarStep: "pick_date" })}
                           className="text-xs px-3 py-1.5 rounded-full border border-border bg-background active:scale-95"
                         >
-                          Another day
+                          {t("stylistChat.anotherDay")}
                         </button>
                       </>
                     )}
@@ -525,7 +528,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
                       onClick={() => ui.pickedDate && void confirmCalendarDate(i, m.itemIds ?? [], ui.pickedDate)}
                       className="text-xs px-3 py-1.5 rounded-full bg-foreground text-background active:scale-95 disabled:opacity-40"
                     >
-                      Confirm
+                      {t("stylistChat.confirm")}
                     </button>
                   </div>
                 )}
@@ -535,17 +538,17 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "liked")}
                       className="text-xl active:scale-90"
-                      aria-label="Like"
+                      aria-label={t("stylistChat.likeAria")}
                     >❤️</button>
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "disliked")}
                       className="text-xl active:scale-90"
-                      aria-label="Not for me"
+                      aria-label={t("stylistChat.notForMeAria")}
                     >👎</button>
                     <button
                       onClick={() => giveFeedback(i, m.itemIds!, "saved")}
                       className="text-xl active:scale-90"
-                      aria-label="Save"
+                      aria-label={t("stylistChat.saveAria")}
                     >💾</button>
                   </div>
                 )}
@@ -568,14 +571,14 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={recording ? "Listening…" : transcribing ? "Transcribing…" : "Ask your stylist…"}
+            placeholder={recording ? t("stylistChat.listening") : transcribing ? t("stylistChat.transcribing") : t("stylistChat.askYourStylistPlaceholder")}
             rows={1}
             className="flex-1 max-h-28 bg-secondary/60 rounded-2xl px-4 py-3 text-sm outline-none placeholder:text-muted-foreground resize-none"
           />
           <button
             onClick={() => (recording ? stopRecording() : void startRecording())}
             disabled={busy || transcribing}
-            aria-label={recording ? "Stop recording" : "Record voice message"}
+            aria-label={recording ? t("stylistChat.stopRecordingAria") : t("stylistChat.recordVoiceAria")}
             className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center active:scale-90 transition disabled:opacity-40 ${
               recording ? "bg-destructive text-destructive-foreground animate-pulse" : "border border-border"
             }`}
@@ -591,7 +594,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
           <button
             onClick={send}
             disabled={busy || !input.trim()}
-            aria-label="Send"
+            aria-label={t("stylistChat.sendAria")}
             className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 disabled:opacity-40"
           >
             <ArrowUp size={16} />
@@ -599,7 +602,7 @@ export function StylistChat({ go, openBuilder, initialMessage }: { go: (s: Scree
         </div>
         {speaking && (
           <p className="mt-2 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            🔊 AURA is speaking…
+            🔊 {t("stylistChat.auraIsSpeaking")}
           </p>
         )}
       </div>
