@@ -1,5 +1,6 @@
 import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,7 @@ import { logWardrobeEvent, confirmOutfitPlanWorn } from "@/lib/wardrobe-events";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { ITEM_CATEGORIES } from "@/lib/wardrobe-options";
 import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
+import i18n from "@/i18n/config";
 const OCCASIONS = ["Everyday", "Work", "Evening", "Weekend", "Travel", "Formal", "Sport"];
 
 type OutfitPlan = {
@@ -45,6 +47,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
  *  across three separate screens.
  */
 export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBuilder: (init: BuilderInit) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { latitude, longitude } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -150,15 +153,15 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const aiPick = async () => {
     const activeItems = items.filter((it) => !(it as unknown as { archived?: boolean }).archived);
     if (activeItems.length < 3) {
-      toast.error(`You have ${activeItems.length} piece${activeItems.length === 1 ? "" : "s"} in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.`);
+      toast.error(t("aiStylist.notEnoughActivePieces", { count: activeItems.length }));
       return;
     }
     const categories = Array.from(new Set(activeItems.map((it) => it.category).filter(Boolean)));
     if (categories.length < 2) {
       toast.error(
         categories.length === 0
-          ? "None of your pieces have a category set. Edit your items and assign a category (Tops, Bottoms, Shoes…) so AURA can compose an outfit."
-          : `All your pieces are tagged "${categories[0]}". Add at least one item from another category (e.g. Bottoms or Shoes) to unlock AI suggestions.`
+          ? t("aiStylist.noCategoriesSet")
+          : t("aiStylist.allSameCategory", { category: categories[0] })
       );
       return;
     }
@@ -187,22 +190,22 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       });
 
       if (!res.ok) {
-        toast.error(res.error || "AI suggestion failed — please try again.");
+        toast.error(res.error || t("aiStylist.aiSuggestionFailed"));
         return;
       }
       if (!res.item_ids.length) {
-        toast.error("Not enough matching pieces in your wardrobe yet for a complete outfit — try adding more items.");
+        toast.error(t("aiStylist.notEnoughMatchingPieces"));
         return;
       }
       openBuilder({
         itemIds: res.item_ids,
-        name: "AI styled look",
+        name: t("aiStylist.aiStyledLook"),
         occasion,
         notes: res.explanation || undefined,
       });
     } catch (e) {
       console.error(e);
-      toast.error("AI suggest failed");
+      toast.error(t("aiStylist.aiSuggestFailed"));
     } finally {
       setAiBusy(false);
     }
@@ -229,7 +232,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       if (res.created > 0) void load();
     } catch (e) {
       console.error("[AURA weekly-outfits]", e);
-      toast.error(e instanceof Error ? e.message : "Couldn't generate work outfits");
+      toast.error(e instanceof Error ? e.message : t("aiStylist.couldNotGenerateWorkOutfits"));
     } finally {
       setWeeklyGenerating(false);
     }
@@ -269,7 +272,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     const { error } = await (supabase.from("outfits" as never) as any).update({ archived }).eq("id", o.id);
     if (error) { toast.error(error.message); return; }
     setOutfits((prev) => prev.map((x) => (x.id === o.id ? { ...x, archived } as Outfit : x)));
-    toast.success(archived ? "Archived" : "Restored to Saved");
+    toast.success(archived ? t("aiStylist.toastArchived") : t("aiStylist.toastRestoredToSaved"));
   };
 
   const assignToDay = async () => {
@@ -297,7 +300,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       notes: assignFor.notes ?? assignFor.name ?? null,
     });
     if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
-    toast.success("Added to calendar");
+    toast.success(t("aiStylist.toastAddedToCalendar"));
     setAssignFor(null);
     void load();
   };
@@ -314,7 +317,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     setOutfits((prev) => prev.filter((o) => o.id !== id));
     setConfirmDelete(null);
     setDeleting(false);
-    toast.success("Outfit deleted");
+    toast.success(t("aiStylist.toastOutfitDeleted"));
   };
 
   const getWornIds = (plan: OutfitPlan) => editedItems[plan.id] ?? plan.item_ids;
@@ -345,7 +348,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     setConfirmingPlanId(null);
     if (error) { toast.error(error); return; }
     setEditedItems((prev) => { const next = { ...prev }; delete next[plan.id]; return next; });
-    toast.success("Marked as worn");
+    toast.success(t("aiStylist.toastMarkedAsWorn"));
     void load();
   };
 
@@ -388,7 +391,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
             <button
               onClick={() => removeFromPlan(planId, id)}
-              aria-label="Remove this piece"
+              aria-label={t("aiStylist.removeThisPieceAria")}
               className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/90 border border-border flex items-center justify-center"
             ><X size={10} /></button>
           </div>
@@ -396,42 +399,41 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       })}
       <button
         onClick={() => setPickerForPlan(planId)}
-        aria-label="Add a piece"
+        aria-label={t("aiStylist.addAPieceAria")}
         className={`${size} shrink-0 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground`}
       ><Plus size={16} /></button>
     </div>
   );
 
-  const dateLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-
-  return (
+  const dateLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(i18n.language, { weekday: "short", month: "short", day: "numeric" });
+    return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Atelier</p>
-        <h1 className="font-serif text-4xl mt-1 italic">Stylist</h1>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("aiStylist.atelier")}</p>
+        <h1 className="font-serif text-4xl mt-1 italic">{t("aiStylist.stylist")}</h1>
       </header>
 
       {!loading && todayPlans.length > 0 && (
         <section className="mx-6 mt-5 space-y-3">
           {todayPlans.map((tp) => {
             const linkedEvent = tp.calendar_event_id ? todayCalEvents.find((e) => e.id === tp.calendar_event_id) : null;
-            const label = tp.calendar_event_id ? (linkedEvent?.title || "Event") : "General";
+            const label = tp.calendar_event_id ? (linkedEvent?.title || t("aiStylist.eventFallback")) : t("aiStylist.generalLabel");
             return (
               <div key={tp.id} className="rounded-3xl gradient-warm border border-border/60 p-4 animate-fade-up">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Today's look</p>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("aiStylist.todaysLook")}</p>
                     <p className="text-xs mt-0.5">{label}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${tp.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"}`}>
-                      {tp.status === "worn" ? "Worn" : "Planned"}
+                      {tp.status === "worn" ? t("aiStylist.worn") : t("aiStylist.planned")}
                     </span>
                     {tp.status !== "worn" && (
                       <button
                         onClick={() => void dismissPlan(tp)}
                         disabled={confirmingPlanId === tp.id}
-                        aria-label="Remove this planned outfit"
+                        aria-label={t("aiStylist.removePlannedOutfitAria")}
                         className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground disabled:opacity-50"
                       ><X size={13} /></button>
                     )}
@@ -452,7 +454,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     onClick={() => void confirmWorn(tp)}
                     disabled={confirmingPlanId === tp.id || getWornIds(tp).length === 0}
                     className="mt-3 w-full h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
-                  ><Check size={12} /> This is what I'm wearing</button>
+                  ><Check size={12} /> {t("aiStylist.thisIsWhatImWearing")}</button>
                 )}
               </div>
             );
@@ -462,7 +464,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
       {!loading && pendingConfirmation.length > 0 && (
         <section className="mx-6 mt-4 space-y-2">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Did you wear this?</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("aiStylist.didYouWearThis")}</p>
           {pendingConfirmation.map((p) => (
             <div key={p.id} className="rounded-2xl border border-border/60 bg-card p-3 animate-fade-up">
               <p className="text-xs text-muted-foreground mb-2">{dateLabel(p.date)}{p.occasion ? ` · ${p.occasion}` : ""}</p>
@@ -472,12 +474,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   onClick={() => void confirmWorn(p)}
                   disabled={confirmingPlanId === p.id || getWornIds(p).length === 0}
                   className="flex-1 h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 disabled:opacity-60"
-                ><Check size={12} /> Yes, this is what I wore</button>
+                ><Check size={12} /> {t("aiStylist.yesThisIsWhatIWore")}</button>
                 <button
                   onClick={() => void dismissPlan(p)}
                   disabled={confirmingPlanId === p.id}
                   className="h-9 w-9 rounded-full border border-border flex items-center justify-center disabled:opacity-60"
-                  aria-label="I didn't wear this"
+                  aria-label={t("aiStylist.iDidntWearThisAria")}
                 ><X size={14} /></button>
               </div>
             </div>
@@ -486,19 +488,19 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       )}
 
       <section className="px-6 mt-8">
-        <h2 className="font-serif text-2xl italic mb-3">My Outfits</h2>
+        <h2 className="font-serif text-2xl italic mb-3">{t("aiStylist.myOutfits")}</h2>
         <div className="flex rounded-full border border-border p-1 mb-4">
           {([
-            { key: "upcoming", label: "Upcoming" },
-            { key: "worn", label: "Worn" },
-            { key: "saved", label: "Saved" },
-            { key: "archive", label: "Archive" },
-          ] as { key: OutfitTab; label: string }[]).map((t) => (
+            { key: "upcoming", label: t("aiStylist.tabUpcoming") },
+            { key: "worn", label: t("aiStylist.tabWorn") },
+            { key: "saved", label: t("aiStylist.tabSaved") },
+            { key: "archive", label: t("aiStylist.tabArchive") },
+          ] as { key: OutfitTab; label: string }[]).map((t2) => (
             <button
-              key={t.key}
-              onClick={() => setOutfitTab(t.key)}
-              className={`flex-1 h-8 rounded-full text-[10px] uppercase tracking-[0.15em] ${outfitTab === t.key ? "bg-foreground text-background" : "text-muted-foreground"}`}
-            >{t.label}</button>
+              key={t2.key}
+              onClick={() => setOutfitTab(t2.key)}
+              className={`flex-1 h-8 rounded-full text-[10px] uppercase tracking-[0.15em] ${outfitTab === t2.key ? "bg-foreground text-background" : "text-muted-foreground"}`}
+            >{t2.label}</button>
           ))}
         </div>
 
@@ -506,7 +508,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-muted-foreground" /></div>
         ) : outfitTab === "upcoming" ? (
           upcomingPlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No upcoming looks planned yet — plan one from a saved outfit, or from the Calendar tab.</p>
+            <p className="text-sm text-muted-foreground">{t("aiStylist.noUpcomingLooks")}</p>
           ) : (
             <div className="space-y-2">
               {upcomingPlans.map((p) => (
@@ -516,7 +518,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     <button
                       onClick={() => void dismissPlan(p)}
                       disabled={confirmingPlanId === p.id}
-                      aria-label="Remove this planned outfit"
+                      aria-label={t("aiStylist.removePlannedOutfitAria")}
                       className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground disabled:opacity-50"
                     ><X size={13} /></button>
                   </div>
@@ -527,7 +529,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           )
         ) : outfitTab === "worn" ? (
           wornEntries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing logged as worn yet — confirm a planned outfit above, or mark one worn from the Calendar tab.</p>
+            <p className="text-sm text-muted-foreground">{t("aiStylist.nothingLoggedAsWorn")}</p>
           ) : (
             <div className="space-y-2">
               {wornEntries.map((w) => (
@@ -547,7 +549,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                 <Search size={15} className="text-muted-foreground" />
                 <input
                   value={query} onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name, occasion, season…"
+                  placeholder={t("aiStylist.searchByNameOccasionSeason")}
                   className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
                 />
               </div>
@@ -556,8 +558,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             {filteredOutfits.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {outfitTab === "archive"
-                  ? "No archived outfits — archive a look from Saved when it's out of rotation but still worth keeping (like a seasonal piece)."
-                  : "No outfits yet. Compose your first with AI suggest or build manually below."}
+                  ? t("aiStylist.noArchivedOutfits")
+                  : t("aiStylist.noOutfitsYet")}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -570,7 +572,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                           {url ? (
                             <img src={url} alt={o.name} className="w-full h-full object-contain p-2" />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">Open canvas</div>
+                            <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">{t("aiStylist.openCanvas")}</div>
                           )}
                         </div>
                       </button>
@@ -578,54 +580,54 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                         <>
                           <button
                             onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
-                            aria-label="Duplicate outfit"
+                            aria-label={t("aiStylist.duplicateOutfitAria")}
                             className="absolute top-2 right-20 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                           ><Copy size={14} /></button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setShareFor(o.id); }}
-                            aria-label="Share outfit"
+                            aria-label={t("aiStylist.shareOutfitAria")}
                             className="absolute top-2 right-11 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                           ><Share2 size={14} /></button>
                         </>
                       )}
                       <button
                         onClick={(e) => { e.stopPropagation(); void toggleArchive(o, outfitTab !== "archive"); }}
-                        aria-label={outfitTab === "archive" ? "Restore to Saved" : "Archive outfit"}
+                        aria-label={outfitTab === "archive" ? t("aiStylist.restoreToSavedAria") : t("aiStylist.archiveOutfitAria")}
                         className={`absolute top-2 ${outfitTab === "archive" ? "right-11" : "right-2"} h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft`}
                       >{outfitTab === "archive" ? <ArchiveRestore size={14} /> : <Archive size={14} />}</button>
                       {outfitTab === "archive" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete(o.id); }}
-                          aria-label="Delete outfit"
+                          aria-label={t("aiStylist.deleteOutfitAria")}
                           className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                         ><Trash2 size={14} /></button>
                       )}
                       <div className="p-3">
                         <button onClick={() => openOutfit(o)} className="block w-full text-left">
                           <p className="font-serif text-base truncate">{o.name}</p>
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{o.item_ids.length} pieces</p>
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("aiStylist.piecesCount", { count: o.item_ids.length })}</p>
                         </button>
                         {outfitTab === "saved" && (
                           <button
                             onClick={() => setAssignFor(o)}
                             className="mt-2 h-8 w-full rounded-full border border-border text-[10px] uppercase tracking-[0.25em] active:scale-[0.98] inline-flex items-center justify-center gap-1.5"
-                          ><CalendarIcon size={11} /> Plan</button>
+                          ><CalendarIcon size={11} /> {t("aiStylist.plan")}</button>
                         )}
                       </div>
 
                       {confirmDelete === o.id && (
                         <div className="absolute inset-0 z-10 bg-background/90 backdrop-blur flex flex-col items-center justify-center gap-2 p-3 text-center">
-                          <p className="text-xs">Delete this outfit?</p>
+                          <p className="text-xs">{t("aiStylist.deleteThisOutfit")}</p>
                           <div className="flex gap-2">
                             <button
                               onClick={() => setConfirmDelete(null)}
                               className="h-8 px-4 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]"
-                            >Cancel</button>
+                            >{t("aiStylist.cancel")}</button>
                             <button
                               disabled={deleting}
                               onClick={() => void deleteOutfit(o.id)}
                               className="h-8 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] disabled:opacity-60"
-                            >{deleting ? "…" : "Delete"}</button>
+                            >{deleting ? "…" : t("aiStylist.delete")}</button>
                           </div>
                         </div>
                       )}
@@ -639,27 +641,27 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       </section>
 
       <section className="px-6 mt-10">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Create</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("aiStylist.create")}</p>
         <div className="flex gap-2">
           <button
             onClick={() => go("builder")}
             className="flex-1 h-12 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] active:scale-[0.98] shadow-luxe"
-          >Build manually</button>
+          >{t("aiStylist.buildManually")}</button>
         </div>
         <button
           onClick={() => go("stylist-chat")}
           className="mt-2 w-full h-12 rounded-full border border-foreground text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
-        ><Sparkles size={13} /> Ask your stylist</button>
+        ><Sparkles size={13} /> {t("aiStylist.askYourStylist")}</button>
 
         <button
           onClick={() => setWeeklySheetOpen(true)}
           className="mt-2 w-full h-12 rounded-full border border-border text-foreground text-xs uppercase tracking-[0.3em] active:scale-[0.98] flex items-center justify-center gap-2"
-        ><CalendarIcon size={13} /> Create work outfits</button>
+        ><CalendarIcon size={13} /> {t("aiStylist.createWorkOutfits")}</button>
 
         <details className="mt-4">
-          <summary className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground cursor-pointer">More options</summary>
+          <summary className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground cursor-pointer">{t("aiStylist.moreOptions")}</summary>
           <div className="mt-3">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Occasion</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("aiStylist.occasion")}</p>
             <div className="flex flex-wrap gap-1.5">
               {OCCASIONS.map((o) => (
                 <button
@@ -675,7 +677,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
               className="mt-3 w-full h-11 rounded-full border border-border text-muted-foreground flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60"
             >
               {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              <span className="text-[10px] uppercase tracking-[0.3em]">AI suggest</span>
+              <span className="text-[10px] uppercase tracking-[0.3em]">{t("aiStylist.aiSuggest")}</span>
             </button>
           </div>
         </details>
@@ -686,7 +688,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       {assignFor && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setAssignFor(null)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
-            <p className="font-serif italic text-lg">Assign to a date</p>
+            <p className="font-serif italic text-lg">{t("aiStylist.assignToADate")}</p>
             <input
               type="date"
               value={assignDate}
@@ -696,7 +698,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             <button
               onClick={() => void assignToDay()}
               className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98]"
-            >Save to calendar</button>
+            >{t("aiStylist.saveToCalendar")}</button>
           </div>
         </div>
       )}
@@ -716,8 +718,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setPickerForPlan(null)}>
             <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
               <div className="flex items-center justify-between shrink-0">
-                <p className="font-serif italic text-lg">What did you wear instead?</p>
-                <button onClick={() => setPickerForPlan(null)} aria-label="Close" className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+                <p className="font-serif italic text-lg">{t("aiStylist.whatDidYouWearInstead")}</p>
+                <button onClick={() => setPickerForPlan(null)} aria-label={t("aiStylist.closeAria")} className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
               </div>
               <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5 shrink-0">
                 <Search size={15} className="text-muted-foreground" />
@@ -725,7 +727,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   autoFocus
                   value={pickerQuery}
                   onChange={(e) => setPickerQuery(e.target.value)}
-                  placeholder="Search by color, brand, fabric…"
+                  placeholder={t("aiStylist.searchByColorBrandFabric")}
                   className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
                 />
               </div>
@@ -740,7 +742,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
               </div>
               <div className="mt-3 overflow-y-auto grid grid-cols-3 gap-2 pb-4">
                 {matches.length === 0 ? (
-                  <p className="col-span-3 text-sm text-muted-foreground py-6 text-center">No pieces match.</p>
+                  <p className="col-span-3 text-sm text-muted-foreground py-6 text-center">{t("aiStylist.noPiecesMatch")}</p>
                 ) : matches.map((it) => {
                   const path = toStoragePath(it.image_url);
                   const src = path ? itemSigned[path] : null;
@@ -764,37 +766,37 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
       {weeklySheetOpen && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => !weeklyGenerating && setWeeklySheetOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-4">
-            <p className="font-serif italic text-lg">Create work outfits</p>
+            <p className="font-serif italic text-lg">{t("aiStylist.createWorkOutfits")}</p>
 
             {weeklyResult ? (
               <div className="text-center py-2">
-                <p className="font-serif text-2xl">{weeklyResult.created} outfit{weeklyResult.created === 1 ? "" : "s"} created</p>
+                <p className="font-serif text-2xl">{t("aiStylist.outfitsCreated", { count: weeklyResult.created })}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {weeklyResult.skippedExisting > 0 ? `${weeklyResult.skippedExisting} day${weeklyResult.skippedExisting === 1 ? "" : "s"} already had a plan, left untouched. ` : ""}
-                  {weeklyResult.failed > 0 ? `${weeklyResult.failed} day${weeklyResult.failed === 1 ? "" : "s"} couldn't be generated.` : ""}
+                  {weeklyResult.skippedExisting > 0 ? `${t("aiStylist.daysAlreadyHadPlan", { count: weeklyResult.skippedExisting })} ` : ""}
+                  {weeklyResult.failed > 0 ? t("aiStylist.daysCouldntBeGenerated", { count: weeklyResult.failed }) : ""}
                 </p>
                 <button
                   onClick={() => { setWeeklySheetOpen(false); setWeeklyResult(null); }}
                   className="mt-4 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]"
-                >Done</button>
+                >{t("aiStylist.done")}</button>
               </div>
             ) : (
               <>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Period</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("aiStylist.period")}</p>
                   <div className="flex gap-2">
                     {([7, 14] as const).map((n) => (
                       <button
                         key={n}
                         onClick={() => setWeeklyDays(n)}
                         className={`flex-1 h-10 rounded-full text-xs ${weeklyDays === n ? "bg-foreground text-background" : "bg-secondary/60"}`}
-                      >{n} days</button>
+                      >{t("aiStylist.nDays", { count: n })}</button>
                     ))}
                   </div>
                 </div>
                 {locations.length > 1 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Wardrobe to use</p>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("aiStylist.wardrobeToUse")}</p>
                     <div className="flex flex-wrap gap-2">
                       {locations.map((loc) => (
                         <button
@@ -805,12 +807,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                       ))}
                     </div>
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      If this period splits across two places, run this once per place instead.
+                      {t("aiStylist.splitAcrossTwoPlaces")}
                     </p>
                   </div>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  Fills in your work days only (set in your profile) — never touches a day you've already planned, and never touches an outfit already linked to a specific event.
+                  {t("aiStylist.fillsInWorkDaysOnly")}
                 </p>
                 <button
                   onClick={() => void runWeeklyGeneration()}
@@ -818,7 +820,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {weeklyGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Generate
+                  {t("aiStylist.generate")}
                 </button>
               </>
             )}
