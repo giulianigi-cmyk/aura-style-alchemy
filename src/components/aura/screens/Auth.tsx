@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/use-auth";
 import { Sparkles, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
 export function Auth() {
+  const { t } = useTranslation();
   const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -23,24 +25,24 @@ export function Auth() {
       const { error } = await resetPassword(email);
       setLoading(false);
       if (error) setError(error);
-      else setInfo("Check your inbox for a password reset link.");
+      else setInfo(t("auth.checkInboxReset"));
       return;
     }
     const fn = mode === "signin" ? signIn : signUp;
     const { error } = await fn(email, password);
     setLoading(false);
     if (error) setError(error);
-    else if (mode === "signup") setInfo("Check your email to confirm, or sign in if confirmation is disabled.");
+    else if (mode === "signup") setInfo(t("auth.checkEmailConfirm"));
   };
 
   const title =
-    mode === "signin" ? "Welcome back" :
-    mode === "signup" ? "Begin your edit" :
-    "Reset your password";
+    mode === "signin" ? t("auth.welcomeBack") :
+    mode === "signup" ? t("auth.beginYourEdit") :
+    t("auth.resetYourPassword");
   const subtitle =
-    mode === "signin" ? "Your wardrobe is waiting." :
-    mode === "signup" ? "Create an account to digitize your closet." :
-    "We'll email you a secure recovery link.";
+    mode === "signin" ? t("auth.wardrobeIsWaiting") :
+    mode === "signup" ? t("auth.createAccountSubtitle") :
+    t("auth.emailRecoveryLink");
 
   return (
     <div className="h-full w-full flex flex-col px-8 pt-20 pb-10 bg-background">
@@ -49,7 +51,7 @@ export function Auth() {
           {mode === "forgot" ? (
             <button onClick={() => { setMode("signin"); reset(); }} className="flex items-center gap-2 text-muted-foreground">
               <ArrowLeft size={14} />
-              <span className="text-[10px] uppercase tracking-[0.4em]">Back</span>
+              <span className="text-[10px] uppercase tracking-[0.4em]">{t("auth.back")}</span>
             </button>
           ) : (
             <>
@@ -63,7 +65,7 @@ export function Auth() {
 
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div>
-            <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Email</label>
+            <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("auth.email")}</label>
             <input
               type="email" required value={email} onChange={e => setEmail(e.target.value)}
               className="mt-1 w-full bg-transparent border-b border-border py-2 outline-none focus:border-foreground transition"
@@ -72,11 +74,11 @@ export function Auth() {
           {mode !== "forgot" && (
             <div>
               <div className="flex items-center justify-between">
-                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Password</label>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("auth.password")}</label>
                 {mode === "signin" && (
                   <button type="button" onClick={() => { setMode("forgot"); reset(); }}
                     className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground transition">
-                    Forgot?
+                    {t("auth.forgot")}
                   </button>
                 )}
               </div>
@@ -88,7 +90,7 @@ export function Auth() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("auth.hidePasswordAria") : t("auth.showPasswordAria")}
                   className="absolute right-0 top-2.5 text-muted-foreground active:scale-90"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -105,9 +107,9 @@ export function Auth() {
             className="mt-4 w-full h-14 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-xs disabled:opacity-50 active:scale-[0.98] transition shadow-luxe"
           >
             {loading ? "…" :
-              mode === "signin" ? "Sign in" :
-              mode === "signup" ? "Create account" :
-              "Send reset link"}
+              mode === "signin" ? t("auth.signIn") :
+              mode === "signup" ? t("auth.createAccount") :
+              t("auth.sendResetLink")}
           </button>
         </form>
 
@@ -116,7 +118,7 @@ export function Auth() {
             onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); reset(); }}
             className="mt-6 text-xs text-muted-foreground tracking-wide"
           >
-            {mode === "signin" ? "New to AURA? Create an account" : "Already a member? Sign in"}
+            {mode === "signin" ? t("auth.newToAura") : t("auth.alreadyMember")}
           </button>
         )}
       </div>
