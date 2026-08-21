@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Palette } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +14,7 @@ import { ColorWheelPicker } from "@/components/ColorWheelPicker";
  * from their closet and opens the same ColorWheelPicker used there.
  */
 export function ColorLab({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
@@ -48,21 +50,19 @@ export function ColorLab({ go }: { go: (s: Screen) => void }) {
       <header className="px-6 pt-6 flex items-center gap-3">
         <button
           onClick={() => go("home")}
-          aria-label="Back"
+          aria-label={t("colorLab.backAria")}
           className="h-9 w-9 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
         >
           <ArrowLeft size={16} />
         </button>
       <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Color Lab</p>
-          <p className="font-serif text-2xl">Color Harmony</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("colorLab.colorLab")}</p>
+          <p className="font-serif text-2xl">{t("colorLab.colorHarmony")}</p>
         </div>
       </header>
 
       <p className="px-6 mt-3 text-sm text-muted-foreground">
-        Choose a piece from your wardrobe to sample its color and see matching
-        pairings on the Johannes Itten color wheel. This is about colors that
-        work well together — not your personal color season.
+        {t("colorLab.description")}
       </p>
 
       {loading ? (
@@ -75,7 +75,7 @@ export function ColorLab({ go }: { go: (s: Screen) => void }) {
         <div className="px-6 mt-10 text-center">
           <Palette size={28} className="mx-auto text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">
-            Add a few pieces to your wardrobe to get started.
+            {t("colorLab.emptyState")}
           </p>
         </div>
       ) : (
