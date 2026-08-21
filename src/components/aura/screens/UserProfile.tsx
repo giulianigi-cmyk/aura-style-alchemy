@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ArrowLeft, Check, Loader2, UserPlus } from "lucide-react";
 import type { Screen } from "../AuraApp";
@@ -16,6 +17,7 @@ type PublicProfile = {
 };
 
 export function UserProfile({ userId, onBack }: { userId: string; go?: (s: Screen) => void; onBack: () => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -49,8 +51,8 @@ export function UserProfile({ userId, onBack }: { userId: string; go?: (s: Scree
     setBusy(true);
     const { error } = await supabase.from("friends").insert({ requester_id: user.id, addressee_id: profile.id });
     setBusy(false);
-    if (error) { toast.error(error.code === "23505" ? "Request already sent" : error.message); return; }
-    toast.success("Request sent");
+    if (error) { toast.error(error.code === "23505" ? t("userProfile.toastRequestAlreadySent") : error.message); return; }
+    toast.success(t("userProfile.toastRequestSent"));
     setProfile({ ...profile, relation: "outgoing" });
   };
 
@@ -64,23 +66,23 @@ export function UserProfile({ userId, onBack }: { userId: string; go?: (s: Scree
       .eq("addressee_id", user.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("You are now friends");
+    toast.success(t("userProfile.toastNowFriends"));
     await load();
   };
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-3 flex items-center gap-3">
-        <button onClick={onBack} aria-label="Back" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90">
+        <button onClick={onBack} aria-label={t("userProfile.backAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={16} />
         </button>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Profile</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("userProfile.profile")}</p>
       </header>
 
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin" /></div>
       ) : !profile ? (
-        <p className="px-6 mt-8 text-sm text-muted-foreground">This profile is not available.</p>
+        <p className="px-6 mt-8 text-sm text-muted-foreground">{t("userProfile.profileNotAvailable")}</p>
       ) : (
         <section className="px-6 mt-4">
           <div className="rounded-3xl bg-card border border-border/60 p-8 text-center shadow-soft animate-fade-up">
@@ -98,24 +100,24 @@ export function UserProfile({ userId, onBack }: { userId: string; go?: (s: Scree
 
             <div className="mt-6">
               {profile.relation === "self" ? null : profile.relation === "friends" ? (
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Friends</span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("userProfile.friends")}</span>
               ) : profile.relation === "outgoing" ? (
                 <button
                   disabled
                   className="h-11 px-6 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] opacity-60"
-                >Request sent</button>
+                >{t("userProfile.requestSent")}</button>
               ) : profile.relation === "incoming" ? (
                 <button
                   onClick={() => void acceptRequest()}
                   disabled={busy}
                   className="h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center gap-2 disabled:opacity-50"
-                ><Check size={12} /> Accept</button>
+                ><Check size={12} /> {t("userProfile.accept")}</button>
               ) : (
                 <button
                   onClick={() => void sendRequest()}
                   disabled={busy}
                   className="h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center gap-2 disabled:opacity-50"
-                ><UserPlus size={12} /> Add friend</button>
+                ><UserPlus size={12} /> {t("userProfile.addFriend")}</button>
               )}
             </div>
           </div>
