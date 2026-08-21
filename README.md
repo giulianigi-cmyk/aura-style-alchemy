@@ -1,12 +1,4 @@
-# AURA — AI Wardrobe Intelligence
-
-AURA is an independent AI-powered product currently under development, designed to help people understand, organize and use the clothes they already own.
-
-The product combines wardrobe intelligence, computer vision, personalized recommendations and contextual styling to turn a digital wardrobe into an intelligent decision-support system.
-
-> Independent product · Currently under development
-> 
-> # AURA — AI Wardrobe Intelligence
+ > # AURA — AI Wardrobe Intelligence
 
 AURA is an independent AI-powered product currently under development, designed to help people understand, organize and make better use of the clothes they already own.
 
