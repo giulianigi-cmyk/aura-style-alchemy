@@ -44,3 +44,28 @@ The development process combines:
 - Implementation
 - Testing
 - Iteration
+## AI & Technology
+
+AURA integrates AI and computer vision into the product experience to transform unstructured garment images and user preferences into structured wardrobe data and personalized recommendations.
+
+The product development work includes:
+
+- AI-assisted garment detection and classification
+- Garment attribute extraction
+- Computer vision workflows
+- Image processing and analysis
+- Structured wardrobe data
+- Personalized recommendation logic
+- AI-powered product experiences
+- Evaluation and integration of AI capabilities into application workflows
+  ## Product & Engineering Decisions
+
+AURA involves evaluating different technical approaches based on user experience, product requirements, feasibility and scalability.
+
+Examples include:
+
+- Choosing different processing strategies depending on the workflow and volume of data
+- Designing structured data flows between product features and AI-enabled capabilities
+- Separating user-facing workflows from asynchronous processing where appropriate
+- Designing review and confirmation steps before AI-detected items are committed to the user's wardrobe
+- Balancing automation with user control in AI-assisted experiences
