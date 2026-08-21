@@ -1,28 +1,18 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 
-type Slide = { intro?: boolean; eyebrow?: string; title?: string; body?: string };
+type Slide = { intro?: boolean; eyebrowKey?: string; titleKey?: string; bodyKey?: string };
 
 const slides: Slide[] = [
   { intro: true },
-  {
-    eyebrow: "Step 01",
-    title: "Your wardrobe,\nfinally seen.",
-    body: "Photograph each piece. AURA catalogs fabric, color, season, and silhouette automatically.",
-  },
-  {
-    eyebrow: "Step 02",
-    title: "An editor,\nin your pocket.",
-    body: "AI styling trained on decades of runway, street, and atelier moments. Always personal.",
-  },
-  {
-    eyebrow: "Step 03",
-    title: "Style with\nintention.",
-    body: "Plan looks for any occasion, shop the gaps, and discover what truly suits you.",
-  },
+  { eyebrowKey: "step01", titleKey: "title01", bodyKey: "body01" },
+  { eyebrowKey: "step02", titleKey: "title02", bodyKey: "body02" },
+  { eyebrowKey: "step03", titleKey: "title03", bodyKey: "body03" },
 ];
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
   const [i, setI] = useState(0);
   const slide = slides[i];
   const last = i === slides.length - 1;
@@ -38,7 +28,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             </p>
             <div className="mx-auto mt-5 h-px w-16 bg-foreground/30" />
             <p className="mt-5 text-[10px] uppercase tracking-[0.45em] text-muted-foreground">
-              Wardrobe Intelligence
+              {t("splash.tagline")}
             </p>
           </div>
         )}
@@ -47,7 +37,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           onClick={onDone}
           className="absolute top-12 right-6 text-[11px] uppercase tracking-[0.25em] text-foreground/70"
         >
-          Skip
+          {t("onboarding.skip")}
         </button>
       </div>
 
@@ -55,12 +45,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         <div className="min-h-[190px] flex flex-col justify-end">
           {!slide.intro && (
             <div key={i}>
-              <p className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground animate-fade-up">{slide.eyebrow}</p>
+              <p className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground animate-fade-up">{t(`onboarding.${slide.eyebrowKey}`)}</p>
               <h1 className="mt-3 font-serif text-[42px] leading-[1.05] text-foreground whitespace-pre-line animate-fade-up" style={{ animationDelay: "0.1s" }}>
-                {slide.title}
+                {t(`onboarding.${slide.titleKey}`)}
               </h1>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground max-w-[280px] animate-fade-up" style={{ animationDelay: "0.2s" }}>
-                {slide.body}
+                {t(`onboarding.${slide.bodyKey}`)}
               </p>
             </div>
           )}
