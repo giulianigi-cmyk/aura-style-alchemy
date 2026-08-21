@@ -135,7 +135,8 @@ This approach allows AI-generated information to be reviewed and incorporated in
 
 ---
 
-## Product Development Principles
+
+### Product Development Principles
 
 AURA is being developed with a focus on:
 
