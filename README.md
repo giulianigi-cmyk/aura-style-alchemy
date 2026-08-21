@@ -131,30 +131,55 @@ At a high level, the architecture connects:
 │ Styling Assistance          │
 │ Context-aware Suggestions   │
 └─────────────────────────────┘
-
 This approach allows AI-generated information to be reviewed and incorporated into the user's wardrobe while maintaining user control over the final data.
+
+---
+
 ## Product Development Principles
+
 AURA is being developed with a focus on:
-User value over technology for its own sake
-Practical application of AI to real product problems
-Human oversight in AI-assisted workflows
-Structured and reusable product data
-Iterative experimentation
-Maintainable product architecture
-Scalable data and processing workflows
-Continuous improvement of the user experience
+
+- User value over technology for its own sake
+- Practical application of AI to real product problems
+- Human oversight in AI-assisted workflows
+- Structured and reusable product data
+- Iterative experimentation
+- Maintainable product architecture
+- Scalable data and processing workflows
+- Continuous improvement of the user experience
+
+---
+
 ## Current Status
+
 AURA is an independent product currently under active development.
+
 The product is being iterated across product experience, AI capabilities, computer vision, data architecture and application workflows.
+
 This repository documents the ongoing development process, selected product decisions and technical implementation.
+
+---
+
 ## Demo
+
 [Open AURA](https://aura-wardrobe-intelligence.lovable.app/)
+
+---
+
 ## Project Structure
+
 The repository includes the main application source code, backend/data components and supporting documentation.
+
 Key areas include:
-src/ — application source code
-supabase/ — backend and database-related components
-docs/ — supporting project documentation
+
+- `src/` — application source code
+- `supabase/` — backend and database-related components
+- `docs/` — supporting project documentation
+
+---
+
 ## About the Project
+
 AURA is an independent product project exploring how AI, computer vision, structured data and product design can work together to create more intelligent and personalized user experiences.
+
 The project combines product thinking, user experience, business problem solving and hands-on technology development.
