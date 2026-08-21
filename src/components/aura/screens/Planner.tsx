@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, X, Plus, Loader2, Sparkles, Cloud, Trash2, Luggage } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { Screen, StylistChatInit } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,7 @@ import { resolvePlanSlot, validateEventSlot } from "@/lib/outfit-plan-slot";
 import { useServerFn } from "@tanstack/react-start";
 import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
+import i18n from "@/i18n/config";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
 type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
@@ -64,8 +66,8 @@ function itemMatchesKeywords(it: WardrobeItem, keywords: string[], materials: st
   return materials.some((m) => itemMaterials.includes(m.toLowerCase()));
 }
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
+const getLocalizedDow = (t: (k: string) => string) => (t("planner.dowLetters") as string).split(",");
 
 export function Planner({ go, openStylistChat, focus }: {
   go: (s: Screen) => void;
@@ -73,6 +75,7 @@ export function Planner({ go, openStylistChat, focus }: {
   /** Deep-link target from a weather_change notification. */
   focus?: { date: string; planId?: string | null } | null;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { city, latitude, longitude, status, detect, setManual } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -155,8 +158,8 @@ export function Planner({ go, openStylistChat, focus }: {
   const cells = view === "month" ? monthGrid(anchor) : weekGrid(anchor);
   const today = toISO(new Date());
   const monthLabel = view === "month"
-    ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
-    : `Week of ${cells[0].getDate()} ${MONTHS[cells[0].getMonth()].slice(0, 3)}`;
+    ? new Date(anchor.getFullYear(), anchor.getMonth(), 1).toLocaleDateString(i18n.language, { month: "long", year: "numeric" })
+    : t("planner.weekOf", { day: cells[0].getDate(), month: cells[0].toLocaleDateString(i18n.language, { month: "short" }) });
 
   const shift = (n: number) => {
     if (view === "month") {
@@ -183,12 +186,12 @@ export function Planner({ go, openStylistChat, focus }: {
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-28">
       <header className="px-6 pt-14 pb-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Calendar</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.calendar")}</p>
         <div className="flex items-center justify-between mt-1">
           <h1 className="font-serif text-4xl">{monthLabel}</h1>
           <div className="flex gap-1">
-            <button onClick={() => shift(-1)} aria-label="Previous period" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronLeft size={16} /></button>
-            <button onClick={() => shift(1)} aria-label="Next period" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronRight size={16} /></button>
+            <button onClick={() => shift(-1)} aria-label={t("planner.previousPeriodAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronLeft size={16} /></button>
+            <button onClick={() => shift(1)} aria-label={t("planner.nextPeriodAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronRight size={16} /></button>
           </div>
         </div>
 
@@ -201,17 +204,17 @@ export function Planner({ go, openStylistChat, focus }: {
                 className={`px-4 py-1.5 rounded-full text-[10px] uppercase tracking-[0.25em] transition ${
                   view === v ? "bg-foreground text-background" : "text-foreground/70"
                 }`}
-              >{v}</button>
+              >{v === "month" ? t("planner.month") : t("planner.week")}</button>
             ))}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => go("builder")}
               className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95 inline-flex items-center gap-1"
-                        ><Sparkles size={11} /> Create outfit</button>
+                        ><Sparkles size={11} /> {t("planner.createOutfit")}</button>
                        <button
               onClick={() => go("trips")}
-              aria-label="Trips"
+              aria-label={t("planner.tripsAria")}
               className="h-12 w-12 rounded-full border border-border flex items-center justify-center active:scale-95"
             ><Luggage size={26} /></button>
           </div>
@@ -220,15 +223,15 @@ export function Planner({ go, openStylistChat, focus }: {
 
       {latitude == null && (
         <div className="mx-6 mt-3 rounded-2xl border border-border/60 bg-card p-4">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Weather</p>
-          <p className="font-serif text-lg mt-1">Enable location for daily forecast</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.weather")}</p>
+          <p className="font-serif text-lg mt-1">{t("planner.enableLocationForForecast")}</p>
           <div className="mt-3 flex gap-2">
             <button
               onClick={detect}
               className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95 flex items-center gap-1.5"
             >
               {status === "loading" ? <Loader2 size={11} className="animate-spin" /> : <Cloud size={11} />}
-              Use location
+              {t("planner.useLocation")}
             </button>
           </div>
           <form
@@ -238,24 +241,24 @@ export function Planner({ go, openStylistChat, focus }: {
             <input
               value={manualCity}
               onChange={(e) => setManualCity(e.target.value)}
-              placeholder="Or type your city"
+              placeholder={t("planner.orTypeCity")}
               className="flex-1 bg-background border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-foreground"
             />
-            <button className="h-9 px-4 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Save</button>
+            <button className="h-9 px-4 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("planner.save")}</button>
           </form>
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Calendar works without weather too — you can plan outfits either way.
+            {t("planner.calendarWorksWithoutWeather")}
           </p>
         </div>
       )}
       {city && latitude != null && (
         <p className="mx-6 mt-3 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-          {city} · forecast next {weather?.daily.length ?? 7} days
+          {t("planner.forecastNextDays", { city, days: weather?.daily.length ?? 7 })}
         </p>
       )}
 
       <div className="mx-4 mt-4 grid grid-cols-7 gap-1 text-center">
-        {DOW.map((d, i) => (
+        {getLocalizedDow(t).map((d, i) => (
           <span key={i} className="text-[9px] uppercase tracking-widest text-muted-foreground">{d}</span>
         ))}
       </div>
@@ -286,7 +289,7 @@ export function Planner({ go, openStylistChat, focus }: {
                   <span className={`font-serif text-sm leading-none pt-0.5 pl-1`}>{d.getDate()}</span>
                   <div className="flex items-center gap-1">
                     {(eventsByDate[iso]?.length ?? 0) > 0 && (
-                      <span className={`h-1.5 w-1.5 rounded-full ${isToday ? "bg-background" : "bg-[var(--champagne)]"}`} title={`${eventsByDate[iso].length} calendar event${eventsByDate[iso].length === 1 ? "" : "s"}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${isToday ? "bg-background" : "bg-[var(--champagne)]"}`} title={t("planner.calendarEventsCount", { count: eventsByDate[iso].length })} />
                     )}
                     {wIcon && <span className="text-[10px] leading-none">{wIcon}</span>}
                   </div>
@@ -357,6 +360,7 @@ function DayDetail({
   onSaved: () => void;
 }) {
 
+  const { t } = useTranslation();
   const { user } = useAuth();
   const resolveProposal = useServerFn(resolveWeatherProposal);
   const isPast = date < toISO(new Date());
@@ -393,7 +397,7 @@ function DayDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSlot ? slotKey(activeSlot) : null, plan?.id]);
 
- const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+ const dateLabel = new Date(date + "T00:00:00").toLocaleDateString(i18n.language, {
     weekday: "long", month: "long", day: "numeric",
   });
 
@@ -426,7 +430,7 @@ function DayDetail({
 
   const save = async ({ log }: { log: boolean }) => {
     if (!user) return;
-    if (!selected.length) { toast.error("Pick at least one piece"); return; }
+    if (!selected.length) { toast.error(t("planner.pickAtLeastOnePiece")); return; }
     setSaving(true);
 
     const wasAlreadyWorn = plan?.status === "worn";
@@ -490,14 +494,14 @@ function DayDetail({
     }
 
     setSaving(false);
-    toast.success(plan ? "Outfit updated" : log ? "Outfit logged" : "Outfit planned");
+    toast.success(plan ? t("planner.toastOutfitUpdated") : log ? t("planner.toastOutfitLogged") : t("planner.toastOutfitPlanned"));
     onSaved();
     if (hasMultipleSlots) setActiveSlot(null); else onClose();
   };
 
   const confirmWorn = async (actualItemIds?: string[]) => {
     if (!plan || !user) return;
-    if (actualItemIds && !actualItemIds.length) { toast.error("Pick at least one piece"); return; }
+    if (actualItemIds && !actualItemIds.length) { toast.error(t("planner.pickAtLeastOnePiece")); return; }
     setSaving(true);
     const { error } = await confirmOutfitPlanWorn(
       { id: plan.id, date: plan.date, item_ids: plan.item_ids, occasion: plan.occasion, notes: plan.notes },
@@ -507,7 +511,7 @@ function DayDetail({
     setSaving(false);
     if (error) { toast.error(error); return; }
     setWornPickerOpen(false);
-    toast.success("Marked as worn");
+    toast.success(t("planner.toastMarkedAsWorn"));
     onSaved();
   };
 
@@ -525,23 +529,20 @@ function DayDetail({
       outfitPlanId: plan.id,
     });
     if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
-    toast.success("Removed");
+    toast.success(t("planner.toastRemoved"));
     onSaved();
     if (hasMultipleSlots) setActiveSlot(null); else onClose();
   };
 
   const askStylistFor = (event: ImportedEvent | null) => {
-    const isItalian = typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("it");
-    const eventDateLabel = new Date(date + "T00:00:00").toLocaleDateString(isItalian ? "it-IT" : "en-US", {
+    const eventDateLabel = new Date(date + "T00:00:00").toLocaleDateString(i18n.language, {
       weekday: "long", month: "long", day: "numeric",
     });
     const promptMessage = event
-      ? (isItalian
-          ? `Ho "${event.title || "un evento"}" ${eventDateLabel}${event.location ? ` a ${event.location}` : ""} — cosa mi consigli di indossare?`
-          : `I have "${event.title || "an event"}" on ${eventDateLabel}${event.location ? ` at ${event.location}` : ""} — what should I wear?`)
-      : (isItalian
-          ? `Cosa mi consigli di indossare ${eventDateLabel}?`
-          : `What should I wear on ${eventDateLabel}?`);
+      ? (event.location
+          ? t("planner.chatPromptEventWithLocation", { title: event.title || t("planner.anEvent"), date: eventDateLabel, location: event.location })
+          : t("planner.chatPromptEvent", { title: event.title || t("planner.anEvent"), date: eventDateLabel }))
+      : t("planner.chatPromptGeneral", { date: eventDateLabel });
     openStylistChat({
       message: promptMessage,
       temperature: weather ? (weather.tempMin + weather.tempMax) / 2 : null,
@@ -555,12 +556,12 @@ function DayDetail({
     <div className="rounded-2xl bg-card border border-border/60 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Forecast</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.forecast")}</p>
           <p className="font-serif text-2xl mt-1">
             {Math.round(weather.tempMax)}° / {Math.round(weather.tempMin)}°
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {describeWeather(weather.weatherCode).label} · rain {weather.precipitationProbability}%
+            {describeWeather(weather.weatherCode).label} · {t("planner.rainPct", { pct: weather.precipitationProbability })}
           </p>
         </div>
         <span className="text-4xl">{describeWeather(weather.weatherCode).icon}</span>
@@ -570,11 +571,11 @@ function DayDetail({
       )}
       {suggestion && (
         <div className="mt-3 pt-3 border-t border-border/40">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Suggested</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.suggested")}</p>
           <p className="font-serif italic text-base mt-1">{suggestion.headline}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {suggestion.tips.map((t) => (
-              <span key={t} className="rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-widest bg-secondary/60">{t}</span>
+            {suggestion.tips.map((t2) => (
+              <span key={t2} className="rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-widest bg-secondary/60">{t2}</span>
             ))}
           </div>
         </div>
@@ -601,7 +602,7 @@ function DayDetail({
         </div>
         {slotPlan && (
           <span className={`shrink-0 text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${slotPlan.status === "worn" ? "bg-foreground text-background" : "bg-background text-muted-foreground"}`}>
-            {slotPlan.status === "worn" ? "Worn" : "Planned"}
+            {slotPlan.status === "worn" ? t("planner.worn") : t("planner.planned")}
           </span>
         )}
       </div>
@@ -620,8 +621,8 @@ function DayDetail({
         </button>
       ) : (
         <div className="mt-2 flex gap-2">
-          <button onClick={onOpen} className="flex-1 h-9 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]">Choose pieces</button>
-          <button onClick={onAsk} className="flex-1 h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1"><Sparkles size={11} /> Ask stylist</button>
+          <button onClick={onOpen} className="flex-1 h-9 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]">{t("planner.choosePieces")}</button>
+          <button onClick={onAsk} className="flex-1 h-9 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1"><Sparkles size={11} /> {t("planner.askStylist")}</button>
         </div>
       )}
     </div>
@@ -640,8 +641,8 @@ function DayDetail({
             )}
             <div>
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                {!activeSlot ? "Outfits" : isPast ? "Log outfit" : "Plan outfit"}
-                {activeSlot?.type === "event" ? ` · ${activeSlot.event.title || "Event"}` : activeSlot?.type === "general" ? " · General" : ""}
+                {!activeSlot ? t("planner.outfits") : isPast ? t("planner.logOutfit") : t("planner.planOutfit")}
+                {activeSlot?.type === "event" ? ` · ${activeSlot.event.title || t("planner.eventFallback")}` : activeSlot?.type === "general" ? ` · ${t("planner.generalLabel")}` : ""}
               </p>
               <p className="font-serif text-xl">{dateLabel}</p>
             </div>
@@ -663,8 +664,8 @@ function DayDetail({
             ))}
 
             <SlotRow
-              label="General"
-              sublabel="No specific event"
+              label={t("planner.generalLabel")}
+              sublabel={t("planner.noSpecificEvent")}
               slotPlan={generalPlan}
               onOpen={() => setActiveSlot({ type: "general" })}
               onAsk={() => askStylistFor(null)}
@@ -672,9 +673,9 @@ function DayDetail({
             {calendarEvents.map((e) => (
               <SlotRow
                 key={e.id}
-                label={e.title || "Untitled event"}
+                label={e.title || t("planner.untitledEvent")}
                 sublabel={[
-                  !e.all_day ? new Date(e.start_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : null,
+                  !e.all_day ? new Date(e.start_time).toLocaleTimeString(i18n.language, { hour: "numeric", minute: "2-digit" }) : null,
                   e.location,
                 ].filter(Boolean).join(" · ") || null}
                 slotPlan={planForEvent(e.id)}
@@ -703,11 +704,11 @@ function DayDetail({
                 <>
                   <div>
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Look</p>
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.look")}</p>
                       <span className={`text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
                         plan.status === "worn" ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground"
                       }`}>
-                        {plan.status === "worn" ? "Worn" : "Planned"}
+                        {plan.status === "worn" ? t("planner.worn") : t("planner.planned")}
                       </span>
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2">
@@ -725,13 +726,13 @@ function DayDetail({
                   </div>
                   {(plan.occasion || plan.notes) && (
                     <div className="rounded-2xl bg-secondary/40 p-4 space-y-2">
-                      {plan.occasion && <p className="text-xs"><span className="uppercase tracking-widest text-muted-foreground text-[10px]">Occasion · </span>{plan.occasion}</p>}
+                      {plan.occasion && <p className="text-xs"><span className="uppercase tracking-widest text-muted-foreground text-[10px]">{t("planner.occasionPrefix")}</span>{plan.occasion}</p>}
                       {plan.notes && <p className="text-xs">{plan.notes}</p>}
                     </div>
                   )}
                   {plan.weather_condition && (
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                      Worn in {plan.weather_condition}{plan.weather_temp != null ? ` · ${Math.round(Number(plan.weather_temp))}°` : ""}
+                      {t("planner.wornIn", { condition: plan.weather_condition })}{plan.weather_temp != null ? ` · ${Math.round(Number(plan.weather_temp))}°` : ""}
                     </p>
                   )}
                 </>
@@ -740,7 +741,7 @@ function DayDetail({
                   <div>
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                        Choose pieces · {selected.length} selected
+                        {t("planner.choosePiecesSelected", { count: selected.length })}
                       </p>
                       {suggestedItems.length > 0 && (
                         <button
@@ -749,7 +750,7 @@ function DayDetail({
                             filterSuggested ? "bg-foreground text-background" : "bg-secondary/60"
                           }`}
                         >
-                          <Sparkles size={10} /> Suggested
+                          <Sparkles size={10} /> {t("planner.suggested")}
                         </button>
                       )}
                     </div>
@@ -764,7 +765,7 @@ function DayDetail({
                   </div>
 
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Occasion</p>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("planner.occasion")}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {OCCASIONS.map((o) => (
                         <button
@@ -777,12 +778,12 @@ function DayDetail({
                   </div>
 
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Note</p>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("planner.note")}</p>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={2}
-                      placeholder="Optional note"
+                      placeholder={t("planner.optionalNote")}
                       className="w-full bg-secondary/40 rounded-2xl px-4 py-3 text-sm outline-none focus:bg-secondary/60 resize-none"
                     />
                   </div>
@@ -805,19 +806,19 @@ function DayDetail({
                       className="h-11 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
                     >
                       {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-                      Mark as worn
+                      {t("planner.markAsWorn")}
                     </button>
                   )}
 
                   <button
                     onClick={() => setEditing(true)}
                     className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
-                  >Edit</button>
+                  >{t("planner.edit")}</button>
                 </>
               ) : (
                 <>
                   {plan && (
-                    <button onClick={() => setEditing(false)} className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
+                    <button onClick={() => setEditing(false)} className="flex-1 h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("planner.cancel")}</button>
                   )}
                   <button
                     onClick={() => void save({ log: isPast })}
@@ -825,7 +826,7 @@ function DayDetail({
                     className="flex-1 h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
                   >
                     {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                    {plan ? "Save" : isPast ? "Log outfit" : "Plan outfit"}
+                    {plan ? t("planner.saveButton") : isPast ? t("planner.logOutfit") : t("planner.planOutfit")}
                   </button>
                 </>
               )}
@@ -843,13 +844,13 @@ function DayDetail({
             <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{dateLabel}</p>
-                <p className="font-serif text-lg italic">What did you actually wear?</p>
+                <p className="font-serif text-lg italic">{t("planner.whatDidYouWear")}</p>
               </div>
               <button onClick={() => setWornPickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                {wornSelected.length} selected
+                {t("planner.selectedCount", { count: wornSelected.length })}
               </p>
               <PiecePicker
                 className="mt-3"
@@ -866,7 +867,7 @@ function DayDetail({
                 className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-                Confirm worn
+                {t("planner.confirmWorn")}
               </button>
             </div>
           </div>
