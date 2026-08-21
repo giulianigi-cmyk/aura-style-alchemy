@@ -72,3 +72,89 @@ Examples include:
 - Separating user-facing workflows from asynchronous processing where appropriate
 - Designing review and confirmation steps before AI-detected items are committed to the user's wardrobe
 - Balancing automation with user control in AI-assisted experiences
+
+## Architecture
+
+AURA is built as a modular web application combining a user-facing product layer, application logic, persistent data storage and AI-enabled processing workflows.
+
+At a high level, the architecture connects:
+
+**User Experience → Application Logic → Data & Storage → AI Processing → Structured Wardrobe Intelligence → Personalized Recommendations**
+
+### High-Level Architecture
+
+```text
+┌─────────────────────────────┐
+│        User Experience      │
+│                             │
+│  Wardrobe · Outfits · Chat  │
+│  Recommendations · Profile │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│      Application Layer      │
+│                             │
+│ Product workflows           │
+│ User preferences            │
+│ Business logic              │
+│ Recommendation workflows    │
+└──────────────┬──────────────┘
+               │
+       ┌───────┴────────┐
+       ▼                ▼
+┌──────────────┐  ┌──────────────────┐
+│ Data &       │  │ AI Processing    │
+│ Storage      │  │                  │
+│              │  │ Image analysis   │
+│ Database     │  │ Garment detection│
+│ User data    │  │ Classification   │
+│ Wardrobe     │  │ Attribute        │
+│ Images       │  │ extraction       │
+└──────┬───────┘  └────────┬─────────┘
+       │                   │
+       └─────────┬─────────┘
+                 ▼
+┌─────────────────────────────┐
+│    Structured Wardrobe      │
+│        Intelligence         │
+│                             │
+│ Garments · Attributes       │
+│ Preferences · Context       │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│ Personalized Experiences    │
+│                             │
+│ Outfit Recommendations      │
+│ Styling Assistance          │
+│ Context-aware Suggestions   │
+└─────────────────────────────┘
+
+This approach allows AI-generated information to be reviewed and incorporated into the user's wardrobe while maintaining user control over the final data.
+Product Development Principles
+AURA is being developed with a focus on:
+User value over technology for its own sake
+Practical application of AI to real product problems
+Human oversight in AI-assisted workflows
+Structured and reusable product data
+Iterative experimentation
+Maintainable product architecture
+Scalable data and processing workflows
+Continuous improvement of the user experience
+Current Status
+AURA is an independent product currently under active development.
+The product is being iterated across product experience, AI capabilities, computer vision, data architecture and application workflows.
+This repository documents the ongoing development process, selected product decisions and technical implementation.
+Demo
+[Open AURA](https://aura-wardrobe-intelligence.lovable.app/)
+Project Structure
+The repository includes the main application source code, backend/data components and supporting documentation.
+Key areas include:
+src/ — application source code
+supabase/ — backend and database-related components
+docs/ — supporting project documentation
+About the Project
+AURA is an independent product project exploring how AI, computer vision, structured data and product design can work together to create more intelligent and personalized user experiences.
+The project combines product thinking, user experience, business problem solving and hands-on technology development.
