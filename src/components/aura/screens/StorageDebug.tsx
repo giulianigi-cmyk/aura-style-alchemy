@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +12,7 @@ type Check = { label: string; status: "pending" | "ok" | "fail"; detail: string;
  *  and shows exactly what happens, so the real error is visible on the
  *  phone instead of needing the Supabase dashboard. */
 export function StorageDebug({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [checks, setChecks] = useState<Check[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,8 +93,8 @@ export function StorageDebug({ go }: { go: (s: Screen) => void }) {
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Temporary</p>
-          <h1 className="font-serif text-2xl italic leading-tight">Storage debug</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("storageDebug.temporary")}</p>
+          <h1 className="font-serif text-2xl italic leading-tight">{t("storageDebug.title")}</h1>
         </div>
       </header>
 
