@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Images, Link2, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import {
   type UrlCandidateResult,
 } from "@/lib/batch-scan.functions";
 import { compressImageForUpload } from "@/lib/image-compress";
+import i18n from "@/i18n/config";
 type JobCounts = { queued: number; processing: number; done: number; failed: number };
 type ScanRow = {
   id: string;
@@ -29,14 +31,8 @@ const MAX_BATCH_PHOTOS = 150;
 type PhotoStatus = "queued" | "compressing" | "uploading" | "uploaded" | "failed";
 type PhotoState = { name: string; status: PhotoStatus; error?: string };
 
-const STATUS_LABEL: Record<string, string> = {
-  queued: "Queued",
-  processing: "Processing",
-  done: "Ready to review",
-  done_with_errors: "Ready · some photos failed",
-};
-
 export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openReview: (scanId: string) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
     const create = useServerFn(createBatchScan);
   const resolveCandidates = useServerFn(resolveBatchUrlCandidates);
@@ -56,6 +52,16 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
   const [chosenIndex, setChosenIndex] = useState<Record<string, number>>({});
   const [brokenCandidates, setBrokenCandidates] = useState<Record<string, boolean>>({});
 
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case "queued": return t("batchScan.statusQueued");
+      case "processing": return t("batchScan.statusProcessing");
+      case "done": return t("batchScan.statusDone");
+      case "done_with_errors": return t("batchScan.statusDoneWithErrors");
+      default: return status;
+    }
+  };
+
     const refresh = async () => {
     try {
       const rows = (await list()) as unknown as ScanRow[];
@@ -71,7 +77,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       await remove({ data: { scanId: id } });
     } catch (e) {
       console.error("[AURA batch-scan] delete failed", e);
-      toast.error("Couldn't remove that batch.");
+      toast.error(t("batchScan.couldntRemoveBatch"));
       refresh();
     }
   };
@@ -99,11 +105,11 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
         rounds++;
       } while (claimed > 0 && rounds < 40);
       if (opts.announce) {
-        toast(totalClaimed > 0 ? `Processed ${totalClaimed} photo${totalClaimed === 1 ? "" : "s"}` : "Nothing to process right now");
+        toast(totalClaimed > 0 ? t("batchScan.processedPhotos", { count: totalClaimed }) : t("batchScan.nothingToProcess"));
       }
     } catch (e) {
       console.warn("[AURA batch-scan] worker trigger failed", e);
-      if (opts.announce) toast.error("Couldn't reach the worker — try again in a moment.");
+      if (opts.announce) toast.error(t("batchScan.couldntReachWorker"));
     } finally {
       setProcessingNow(false);
     }
@@ -136,7 +142,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     );
     if (!urls.length) return;
     setBusy(true);
-    setLabel(`Looking for photos on ${urls.length} link${urls.length === 1 ? "" : "s"}…`);
+    setLabel(t("batchScan.lookingForPhotosOnLinks", { count: urls.length }));
     try {
       const { data: sess } = await supabase.auth.getSession();
       const res = await resolveCandidates({ data: { urls, accessToken: sess.session?.access_token } });
@@ -145,10 +151,10 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       res.results.forEach((r) => { if (r.ok) defaults[r.url] = 0; });
       setChosenIndex(defaults);
       const failedCount = res.results.filter((r) => !r.ok).length;
-      if (failedCount) toast.warning(`${failedCount} link${failedCount === 1 ? "" : "s"} couldn't be read`);
+      if (failedCount) toast.warning(t("batchScan.linksCouldntBeRead", { count: failedCount }));
     } catch (e) {
       console.error("[AURA batch-scan] candidate lookup failed", e);
-      toast.error("Couldn't look up those links.");
+      toast.error(t("batchScan.couldntLookUpLinks"));
     } finally {
       setBusy(false);
       setLabel("");
@@ -169,18 +175,18 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       }));
     if (!selections.length) return;
     setBusy(true);
-    setLabel(`Queueing ${selections.length} photo${selections.length === 1 ? "" : "s"}…`);
+    setLabel(t("batchScan.queueingPhotos", { count: selections.length }));
     try {
       const res = await queueSelections({ data: { selections } });
       if (!res.scanId) {
-        toast.error(res.error ?? "Could not queue those photos.");
+        toast.error(res.error ?? t("batchScan.couldNotQueuePhotos"));
         return;
       }
       const failedCount = res.failed?.length ?? 0;
       toast.success(
         failedCount
-          ? `${res.jobs} queued · ${failedCount} photo${failedCount === 1 ? "" : "s"} failed`
-          : `${res.jobs} photo${res.jobs === 1 ? "" : "s"} queued`,
+          ? t("batchScan.queuedSomeFailed", { queued: res.jobs, failed: failedCount })
+          : t("batchScan.photosQueued", { count: res.jobs }),
       );
       setUrlRows([""]);
       setUrlCandidates(null);
@@ -188,7 +194,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
       await runWorker();
     } catch (e) {
       console.error("[AURA batch-scan] queueing selections failed", e);
-      toast.error("Could not queue those photos.");
+      toast.error(t("batchScan.couldNotQueuePhotos"));
     } finally {
       setBusy(false);
       setLabel("");
@@ -200,7 +206,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
     const all = Array.from(files);
     const picked = all.slice(0, MAX_BATCH_PHOTOS);
     if (all.length > MAX_BATCH_PHOTOS) {
-      toast.warning(`Only the first ${MAX_BATCH_PHOTOS} photos are used per batch — upload the rest as a second batch.`);
+      toast.warning(t("batchScan.onlyFirstNPhotosUsed", { count: MAX_BATCH_PHOTOS }));
     }
 
     setBusy(true);
@@ -246,24 +252,24 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
 
     try {
       if (paths.length) {
-        setLabel("Queueing…");
+        setLabel(t("batchScan.queueing"));
         await create({ data: { paths } });
         const failedCount = failures.length;
         toast.success(
           failedCount
-            ? `${paths.length} queued · ${failedCount} photo${failedCount === 1 ? "" : "s"} failed to upload`
-            : `${paths.length} photo${paths.length === 1 ? "" : "s"} queued`,
+            ? t("batchScan.uploadedSomeFailed", { queued: paths.length, failed: failedCount })
+            : t("batchScan.photosQueued", { count: paths.length }),
         );
         await runWorker();
       } else {
-        toast.error("None of those photos could be uploaded.");
+        toast.error(t("batchScan.noneCouldBeUploaded"));
       }
     } catch (e) {
       console.error("[AURA batch-scan] queueing failed", e);
       toast.error(
         paths.length
-          ? "Photos uploaded but couldn't be queued — tap Process to retry."
-          : "Could not queue these photos.",
+          ? t("batchScan.uploadedButNotQueued")
+          : t("batchScan.couldNotQueuePhotos"),
       );
     } finally {
       setBusy(false);
@@ -279,8 +285,8 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Wardrobe</p>
-          <h1 className="font-serif text-2xl italic leading-tight">Batch scan</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("batchScan.wardrobe")}</p>
+          <h1 className="font-serif text-2xl italic leading-tight">{t("batchScan.batchScan")}</h1>
         </div>
       </header>
 
@@ -289,21 +295,20 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
           <button
             onClick={() => setMode("photos")}
             className={`flex-1 h-9 rounded-full text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 ${mode === "photos" ? "bg-foreground text-background" : "text-muted-foreground"}`}
-          ><Images size={12} /> From photos</button>
+          ><Images size={12} /> {t("batchScan.fromPhotos")}</button>
           <button
             onClick={() => setMode("urls")}
             className={`flex-1 h-9 rounded-full text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-1.5 ${mode === "urls" ? "bg-foreground text-background" : "text-muted-foreground"}`}
-          ><Link2 size={12} /> From URLs</button>
+          ><Link2 size={12} /> {t("batchScan.fromUrls")}</button>
         </div>
 
         {mode === "photos" && (
           <>
             <div className="rounded-3xl border-2 border-dashed border-border p-8 text-center">
               <Images size={22} className="mx-auto text-muted-foreground" />
-              <p className="mt-4 font-serif text-lg italic">Upload several outfit photos</p>
+              <p className="mt-4 font-serif text-lg italic">{t("batchScan.uploadSeveralPhotos")}</p>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                AURA analyses them in the background and prepares a list of suggested pieces.
-                Nothing enters your closet until you review and confirm.
+                {t("batchScan.uploadHint")}
               </p>
               <button
                 disabled={busy}
@@ -311,12 +316,12 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                 className="mt-6 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
               >{busy
                 ? (photoStates.length
-                    ? `${photoStates.filter((p) => p.status === "uploaded").length}/${photoStates.length} uploaded…`
-                    : label || "Working…")
-                : "Choose photos"}</button>
+                    ? t("batchScan.nOfMUploaded", { done: photoStates.filter((p) => p.status === "uploaded").length, total: photoStates.length })
+                    : label || t("batchScan.working"))
+                : t("batchScan.choosePhotos")}</button>
               {busy && photoStates.some((p) => p.status === "failed") && (
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  {photoStates.filter((p) => p.status === "failed").length} photo{photoStates.filter((p) => p.status === "failed").length === 1 ? "" : "s"} failed to upload so far — the rest keep going.
+                  {t("batchScan.photosFailedSoFar", { count: photoStates.filter((p) => p.status === "failed").length })}
                 </p>
               )}
             </div>
@@ -329,9 +334,9 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
 
         {mode === "urls" && !urlCandidates && (
           <div className="rounded-3xl border-2 border-dashed border-border p-6">
-            <p className="font-serif text-lg italic text-center">Paste product or image links</p>
+            <p className="font-serif text-lg italic text-center">{t("batchScan.pastLinks")}</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
-              One link per row — a product page or a direct image link both work. AURA finds the candidate photos so you can pick the right one for each.
+              {t("batchScan.pasteLinksHint")}
             </p>
             <div className="mt-5 space-y-2">
               {urlRows.map((row, i) => (
@@ -345,7 +350,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                   />
                   <button
                     onClick={() => removeUrlRow(i)}
-                    aria-label="Remove this URL"
+                    aria-label={t("batchScan.removeUrlAria")}
                     className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
                   ><X size={12} /></button>
                 </div>
@@ -354,23 +359,23 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
             <button
               onClick={addUrlRow}
               className="mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-            ><Plus size={12} /> Add URL</button>
+            ><Plus size={12} /> {t("batchScan.addUrl")}</button>
             <button
               disabled={busy}
               onClick={onFindPhotos}
               className="mt-5 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
-            >{busy ? label || "Working…" : "Find photos"}</button>
+            >{busy ? label || t("batchScan.working") : t("batchScan.findPhotos")}</button>
           </div>
         )}
 
         {mode === "urls" && urlCandidates && (
           <div className="rounded-3xl border-2 border-dashed border-border p-5">
             <div className="flex items-center justify-between">
-              <p className="font-serif text-lg italic">Choose a photo for each</p>
+              <p className="font-serif text-lg italic">{t("batchScan.chooseAPhotoForEach")}</p>
               <button
                 onClick={() => { setUrlCandidates(null); setChosenIndex({}); }}
                 className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-              >Start over</button>
+              >{t("batchScan.startOver")}</button>
             </div>
             <div className="mt-4 space-y-4">
               {urlCandidates.map((r) => (
@@ -393,7 +398,7 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                             style={{ background: "#FFFFFF" }}
                           >
                             {broken ? (
-                              <span className="text-[9px] text-muted-foreground px-1 text-center leading-tight">Unavailable</span>
+                              <span className="text-[9px] text-muted-foreground px-1 text-center leading-tight">{t("batchScan.unavailable")}</span>
                             ) : (
                               <img
                                 src={c}
@@ -421,26 +426,26 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
               disabled={busy || !urlCandidates.some((r) => r.ok)}
               onClick={onQueueSelections}
               className="mt-5 h-12 w-full rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] disabled:opacity-50"
-            >{busy ? label || "Working…" : `Queue ${urlCandidates.filter((r) => r.ok).length} photo${urlCandidates.filter((r) => r.ok).length === 1 ? "" : "s"}`}</button>
+            >{busy ? label || t("batchScan.working") : t("batchScan.queueNPhotos", { count: urlCandidates.filter((r) => r.ok).length })}</button>
           </div>
         )}
       </div>
 
       <div className="mx-6 mt-8">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your batches</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("batchScan.yourBatches")}</p>
           <button
             onClick={() => runWorker({ announce: true })}
             disabled={processingNow}
             className="flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground disabled:opacity-50"
           >
-            {processingNow ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Process
+            {processingNow ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {t("batchScan.process")}
           </button>
         </div>
 
         <div className="mt-3 space-y-2">
           {scans.length === 0 && (
-            <p className="text-sm text-muted-foreground">No batches yet.</p>
+            <p className="text-sm text-muted-foreground">{t("batchScan.noBatchesYet")}</p>
           )}
                     {scans.map((s) => {
             const c = s.jobCounts;
@@ -455,25 +460,25 @@ export function BatchScan({ go, openReview }: { go: (s: Screen) => void; openRev
                   onClick={() => reviewable && openReview(s.id)}
                   className="flex-1 min-w-0 text-left"
                 >
-                  <p className="text-sm">{s.total_photos} photo{s.total_photos === 1 ? "" : "s"}</p>
+                  <p className="text-sm">{t("batchScan.photosCount", { count: s.total_photos })}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {STATUS_LABEL[s.status] ?? s.status} · {new Date(s.created_at).toLocaleString("en-US")}
+                    {statusLabel(s.status)} · {new Date(s.created_at).toLocaleString(i18n.language)}
                   </p>
                   {!ready && (c.queued + c.processing + c.done + c.failed > 0) && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      ✓ {c.done} done{c.processing ? ` · ⏳ ${c.processing} processing` : ""}{c.queued ? ` · ${c.queued} queued` : ""}{c.failed ? ` · ⚠ ${c.failed} failed` : ""}
+                      ✓ {t("batchScan.doneCount", { count: c.done })}{c.processing ? ` · ⏳ ${t("batchScan.processingCount", { count: c.processing })}` : ""}{c.queued ? ` · ${t("batchScan.queuedCount", { count: c.queued })}` : ""}{c.failed ? ` · ⚠ ${t("batchScan.failedCount", { count: c.failed })}` : ""}
                     </p>
                   )}
                 </button>
                 {!ready && <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />}
                 {reviewable && (
                   <button onClick={() => openReview(s.id)} className="text-[10px] uppercase tracking-[0.25em] shrink-0">
-                    Review
+                    {t("batchScan.review")}
                   </button>
                 )}
                 <button
                   onClick={() => deleteScan(s.id)}
-                  aria-label="Remove this batch"
+                  aria-label={t("batchScan.removeBatchAria")}
                   className="h-7 w-7 rounded-full bg-secondary/60 flex items-center justify-center shrink-0 active:scale-90"
                 ><X size={12} /></button>
               </div>
