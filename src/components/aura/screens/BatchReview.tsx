@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Check, Loader2, AlertTriangle, Copy, X } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
 }
 
 export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: string }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const load = useServerFn(listDetectedItems);
   const confirm = useServerFn(confirmDetectedItems);
@@ -159,7 +161,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         }
       } catch (e) {
         console.error("[AURA batch-review] load failed", e);
-        toast.error("Couldn't load this batch.");
+        toast.error(t("batchReview.couldntLoadBatch"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -199,7 +201,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         ? { ...d, category, subcategory, colors, materials, seasons, brand, styles, occasions, price, currency, size }
         : d
     )));
-    toast.success(`Copied to ${copyTargets.size} piece${copyTargets.size === 1 ? "" : "s"}`);
+    toast.success(t("batchReview.copiedToPieces", { count: copyTargets.size }));
     setCopyFromId(null);
   };
 
@@ -261,7 +263,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     setRemovingBgId(id);
     try {
       const ok = await performBgRemoval(id, url);
-      if (!ok) toast.error("Couldn't remove the background cleanly — kept the original.");
+      if (!ok) toast.error(t("batchReview.couldntRemoveBgKept"));
     } finally {
       setRemovingBgId(null);
     }
@@ -269,7 +271,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
 
   const removeBgFromAll = async () => {
     const targets = drafts.filter((d) => !d.bgRemoved && d.cropUrl);
-    if (!targets.length) { toast("Every piece already has its background removed."); return; }
+    if (!targets.length) { toast(t("batchReview.everyPieceAlreadyHasBg")); return; }
     setBulkBgRunning(true);
     setBulkBgProgress({ done: 0, total: targets.length });
     let failed = 0;
@@ -283,8 +285,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
     setBulkBgRunning(false);
     toast.success(
       failed
-        ? `Background removed on ${targets.length - failed} piece${targets.length - failed === 1 ? "" : "s"} · ${failed} failed — retry those individually`
-        : `Background removed on all ${targets.length} piece${targets.length === 1 ? "" : "s"}`,
+        ? t("batchReview.bgRemovedSomeFailed", { done: targets.length - failed, failed })
+        : t("batchReview.bgRemovedAll", { count: targets.length }),
     );
   };
 
@@ -389,7 +391,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       }
 
       if (!payload.length) {
-        toast.error("Nothing to save.");
+        toast.error(t("batchReview.nothingToSave"));
         return;
       }
 
@@ -399,21 +401,21 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
       };
 
       if (res.confirmed > 0) {
-        const dupNote = skippedCount ? ` (${skippedCount} skipped as duplicates already in your closet)` : "";
-        toast.success(`Added ${res.confirmed} piece${res.confirmed === 1 ? "" : "s"} to your closet${dupNote}`);
+        const dupNote = skippedCount ? t("batchReview.skippedAsDuplicates", { count: skippedCount }) : "";
+        toast.success(t("batchReview.addedToCloset", { count: res.confirmed }) + dupNote);
       }
       const failedItems = res.results.filter((r) => !r.ok);
       if (failedItems.length) {
-        const reasons = Array.from(new Set(failedItems.map((r) => r.error || "unknown error")));
+        const reasons = Array.from(new Set(failedItems.map((r) => r.error || t("batchReview.unknownError"))));
         console.error("[AURA batch-review] items not confirmed:", failedItems);
         toast.error(
-          `${failedItems.length} item${failedItems.length === 1 ? "" : "s"} not saved: ${reasons.join("; ")}`,
+          t("batchReview.itemsNotSaved", { count: failedItems.length, reasons: reasons.join("; ") }),
         );
       }
       if (res.confirmed > 0) go("wardrobe");
     } catch (e) {
       console.error("[AURA batch-review] save failed", e);
-      toast.error(e instanceof Error ? e.message : "Some items could not be saved.");
+      toast.error(e instanceof Error ? e.message : t("batchReview.someItemsNotSaved"));
     } finally {
       setSaving(false);
     }
@@ -426,8 +428,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Batch scan</p>
-          <h1 className="font-serif text-2xl italic leading-tight">Review pieces</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("batchReview.batchScan")}</p>
+          <h1 className="font-serif text-2xl italic leading-tight">{t("batchReview.reviewPieces")}</h1>
         </div>
       </header>
 
@@ -436,7 +438,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           <Loader2 size={18} className="mx-auto animate-spin" />
           {loadProgress.total > 0 ? (
             <>
-              <p className="mt-3 text-sm">Cutting out each piece… {loadProgress.done}/{loadProgress.total}</p>
+              <p className="mt-3 text-sm">{t("batchReview.cuttingOutPieces", { done: loadProgress.done, total: loadProgress.total })}</p>
               <div className="mt-3 mx-auto h-1.5 w-48 rounded-full bg-secondary/60 overflow-hidden">
                 <div
                   className="h-full bg-foreground transition-all duration-300"
@@ -444,25 +446,25 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 />
               </div>
               {drafts.length > 0 && (
-                <p className="mt-3 text-[11px]">Finished pieces are ready to review below while the rest keep processing.</p>
+                <p className="mt-3 text-[11px]">{t("batchReview.finishedPiecesReady")}</p>
               )}
             </>
           ) : (
-            <p className="mt-3 text-sm">Loading batch…</p>
+            <p className="mt-3 text-sm">{t("batchReview.loadingBatch")}</p>
           )}
         </div>
       )}
 
       {!loading && drafts.length === 0 && (
         <p className="mx-6 mt-10 text-sm text-muted-foreground">
-          Nothing left to review in this batch.
+          {t("batchReview.nothingLeftToReview")}
         </p>
       )}
 
       {drafts.length > 0 && (
         <div className="mx-6 mt-4 space-y-4">
           <p className="text-sm text-muted-foreground">
-            {drafts.length} suggested piece{drafts.length === 1 ? "" : "s"}. Edit anything, discard what you don't want.
+            {t("batchReview.suggestedPieces", { count: drafts.length })}
           </p>
 
           {drafts.map((d) => (
@@ -471,18 +473,18 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 <div className="mb-1.5 flex items-center justify-between gap-2 rounded-full bg-secondary/70 px-3 py-1">
                   <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
                     <AlertTriangle size={11} />
-                    {d.included ? "Looks like a duplicate — will still be added" : "Already in your closet — won't be added"}
+                    {d.included ? t("batchReview.looksLikeDuplicateWillAdd") : t("batchReview.alreadyInClosetWontAdd")}
                   </span>
                   <button
                     onClick={() => update(d.id, { included: !d.included })}
                     className="shrink-0 text-[10px] uppercase tracking-widest underline"
-                  >{d.included ? "Skip it" : "Add anyway"}</button>
+                  >{d.included ? t("batchReview.skipIt") : t("batchReview.addAnyway")}</button>
                 </div>
               )}
               {d.dedupe.verdict === "maybe" && (
                 <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] uppercase tracking-widest bg-amber-100 text-amber-800">
                   <AlertTriangle size={11} />
-                  Looks similar to something you own
+                  {t("batchReview.looksSimilarToOwned")}
                 </div>
               )}
               <DetectedItemCard
@@ -497,18 +499,18 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                         <button
                           onClick={() => setAdjustingId(d.id)}
                           className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
-                        >Adjust crop</button>
+                        >{t("batchReview.adjustCrop")}</button>
                         <button
                           onClick={() => void removeBg(d.id)}
                           disabled={removingBgId === d.id}
                           className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
-                        >{removingBgId === d.id ? <Loader2 size={11} className="animate-spin" /> : null}{d.bgRemoved ? "Background removed" : "Remove background"}</button>
+                        >{removingBgId === d.id ? <Loader2 size={11} className="animate-spin" /> : null}{d.bgRemoved ? t("batchReview.backgroundRemoved") : t("batchReview.removeBackground")}</button>
                       </div>
                       {drafts.length > 1 && (
                         <button
                           onClick={() => openCopySheet(d.id)}
                           className="w-full h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] flex items-center justify-center gap-1.5"
-                        ><Copy size={11} /> Copy these details to others</button>
+                        ><Copy size={11} /> {t("batchReview.copyDetailsToOthers")}</button>
                       )}
                     </div>
                   )
@@ -532,25 +534,25 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           {copyFromId && (() => {
             const others = drafts.filter((d) => d.id !== copyFromId);
             const source = drafts.find((d) => d.id === copyFromId);
-            const sourceLabel = source ? [source.colors[0], source.subcategory || source.category].filter(Boolean).join(" ") || "this piece" : "this piece";
+            const sourceLabel = source ? [source.colors[0], source.subcategory || source.category].filter(Boolean).join(" ") || t("batchReview.thisPiece") : t("batchReview.thisPiece");
             return (
               <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCopyFromId(null)}>
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
                   <div className="flex items-center justify-between shrink-0">
-                    <p className="font-serif italic text-lg">Copy details to which pieces?</p>
-                    <button onClick={() => setCopyFromId(null)} aria-label="Close" className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+                    <p className="font-serif italic text-lg">{t("batchReview.copyDetailsToWhich")}</p>
+                    <button onClick={() => setCopyFromId(null)} aria-label={t("batchReview.closeAria")} className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground shrink-0">
-                    Copying from <span className="font-medium text-foreground">{sourceLabel}</span> — category, colors, material, brand and the rest, not the photo itself.
+                    {t("batchReview.copyingFrom")} <span className="font-medium text-foreground">{sourceLabel}</span> — {t("batchReview.copyingFromDetails")}
                   </p>
                   <button
                     onClick={() => setCopyTargets(new Set(others.map((d) => d.id)))}
                     className="mt-2 self-start text-[10px] uppercase tracking-[0.2em] text-muted-foreground underline shrink-0"
-                  >Select all ({others.length})</button>
+                  >{t("batchReview.selectAll", { count: others.length })}</button>
                   <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-2 pb-4">
                     {others.map((d) => {
                       const on = copyTargets.has(d.id);
-                      const label = [d.colors[0], d.subcategory || d.category].filter(Boolean).join(" ") || "Untitled piece";
+                      const label = [d.colors[0], d.subcategory || d.category].filter(Boolean).join(" ") || t("batchReview.untitledPiece");
                       return (
                         <button
                           key={d.id}
@@ -574,7 +576,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                     onClick={applyCopy}
                     disabled={copyTargets.size === 0}
                     className="mt-1 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 shrink-0"
-                  >Copy to {copyTargets.size} piece{copyTargets.size === 1 ? "" : "s"}</button>
+                  >{t("batchReview.copyToPieces", { count: copyTargets.size })}</button>
                 </div>
               </div>
             );
@@ -588,7 +590,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                 className="w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {bulkBgRunning ? <Loader2 size={13} className="animate-spin" /> : null}
-                {bulkBgRunning ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}` : "Remove background from all"}
+                {bulkBgRunning ? t("batchReview.removingBackgrounds", { done: bulkBgProgress.done, total: bulkBgProgress.total }) : t("batchReview.removeBackgroundFromAll")}
               </button>
               {bulkBgRunning && (
                 <div className="mt-2 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
@@ -600,7 +602,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               )}
               {!bulkBgRunning && (
                 <p className="mt-1.5 text-[10px] text-muted-foreground text-center">
-                  Only applies to pieces that don't have it yet — and happens automatically when you tap "Add" below anyway, so this is just for previewing first.
+                  {t("batchReview.onlyAppliesToPiecesWithout")}
                 </p>
               )}
             </div>
@@ -614,8 +616,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving && bulkBgRunning
-                ? `Removing backgrounds… ${bulkBgProgress.done}/${bulkBgProgress.total}`
-                : <>Add {toSave.length} item{toSave.length === 1 ? "" : "s"}{skippedCount ? ` (${skippedCount} duplicate${skippedCount === 1 ? "" : "s"} skipped)` : ""}</>}
+                ? t("batchReview.removingBackgrounds", { done: bulkBgProgress.done, total: bulkBgProgress.total })
+                : <>{t("batchReview.addItems", { count: toSave.length })}{skippedCount ? t("batchReview.duplicatesSkippedParen", { count: skippedCount }) : ""}</>}
             </button>
           </div>
         </div>
