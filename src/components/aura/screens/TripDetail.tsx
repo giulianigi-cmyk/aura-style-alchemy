@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
@@ -19,12 +20,13 @@ import { resolveWardrobeUrls, thumbSrc } from "@/lib/wardrobe-image";
 import { useAuth } from "@/hooks/use-auth";
 import { OCCASIONS } from "./Planner";
 import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
+import i18n from "@/i18n/config";
 
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
 
 function fmtDate(d: string) {
-  return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(`${d}T00:00:00`).toLocaleDateString(i18n.language, { month: "short", day: "numeric", year: "numeric" });
 }
 
 type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
@@ -36,6 +38,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
    *  card is scrolled to and shows the proposal inline. */
   focusActivityId?: string | null;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [destinations, setDestinations] = useState<TripDestination[]>([]);
@@ -119,12 +122,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
           }
         }
       })
-      .catch((e) => { console.error("[AURA trip-detail] load failed", e); toast.error("Couldn't load this trip"); })
+      .catch((e) => { console.error("[AURA trip-detail] load failed", e); toast.error(t("tripDetail.couldntLoadTrip")); })
       .finally(() => setLoading(false));
   };
   useEffect(load, [tripId]);
 
-  const locationName = (id: string) => allLocations.find((l) => l.id === id)?.name ?? "Unknown";
+  const locationName = (id: string) => allLocations.find((l) => l.id === id)?.name ?? t("tripDetail.unknown");
 
   const toggleEssentialStatus = async (item: TripEssential) => {
     const nextStatus = item.status === "packed" ? "to_pack" : "packed";
@@ -144,7 +147,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
       setEssentials((prev) => [...prev, res.item]);
       setNewName(""); setNewCategory(""); setAddingEssential(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't add item");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntAddItem"));
     }
   };
 
@@ -162,10 +165,10 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     if (!trip) return;
     try {
       await deleteTrip({ data: { tripId: trip.id } });
-      toast.success("Trip deleted");
+      toast.success(t("tripDetail.toastTripDeleted"));
       go("trips");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't delete trip");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntDeleteTrip"));
     }
   };
 
@@ -184,7 +187,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
       setActivities((prev) => [...prev, res.activity].sort((a, b) => a.activity_date.localeCompare(b.activity_date)));
       setActType(""); setActDressCode(""); setActSegment("day"); setActDate(""); setAddingActivity(false); setDuplicatingActivity(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't add activity");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntAddActivity"));
     }
   };
 
@@ -227,7 +230,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
       setWardrobeSigned(await resolveWardrobeUrls(list));
     } catch (e) {
       console.error("[AURA trip-detail] wardrobe load failed", e);
-      toast.error("Couldn't load your wardrobe");
+      toast.error(t("tripDetail.couldntLoadWardrobe"));
     } finally {
       setWardrobeLoading(false);
     }
@@ -248,7 +251,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         setPackingItems((prev) => [...prev, res.item]);
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't update packing list");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntUpdatePackingList"));
       load(); // resync on failure rather than trust the optimistic state
     } finally {
       setPendingItemId(null);
@@ -273,12 +276,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     try {
       const res = await generateTripCapsule({ data: { tripId: trip.id } });
       setGenResult({ generated: res.generated, failed: res.failed, unclassifiedExcluded: res.unclassifiedExcluded });
-      if (res.generated > 0) toast.success(`${res.generated} outfit${res.generated === 1 ? "" : "s"} generated`);
-      else if (res.failed.length === 0 && res.skippedExisting > 0) toast.message("Everything logged already has an outfit");
-      else if (res.failed.length === 0) toast.message("Log an activity first — there's nothing to generate yet");
+      if (res.generated > 0) toast.success(t("tripDetail.outfitsGenerated", { count: res.generated }));
+      else if (res.failed.length === 0 && res.skippedExisting > 0) toast.message(t("tripDetail.everythingHasOutfit"));
+      else if (res.failed.length === 0) toast.message(t("tripDetail.logActivityFirst"));
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't generate outfits");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntGenerateOutfits"));
     } finally {
       setGenerating(false);
     }
@@ -291,11 +294,11 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     setRegeneratingId(activityId);
     try {
       const res = await generateTripCapsule({ data: { tripId: trip.id, activityIds: [activityId] } });
-      if (res.generated > 0) toast.success("Outfit regenerated");
-      else toast.error(res.failed[0]?.reason ?? "Couldn't compose a look for this activity");
+      if (res.generated > 0) toast.success(t("tripDetail.outfitRegenerated"));
+      else toast.error(res.failed[0]?.reason ?? t("tripDetail.couldntComposeLook"));
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't regenerate outfit");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntRegenerateOutfit"));
     } finally {
       setRegeneratingId(null);
     }
@@ -308,7 +311,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
 
   const saveEditPlan = async () => {
     if (!editingPlan || savingPlan) return;
-    if (!editItemIds.length) { toast.error("Pick at least one piece"); return; }
+    if (!editItemIds.length) { toast.error(t("tripDetail.pickAtLeastOnePiece")); return; }
     setSavingPlan(true);
     try {
       await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
@@ -320,9 +323,9 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         catch (e) { console.error("[AURA trip] proposal resolve failed", e); }
       }
       setEditingPlan(null);
-      toast.success("Outfit updated");
+      toast.success(t("tripDetail.toastOutfitUpdated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't update outfit");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntUpdateOutfit"));
     } finally {
       setSavingPlan(false);
     }
@@ -333,7 +336,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     try {
       await deleteTripOutfitPlan({ data: { planId } });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't delete outfit");
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntDeleteOutfit"));
       load();
     }
   };
@@ -369,12 +372,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
           </button>
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-1.5"><Icon size={11} /> {trip.trip_type}</p>
-            <h1 className="font-serif text-2xl mt-1 truncate">{trip.name || "Untitled trip"}</h1>
+            <h1 className="font-serif text-2xl mt-1 truncate">{trip.name || t("tripDetail.untitledTrip")}</h1>
           </div>
         </div>
         <button
           onClick={() => setConfirmDelete(true)}
-          aria-label="Delete trip"
+          aria-label={t("tripDetail.deleteTripAria")}
           className="h-10 w-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90 shrink-0"
         ><Trash2 size={15} /></button>
       </header>
@@ -390,22 +393,22 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
           {sourceLocationIds.length > 0 ? sourceLocationIds.map((id) => (
             <span key={id} className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{locationName(id)}</span>
           )) : (
-            <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">Whole wardrobe</span>
+            <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{t("tripDetail.wholeWardrobe")}</span>
           )}
           <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">
-            {trip.laundry_available ? "Laundry available" : "No laundry"}
+            {trip.laundry_available ? t("tripDetail.laundryAvailable") : t("tripDetail.noLaundry")}
           </span>
         </div>
       </div>
 
       <section className="px-6 mt-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic">Essentials</h2>
-          {essentials.length > 0 && <p className="text-[11px] text-muted-foreground">{packedCount}/{essentials.length} packed</p>}
+          <h2 className="font-serif text-xl italic">{t("tripDetail.essentials")}</h2>
+          {essentials.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.packedCount", { packed: packedCount, total: essentials.length })}</p>}
         </div>
 
         {essentials.length === 0 && !addingEssential && (
-          <p className="text-sm text-muted-foreground mb-3">Nothing here yet — add items one by one, or apply a preset next time you create a trip.</p>
+          <p className="text-sm text-muted-foreground mb-3">{t("tripDetail.noEssentialsYet")}</p>
         )}
 
         <div className="space-y-4">
@@ -422,7 +425,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                     <span className={`flex-1 text-sm ${item.status === "packed" ? "line-through text-muted-foreground" : ""}`}>
                       {item.name} ×{item.quantity}
                     </span>
-                    <button onClick={() => void removeEssential(item.id)} aria-label={`Remove ${item.name}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
+                    <button onClick={() => void removeEssential(item.id)} aria-label={t("tripDetail.removeItemAria", { name: item.name })} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                       <X size={13} />
                     </button>
                   </div>
@@ -438,7 +441,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
               <input
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="Category (optional)"
+                placeholder={t("tripDetail.categoryOptional")}
                 className="w-28 bg-secondary/60 rounded-full px-3 py-2.5 text-xs outline-none placeholder:text-muted-foreground"
               />
               <input
@@ -446,36 +449,36 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void addEssential()}
-                placeholder="Item name"
+                placeholder={t("tripDetail.itemName")}
                 className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setAddingEssential(false)} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
-              <button onClick={() => void addEssential()} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">Add</button>
+              <button onClick={() => setAddingEssential(false)} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
+              <button onClick={() => void addEssential()} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.add")}</button>
             </div>
           </div>
         ) : (
           <button
             onClick={() => setAddingEssential(true)}
             className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-          ><Plus size={13} /> Add item</button>
+          ><Plus size={13} /> {t("tripDetail.addItem")}</button>
         )}
       </section>
 
       <section className="px-6 mt-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><Luggage size={16} /> Items to pack</h2>
+          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><Luggage size={16} /> {t("tripDetail.itemsToPack")}</h2>
           {packingItems.length > 0 && (
             <p className="text-[11px] text-muted-foreground">
-              {packingItems.filter((p) => p.status === "packed").length}/{packingItems.length} packed
+              {t("tripDetail.packedCount", { packed: packingItems.filter((p) => p.status === "packed").length, total: packingItems.length })}
             </p>
           )}
         </div>
 
         {packingItems.length === 0 && (
           <p className="text-sm text-muted-foreground mb-3">
-            Add real pieces from your wardrobe — this becomes your actual suitcase, with photos, not just a checklist.
+            {t("tripDetail.addRealPiecesHint")}
           </p>
         )}
 
@@ -496,7 +499,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                   )}
                   <button
                     onClick={() => void togglePackingItem(p.item_id)}
-                    aria-label="Remove from packing list"
+                    aria-label={t("tripDetail.removeFromPackingAria")}
                     className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
                   ><X size={11} /></button>
                 </div>
@@ -508,16 +511,16 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         <button
           onClick={() => void openPicker()}
           className="w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-        ><Plus size={13} /> Add from wardrobe</button>
+        ><Plus size={13} /> {t("tripDetail.addFromWardrobe")}</button>
       </section>
 
       {(() => {
         const UNDERWEAR_GROUPS: { label: string; subcats: string[] }[] = [
-          { label: "Bras", subcats: ["Bra", "Sports Bra"] },
-          { label: "Underwear", subcats: ["Briefs", "Panties", "Boxers"] },
-          { label: "Socks", subcats: ["Socks", "Tights"] },
-          { label: "Sleepwear", subcats: ["Sleepwear"] },
-          { label: "Shapewear", subcats: ["Shapewear"] },
+          { label: t("tripDetail.bras"), subcats: ["Bra", "Sports Bra"] },
+          { label: t("tripDetail.underwear"), subcats: ["Briefs", "Panties", "Boxers"] },
+          { label: t("tripDetail.socks"), subcats: ["Socks", "Tights"] },
+          { label: t("tripDetail.sleepwear"), subcats: ["Sleepwear"] },
+          { label: t("tripDetail.shapewear"), subcats: ["Shapewear"] },
         ];
         const underwearPacking = packingItems.filter((p) => {
           const it = wardrobeItems.find((w) => w.id === p.item_id);
@@ -536,9 +539,9 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         return (
           <section className="px-6 mt-8">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-serif text-xl italic">Underwear</h2>
+              <h2 className="font-serif text-xl italic">{t("tripDetail.underwear")}</h2>
               <p className="text-[11px] text-muted-foreground">
-                {underwearPacking.filter((p) => p.status === "packed").length}/{underwearPacking.length} packed
+                {t("tripDetail.packedCount", { packed: underwearPacking.filter((p) => p.status === "packed").length, total: underwearPacking.length })}
               </p>
             </div>
             <div className="space-y-4">
@@ -561,7 +564,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                           )}
                           <button
                             onClick={() => void togglePackingItem(p.item_id)}
-                            aria-label="Remove from packing list"
+                            aria-label={t("tripDetail.removeFromPackingAria")}
                             className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
                           ><X size={11} /></button>
                         </div>
@@ -578,8 +581,8 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         <div className="fixed inset-0 z-50 bg-background flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Your wardrobe</p>
-              <p className="font-serif text-xl">Tap to add or remove</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.yourWardrobe")}</p>
+              <p className="font-serif text-xl">{t("tripDetail.tapToAddOrRemove")}</p>
             </div>
             <button onClick={() => setPickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={16} /></button>
           </div>
@@ -587,7 +590,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
             {wardrobeLoading ? (
               <div className="flex justify-center mt-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
             ) : wardrobeItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground mt-8 text-center">No pieces in your wardrobe yet.</p>
+              <p className="text-sm text-muted-foreground mt-8 text-center">{t("tripDetail.noPiecesYet")}</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {wardrobeItems.map((it) => {
@@ -610,7 +613,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
             )}
           </div>
           <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
-            <button onClick={() => setPickerOpen(false)} className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">Done</button>
+            <button onClick={() => setPickerOpen(false)} className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.done")}</button>
           </div>
         </div>
       )}
@@ -619,7 +622,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Edit outfit</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.editOutfit")}</p>
               <p className="font-serif text-xl italic truncate">
                 {activities.find((a) => a.id === editingPlan.trip_activity_id)?.activity_type ?? editingPlan.occasion ?? fmtDate(editingPlan.date)}
               </p>
@@ -633,7 +636,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
             selectedIds={editItemIds}
             onToggle={(id) => setEditItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
             loading={wardrobeLoading}
-            emptyHint="No pieces in your wardrobe yet."
+            emptyHint={t("tripDetail.noPiecesYet")}
           />
           <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
             <button
@@ -642,7 +645,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
               className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
             >
               {savingPlan ? <Loader2 size={14} className="animate-spin" /> : null}
-              Save {editItemIds.length} piece{editItemIds.length === 1 ? "" : "s"}
+              {t("tripDetail.savePieces", { count: editItemIds.length })}
             </button>
           </div>
         </div>
@@ -650,13 +653,13 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
 
       <section className="px-6 mt-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><CalendarDays size={16} /> Activities</h2>
-          {activities.length > 0 && <p className="text-[11px] text-muted-foreground">{activities.length} logged</p>}
+          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><CalendarDays size={16} /> {t("tripDetail.activities")}</h2>
+          {activities.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.loggedCount", { count: activities.length })}</p>}
         </div>
 
         {activities.length === 0 && !addingActivity && (
           <p className="text-sm text-muted-foreground mb-3">
-            Log what you'll be doing each day — dinners, meetings, museum visits — so AURA can plan outfits and pack around them.
+            {t("tripDetail.logActivitiesHint")}
           </p>
         )}
 
@@ -672,12 +675,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
               </div>
               <button
                 onClick={() => startDuplicateActivity(a)}
-                aria-label={`Duplicate ${a.activity_type}`}
+                aria-label={t("tripDetail.duplicateActivityAria", { name: a.activity_type })}
                 className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
               >
                 <Copy size={12} />
               </button>
-              <button onClick={() => void removeActivity(a.id)} aria-label={`Remove ${a.activity_type}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
+              <button onClick={() => void removeActivity(a.id)} aria-label={t("tripDetail.removeActivityAria", { name: a.activity_type })} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                 <X size={13} />
               </button>
             </div>
@@ -687,7 +690,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         {addingActivity ? (
           <div className="mt-3 space-y-2">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-              {duplicatingActivity ? "Duplicate activity" : "New activity"}
+              {duplicatingActivity ? t("tripDetail.duplicateActivity") : t("tripDetail.newActivity")}
             </p>
             <div className="flex items-center gap-2">
               <input
@@ -702,7 +705,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                 autoFocus
                 value={actType}
                 onChange={(e) => setActType(e.target.value)}
-                placeholder="e.g. Dinner, Client meeting"
+                placeholder={t("tripDetail.activityPlaceholder")}
                 className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
@@ -713,7 +716,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                   onClick={() => setActSegment(seg)}
                   className={`px-3 py-1.5 rounded-full text-[11px] capitalize flex items-center gap-1 ${actSegment === seg ? "bg-foreground text-background" : "bg-secondary/60"}`}
                 >
-                  {seg === "evening" ? <Moon size={11} /> : <Sun size={11} />} {seg}
+                  {seg === "evening" ? <Moon size={11} /> : <Sun size={11} />} {seg === "evening" ? t("tripDetail.evening") : t("tripDetail.day")}
                 </button>
               ))}
             </div>
@@ -727,9 +730,9 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
               ))}
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => cancelActivityForm()} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
+              <button onClick={() => cancelActivityForm()} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
               <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">
-                {duplicatingActivity ? "Duplicate" : "Add"}
+                {duplicatingActivity ? t("tripDetail.duplicateButton") : t("tripDetail.add")}
               </button>
             </div>
           </div>
@@ -737,7 +740,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
           <button
             onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
             className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-          ><Plus size={13} /> Add activity</button>
+          ><Plus size={13} /> {t("tripDetail.addActivity")}</button>
         )}
       </section>
 
@@ -750,12 +753,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                 <div key={note.countryKeywords[0]} className="flex items-start gap-2.5">
                   <Info size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
                   <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground">Suggerimento: {country}</span>{" "}
+                    <span className="font-medium text-foreground">{t("tripDetail.tipLabel")}: {country}</span>{" "}
                     {note.message}
                   </p>
                   <button
                     onClick={() => setDismissedNotes((prev) => [...prev, note.countryKeywords[0]])}
-                    aria-label="Hide note"
+                    aria-label={t("tripDetail.hideNoteAria")}
                     className="h-6 w-6 rounded-full border border-border/60 flex items-center justify-center shrink-0"
                   ><X size={12} /></button>
                 </div>
@@ -765,13 +768,13 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
         )}
 
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic">Day-by-day outfits</h2>
-          {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{outfitPlans.length} generated</p>}
+          <h2 className="font-serif text-xl italic">{t("tripDetail.dayByDayOutfits")}</h2>
+          {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.generatedCount", { count: outfitPlans.length })}</p>}
         </div>
 
         {outfitPlans.length === 0 && (
           <p className="text-sm text-muted-foreground mb-3">
-            Builds a packing capsule and a look for each day of the trip — using the activities logged above where you've added them, and a generic day + evening look everywhere else.
+            {t("tripDetail.buildsPackingCapsuleHint")}
           </p>
         )}
 
@@ -797,7 +800,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                       <button
                         onClick={() => void regenerateActivity(a.id)}
                         disabled={regeneratingId === a.id}
-                        aria-label={`Regenerate outfit for ${a.activity_type}`}
+                        aria-label={t("tripDetail.regenerateOutfitAria", { name: a.activity_type })}
                         className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90 disabled:opacity-40"
                       >
                         {regeneratingId === a.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
@@ -806,12 +809,12 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                         <>
                           <button
                             onClick={() => startEditPlan(op)}
-                            aria-label={`Edit outfit for ${a.activity_type}`}
+                            aria-label={t("tripDetail.editOutfitAria", { name: a.activity_type })}
                             className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
                           ><Pencil size={12} /></button>
                           <button
                             onClick={() => void removePlan(op.id)}
-                            aria-label={`Delete outfit for ${a.activity_type}`}
+                            aria-label={t("tripDetail.deleteOutfitAria", { name: a.activity_type })}
                             className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
                           ><Trash2 size={12} /></button>
                         </>
@@ -819,7 +822,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                     </div>
                     {op?.weather_temp != null && (
                       <p className="text-[10px] text-muted-foreground mb-2 -mt-1">
-                        {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? " · Estimated" : ""}
+                        {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? ` · ${t("tripDetail.estimated")}` : ""}
                       </p>
                     )}
                     {proposal && (
@@ -846,7 +849,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                         })}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-muted-foreground">No outfit yet — generate one for this activity.</p>
+                      <p className="text-[11px] text-muted-foreground">{t("tripDetail.noOutfitYet")}</p>
                     )}
                   </div>
                 );
@@ -866,7 +869,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
             {genResult.unclassifiedExcluded > 0 && (
               <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
                 <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                {genResult.unclassifiedExcluded} wardrobe piece{genResult.unclassifiedExcluded === 1 ? "" : "s"} skipped — not yet classified. Tap the wand icon (✨) at the top of Wardrobe to classify them.
+                {t("tripDetail.unclassifiedSkipped", { count: genResult.unclassifiedExcluded })}
               </p>
             )}
           </div>
@@ -878,21 +881,21 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
           className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
         >
           {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-          {outfitPlans.length > 0 ? "Generate remaining" : "Generate outfits"}
+          {outfitPlans.length > 0 ? t("tripDetail.generateRemaining") : t("tripDetail.generateOutfits")}
         </button>
         {activities.length === 0 && (
-          <p className="mt-2 text-[11px] text-muted-foreground text-center">No activities logged — AURA will build a generic day + evening capsule for the whole trip. Log activities above for specific looks instead.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground text-center">{t("tripDetail.noActivitiesHint")}</p>
         )}
       </section>
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setConfirmDelete(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-destructive/40 bg-card p-5 shadow-luxe">
-            <p className="font-serif text-lg text-center">Delete this trip?</p>
-            <p className="text-xs text-muted-foreground text-center mt-1">This cannot be undone.</p>
+            <p className="font-serif text-lg text-center">{t("tripDetail.deleteThisTrip")}</p>
+            <p className="text-xs text-muted-foreground text-center mt-1">{t("tripDetail.cannotBeUndone")}</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">Cancel</button>
-              <button onClick={() => void doDeleteTrip()} className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em]">Delete</button>
+              <button onClick={() => setConfirmDelete(false)} className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
+              <button onClick={() => void doDeleteTrip()} className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.delete")}</button>
             </div>
           </div>
         </div>
