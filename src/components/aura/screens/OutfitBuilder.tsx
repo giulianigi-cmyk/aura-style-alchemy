@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { uploadOutfitThumb } from "@/lib/outfit-thumb";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import { suggestOutfitAI } from "@/lib/ai-suggest-outfit.functions";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { logWardrobeEvent } from "@/lib/wardrobe-events";
 import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
+import i18n from "@/i18n/config";
 
 const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -75,7 +77,7 @@ function autoPlace(items: WardrobeItem[], signed: Record<string, string>): Place
 }
 
 export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: BuilderInit }) {
-
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { latitude, longitude, city } = useLocation();
   const { data: weather } = useWeather(latitude, longitude);
@@ -150,7 +152,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
   const addItem = useCallback((it: WardrobeItem) => {
     const path = toStoragePath(it.image_url);
     const url = path ? signed[path] : null;
-    if (!url) { toast.error("This item has no image yet"); return; }
+    if (!url) { toast.error(t("outfitBuilder.itemNoImage")); return; }
     const key = `${it.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     zSeqRef.current += 1;
     setPlaced((prev) => [
@@ -263,7 +265,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
   // AI Suggest: call Lovable AI Gateway (google/gemini-2.5-flash) for a coherent outfit.
   const aiSuggest = useCallback(async () => {
-    if (!items.length) { toast.error("Add wardrobe items first"); return; }
+    if (!items.length) { toast.error(t("outfitBuilder.addWardrobeItemsFirst")); return; }
     setAiBusy(true);
     setAiExplanation("");
     try {
@@ -287,7 +289,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         },
       });
       if (!res.ok || !res.item_ids.length) {
-        toast.error("AI couldn't compose a look — try again");
+        toast.error(t("outfitBuilder.aiCouldntCompose"));
         return;
       }
       const byId = new Map(items.map((it) => [it.id, it]));
@@ -327,15 +329,15 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       });
 
       if (!placedNext.length) {
-        toast.error("Selected items are missing images");
+        toast.error(t("outfitBuilder.selectedItemsMissingImages"));
         return;
       }
       setPlaced(placedNext);
       setAiExplanation(res.explanation);
-      toast.success("AI outfit ready — tweak away");
+      toast.success(t("outfitBuilder.aiOutfitReady"));
     } catch (e) {
       console.error(e);
-      toast.error("AI suggest failed");
+      toast.error(t("outfitBuilder.aiSuggestFailed"));
     } finally {
       setAiBusy(false);
     }
@@ -415,7 +417,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       );
 
       if (anyFailed) {
-        toast.error("Couldn't load one of the pieces for the shared image — try again in a moment.");
+        toast.error(t("outfitBuilder.couldntLoadPieceForShare"));
         return null;
       }
 
@@ -431,7 +433,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       return { blob, dataUrl };
     } catch (e) {
       console.error("[AURA] export", e);
-      toast.error("Couldn't export the canvas");
+      toast.error(t("outfitBuilder.couldntExportCanvas"));
       return null;
     } finally {
       // Restore original signed URLs so the live canvas keeps working
@@ -443,7 +445,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
   const save = useCallback(async () => {
     if (!user) return;
-    if (!placed.length) { toast.error("Add at least one item"); return; }
+    if (!placed.length) { toast.error(t("outfitBuilder.addAtLeastOneItem")); return; }
     setSaving(true);
     try {
       const exported = await exportCanvas();
@@ -462,7 +464,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
       const seasonTag = weather ? [season] : [];
       const payload = {
-        name: name.trim() || `Outfit ${new Date().toLocaleDateString("en-US")}`,
+        name: name.trim() || t("outfitBuilder.defaultOutfitName", { date: new Date().toLocaleDateString(i18n.language) }),
         item_ids: placed.map((p) => p.itemId),
         canvas_image_url: path,
         thumbnail_path: thumbPath,
@@ -481,10 +483,10 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       setShareState({ blob: exported.blob, dataUrl: exported.dataUrl, signedUrl });
       // Save no longer forces the share sheet open — the user opens it
       // explicitly via the "Share" button once they're ready.
-      toast.success(init?.outfitId ? "Outfit updated" : "Outfit saved");
+      toast.success(init?.outfitId ? t("outfitBuilder.toastOutfitUpdated") : t("outfitBuilder.toastOutfitSaved"));
     } catch (e: unknown) {
       console.error("[AURA] save outfit", e);
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      toast.error(e instanceof Error ? e.message : t("outfitBuilder.toastSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -516,11 +518,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         notes: notes.trim() || name.trim() || null,
       });
       if (eventErr) console.error("[AURA wardrobe-events] log failed", eventErr);
-      toast.success("Added to calendar");
+      toast.success(t("outfitBuilder.toastAddedToCalendar"));
       setCalendarOpen(false);
     } catch (e) {
       console.error("[AURA] add to calendar", e);
-      toast.error(e instanceof Error ? e.message : "Couldn't add to calendar");
+      toast.error(e instanceof Error ? e.message : t("outfitBuilder.toastCouldntAddToCalendar"));
     } finally {
       setAddingToCalendar(false);
     }
@@ -532,7 +534,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     if (!shareState) return;
     const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
     const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
-    if (!ok) toast.message("Native share not available — use the buttons below");
+    if (!ok) toast.message(t("outfitBuilder.nativeShareNotAvailable"));
   };
 
   /** WhatsApp's wa.me links can only pre-fill TEXT, never attach an image
@@ -551,12 +553,12 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
   };
 
   const copyLink = async () => {
-    if (!shareState?.signedUrl) { toast.error("No shareable link yet"); return; }
+    if (!shareState?.signedUrl) { toast.error(t("outfitBuilder.noShareableLinkYet")); return; }
     try {
       await navigator.clipboard.writeText(`${AURA_SHARE_CAPTION}\n${shareState.signedUrl}`);
-      toast.success("Link copied");
+      toast.success(t("outfitBuilder.linkCopied"));
     } catch {
-      toast.error("Copy failed");
+      toast.error(t("outfitBuilder.copyFailed"));
     }
   };
 
@@ -573,11 +575,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         <button onClick={() => go("planner")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={15} />
         </button>
-        <p className="font-serif text-lg italic">Outfit builder</p>
+        <p className="font-serif text-lg italic">{t("outfitBuilder.title")}</p>
         <button
           onClick={() => go("saved-outfits")}
           className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
-        >Saved</button>
+        >{t("outfitBuilder.saved")}</button>
       </header>
 
       {/* Weather */}
@@ -587,7 +589,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             <span className="text-xl leading-none">{wDesc.icon}</span>
             <div>
               <p className="font-serif text-lg leading-none">{Math.round(weather.current.temperature)}° {wDesc.label}</p>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{city ?? "Today"} · {classifyTemp(weather.current.temperature)}</p>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{city ?? t("outfitBuilder.today")} · {classifyTemp(weather.current.temperature)}</p>
             </div>
           </div>
           <button
@@ -596,7 +598,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             className="h-9 px-4 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95 inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {aiBusy ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-            AI suggest
+            {t("outfitBuilder.aiSuggest")}
           </button>
         </div>
       )}
@@ -616,7 +618,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.25em] ${
                 ratio === r ? "bg-foreground text-background" : "text-foreground/70"
               }`}
-            >{r === "1:1" ? "Feed 1:1" : "Story 9:16"}</button>
+            >{r === "1:1" ? t("outfitBuilder.feed11") : t("outfitBuilder.story916")}</button>
           ))}
         </div>
         <select
@@ -624,7 +626,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           onChange={(e) => setOccasion(e.target.value)}
           className="h-9 px-3 rounded-full bg-secondary/60 text-[10px] uppercase tracking-[0.25em] border-none outline-none"
         >
-          <option value="">Occasion</option>
+          <option value="">{t("outfitBuilder.occasion")}</option>
           {OCCASIONS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
@@ -687,33 +689,33 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                       >
                         <button
                           onClick={() => { setPlaced((arr) => arr.filter((x) => x.key !== p.key)); setSelectedKey(null); }}
-                          aria-label="Remove from canvas"
-                          title="Remove from canvas"
+                          aria-label={t("outfitBuilder.removeFromCanvasAria")}
+                          title={t("outfitBuilder.removeFromCanvasAria")}
                           className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
                         ><X size={13} /></button>
                         <button
                           onClick={bringForward}
-                          aria-label="Bring forward"
-                          title="Bring forward"
+                          aria-label={t("outfitBuilder.bringForwardAria")}
+                          title={t("outfitBuilder.bringForwardAria")}
                           className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
                         ><ChevronUp size={14} /></button>
                         <button
                           onClick={sendBackward}
-                          aria-label="Send backward"
-                          title="Send backward"
+                          aria-label={t("outfitBuilder.sendBackwardAria")}
+                          title={t("outfitBuilder.sendBackwardAria")}
                           className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
                         ><ChevronDown size={14} /></button>
                       </div>
                       {/* resize handle */}
                       <button
                         onPointerDown={onPointerDown("resize", p.key)}
-                        aria-label="Resize"
+                        aria-label={t("outfitBuilder.resizeAria")}
                         className="absolute -right-3 -bottom-3 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] shadow-md"
                       >↘</button>
                       {/* rotate handle */}
                       <button
                         onPointerDown={onPointerDown("rotate", p.key)}
-                        aria-label="Rotate"
+                        aria-label={t("outfitBuilder.rotateAria")}
                         className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] shadow-md"
                       >⟳</button>
                     </>
@@ -733,7 +735,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           {placed.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-center px-8">
               <p className="text-muted-foreground text-sm">
-                Add items from your wardrobe to start composing.
+                {t("outfitBuilder.addItemsToStart")}
               </p>
             </div>
           )}
@@ -743,16 +745,16 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       {/* Toolbar */}
       <div className="mx-6 mt-3 grid grid-cols-4 gap-2">
         <button onClick={() => setPickerOpen(true)} className="h-11 rounded-2xl bg-foreground text-background inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em]">
-          <Plus size={12} /> Add
+          <Plus size={12} /> {t("outfitBuilder.add")}
         </button>
         <button onClick={bringForward} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
-          <ChevronUp size={12} /> Front
+          <ChevronUp size={12} /> {t("outfitBuilder.front")}
         </button>
         <button onClick={sendBackward} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
-          <ChevronDown size={12} /> Back
+          <ChevronDown size={12} /> {t("outfitBuilder.back")}
         </button>
         <button onClick={removeSelected} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
-          <Trash2 size={12} /> Del
+          <Trash2 size={12} /> {t("outfitBuilder.del")}
         </button>
       </div>
 
@@ -761,13 +763,13 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Outfit name"
+          placeholder={t("outfitBuilder.outfitNamePlaceholder")}
           className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
         />
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes (optional)"
+          placeholder={t("outfitBuilder.notesOptionalPlaceholder")}
           rows={2}
           className="w-full bg-secondary/60 rounded-2xl px-4 py-2.5 text-sm outline-none resize-none"
         />
@@ -777,14 +779,14 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          Save outfit
+          {t("outfitBuilder.saveOutfit")}
         </button>
                {shareState && (
           <button
             onClick={() => setShareOpen(true)}
             className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
           >
-            <Share2 size={12} /> Share this look
+            <Share2 size={12} /> {t("outfitBuilder.shareThisLook")}
           </button>
         )}
         {savedOutfitId && (
@@ -792,7 +794,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             onClick={() => setCalendarOpen(true)}
             className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
           >
-            <CalendarIcon size={12} /> Add to calendar
+            <CalendarIcon size={12} /> {t("outfitBuilder.addToCalendar")}
           </button>
         )}
       </div>
@@ -800,7 +802,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
       {calendarOpen && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCalendarOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
-            <p className="font-serif italic text-lg">Add to calendar</p>
+            <p className="font-serif italic text-lg">{t("outfitBuilder.addToCalendar")}</p>
             <input
               type="date"
               value={calendarDate}
@@ -813,7 +815,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
               {addingToCalendar && <Loader2 size={12} className="animate-spin" />}
-              Save to calendar
+              {t("outfitBuilder.saveToCalendar")}
             </button>
           </div>
         </div>
@@ -828,8 +830,8 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md h-[88vh] bg-background rounded-t-3xl flex flex-col animate-fade-up">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{placed.length} on canvas</p>
-                <p className="font-serif text-lg italic">Add from closet</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("outfitBuilder.onCanvas", { count: placed.length })}</p>
+                <p className="font-serif text-lg italic">{t("outfitBuilder.addFromCloset")}</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
@@ -838,10 +840,10 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                       key={f}
                       onClick={() => setPickerFilter(f)}
                       className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.25em] ${pickerFilter === f ? "bg-foreground text-background" : "text-foreground/70"}`}
-                    >{f === "all" ? "All" : `For ${season}`}</button>
+                    >{f === "all" ? t("outfitBuilder.all") : t("outfitBuilder.forSeason", { season })}</button>
                   ))}
                 </div>
-                <button onClick={() => setPickerOpen(false)} aria-label="Close" className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
+                <button onClick={() => setPickerOpen(false)} aria-label={t("outfitBuilder.closeAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
@@ -871,13 +873,13 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setShareOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-serif italic text-lg">Share your look</p>
-              <button className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground" onClick={() => setShareOpen(false)}>Close</button>
+              <p className="font-serif italic text-lg">{t("outfitBuilder.shareYourLook")}</p>
+              <button className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground" onClick={() => setShareOpen(false)}>{t("outfitBuilder.close")}</button>
             </div>
             <img src={shareState.dataUrl} alt="preview" className="max-h-40 w-auto mx-auto rounded-xl mb-4" />
             <div className="grid grid-cols-4 gap-3">
-              <ShareBtn icon={<Share2 size={16} />} label="Share" onClick={doNativeShare} />
-             <ShareBtn icon={<Download size={16} />} label="Save" onClick={async () => {
+              <ShareBtn icon={<Share2 size={16} />} label={t("outfitBuilder.share")} onClick={doNativeShare} />
+             <ShareBtn icon={<Download size={16} />} label={t("outfitBuilder.saveButton")} onClick={async () => {
                 // A plain <a download> lands in iOS's Files/Downloads, not
                 // the Camera Roll. The native share sheet's "Save Image"
                 // option is the only web-safe way to reach Photos.
@@ -885,25 +887,25 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
                 const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
                 if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
               }} />
-              <ShareBtn icon={<Copy size={16} />} label="Copy link" onClick={copyLink} />
-              <ShareBtn icon={<MessageCircle size={16} />} label="WhatsApp" onClick={shareToWhatsApp} />
-            <ShareBtn icon={<Instagram size={16} />} label="Instagram" onClick={async () => {
+              <ShareBtn icon={<Copy size={16} />} label={t("outfitBuilder.copyLink")} onClick={copyLink} />
+              <ShareBtn icon={<MessageCircle size={16} />} label={t("outfitBuilder.whatsapp")} onClick={shareToWhatsApp} />
+            <ShareBtn icon={<Instagram size={16} />} label={t("outfitBuilder.instagram")} onClick={async () => {
                 const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
                 const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
                 if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
                 window.location.href = shareLinks("", "").instagram;
               }} />
-              <ShareBtn icon={<Music2 size={16} />} label="TikTok" onClick={async () => {
+              <ShareBtn icon={<Music2 size={16} />} label={t("outfitBuilder.tiktok")} onClick={async () => {
                 const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
                 const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
                 if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
                 window.location.href = shareLinks("", "").tiktok;
               }} />
-              <ShareBtn icon={<Facebook size={16} />} label="Facebook" onClick={() => window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).facebook, "_blank")} />
-              <ShareBtn icon={<Mail size={16} />} label="Email" onClick={() => window.location.href = shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).email} />
+              <ShareBtn icon={<Facebook size={16} />} label={t("outfitBuilder.facebook")} onClick={() => window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).facebook, "_blank")} />
+              <ShareBtn icon={<Mail size={16} />} label={t("outfitBuilder.email")} onClick={() => window.location.href = shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).email} />
             </div>
             <p className="mt-4 text-[10px] text-center text-muted-foreground tracking-widest uppercase">
-              Instagram &amp; TikTok require pasting from your camera roll
+              {t("outfitBuilder.instagramTiktokNote")}
             </p>
           </div>
         </div>
@@ -911,7 +913,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
       {currentTemp === null && !weather && (
         <p className="mx-6 mt-3 text-[11px] text-muted-foreground">
-          Enable location in Calendar to see today&apos;s weather and matching items.
+          {t("outfitBuilder.enableLocationHint")}
         </p>
       )}
     </div>
