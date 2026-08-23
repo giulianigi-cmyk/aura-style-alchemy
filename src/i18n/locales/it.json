@@ -37,6 +37,9 @@
     "lookFallback": "Look",
     "fromYourWardrobe": "Dal tuo guardaroba",
     "addFirstPieces": "Aggiungi i tuoi primi capi per vederli qui.",
+    "occasionWork": "Lavoro",
+"occasionWeekend": "Weekend",
+"occasionEvening": "Sera",
     "noImage": "Nessuna immagine"
   },
   "profile": {
