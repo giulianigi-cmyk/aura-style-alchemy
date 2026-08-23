@@ -341,7 +341,7 @@ create policy "comments_insert_own_if_participant" on public.message_comments fo
 create or replace function public.notify_outfit_share()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.content_type = 'outfit_share' then
+  if new.content_type in ('outfit_share', 'text') then
     insert into public.notifications (user_id, type, title, body, data)
     select cp.user_id, 'outfit_share', 'Nuovo outfit condiviso', 'Hai ricevuto un outfit in chat',
            jsonb_build_object('conversation_id', new.conversation_id, 'message_id', new.id, 'sender_id', new.sender_id)
