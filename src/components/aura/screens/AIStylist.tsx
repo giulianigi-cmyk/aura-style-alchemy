@@ -774,7 +774,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
       {weeklySheetOpen && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => !weeklyGenerating && setWeeklySheetOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-4">
+                    <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-10 space-y-4 max-h-[85vh] overflow-y-auto">
+
             <p className="font-serif italic text-lg">{t("aiStylist.createWorkOutfits")}</p>
 
             {weeklyResult ? (
