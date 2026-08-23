@@ -28,11 +28,13 @@ type Found = { id: string; username: string | null; profile_image: string | null
 function Inner({ username }: { username: string }) {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [state, setState] = useState<"loading" | "missing" | "found">("loading");
+  const [state, setState] = useState<"loading" | "missing" | "found" | "signedout">("loading");
   const [found, setFound] = useState<Found | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
+  // Profile lookup requires a session — anonymous visitors can't probe
+  // usernames. They get a sign-in prompt and return here afterwards.
   const load = useCallback(async () => {
     setState("loading");
     const { data, error } = await supabase.rpc("profile_by_username", { _username: username.toLowerCase() });
@@ -49,7 +51,12 @@ function Inner({ username }: { username: string }) {
     } else setAvatar(null);
   }, [username]);
 
-  useEffect(() => { if (!authLoading) void load(); }, [authLoading, load]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { setState("signedout"); return; }
+    void load();
+  }, [authLoading, user, load]);
+
 
   const signIn = () => {
     try { window.localStorage.setItem(RETURN_KEY, `/add/${username.toLowerCase()}`); } catch { /* ignore */ }
