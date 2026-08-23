@@ -610,4 +610,321 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
 
       {/* Ratio + occasion */}
       <div className="mx-6 mt-3 flex items-center justify-between gap-2">
-        
+        <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
+          {(["1:1", "9:16"] as Ratio[]).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRatio(r)}
+              className={`px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.25em] ${
+                ratio === r ? "bg-foreground text-background" : "text-foreground/70"
+              }`}
+            >{r === "1:1" ? t("outfitBuilder.feed11") : t("outfitBuilder.story916")}</button>
+          ))}
+        </div>
+        <select
+          value={occasion}
+          onChange={(e) => setOccasion(e.target.value)}
+          className="h-9 px-3 rounded-full bg-secondary/60 text-[10px] uppercase tracking-[0.25em] border-none outline-none"
+        >
+          <option value="">{t("outfitBuilder.occasion")}</option>
+          {OCCASIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+
+      {/* Canvas.
+          `containerType: size` enables cqmin units used by placed items
+          and the AURA watermark below. Without it, cqmin resolves to 0
+          and items/watermark collapse to invisible.
+          The visible border + drop shadow make the composition area
+          clearly distinguishable from the near-white app background
+          (previously #FFFFFF on oklch(0.975...) blended together and
+          users reported the canvas as "not visible"). */}
+      <div className="mx-4 mt-4">
+        <div
+          ref={canvasRef}
+          onClick={() => setSelectedKey(null)}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          className={`relative w-full ${aspect} rounded-2xl overflow-hidden shadow-md border border-border select-none touch-none`}
+          style={{ background: "#FFFFFF", containerType: "size" }}
+        >
+          {placed
+            .slice()
+            .sort((a, b) => a.z - b.z)
+            .map((p) => {
+              const isSel = p.key === selectedKey;
+              const short = 100; // in cqmin — use padding trick with % of container
+              return (
+                <div
+                  key={p.key}
+                  className="absolute"
+                  style={{
+                    left: `${p.x * 100}%`,
+                    top: `${p.y * 100}%`,
+                    width: `${p.scale * short}%`,
+                    transform: `translate(-50%, -50%) rotate(${p.rotation}deg)`,
+                    zIndex: p.z,
+                  }}
+                  onPointerDown={onPointerDown("move", p.key)}
+                >
+                                    <img
+                    src={p.imgUrl}
+                    alt=""
+                    draggable={false}
+                    className="w-full h-auto pointer-events-none"
+                    crossOrigin="anonymous"
+                    data-item-key={p.key}
+                    style={{ display: "block" }}
+                  />
+                  {isSel && (
+                    <>
+                      <div className="absolute inset-0 border-2 border-dashed border-foreground/60 pointer-events-none" />
+                      {/* Floating toolbar — remove from canvas / bring forward / send backward.
+                          "Remove" here only clears this composition; the wardrobe item stays. */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 -top-11 flex items-center gap-1 rounded-full bg-foreground text-background px-2 py-1 shadow-md"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => { setPlaced((arr) => arr.filter((x) => x.key !== p.key)); setSelectedKey(null); }}
+                          aria-label={t("outfitBuilder.removeFromCanvasAria")}
+                          title={t("outfitBuilder.removeFromCanvasAria")}
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><X size={13} /></button>
+                        <button
+                          onClick={bringForward}
+                          aria-label={t("outfitBuilder.bringForwardAria")}
+                          title={t("outfitBuilder.bringForwardAria")}
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><ChevronUp size={14} /></button>
+                        <button
+                          onClick={sendBackward}
+                          aria-label={t("outfitBuilder.sendBackwardAria")}
+                          title={t("outfitBuilder.sendBackwardAria")}
+                          className="h-7 w-7 rounded-full flex items-center justify-center active:scale-90"
+                        ><ChevronDown size={14} /></button>
+                      </div>
+                      {/* resize handle */}
+                      <button
+                        onPointerDown={onPointerDown("resize", p.key)}
+                        aria-label={t("outfitBuilder.resizeAria")}
+                        className="absolute -right-3 -bottom-3 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] shadow-md"
+                      >↘</button>
+                      {/* rotate handle */}
+                      <button
+                        onPointerDown={onPointerDown("rotate", p.key)}
+                        aria-label={t("outfitBuilder.rotateAria")}
+                        className="absolute -left-3 -top-3 h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] shadow-md"
+                      >⟳</button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+          {/* AURA watermark — matches the wordmark style used on the Splash screen exactly */}
+          <div className="absolute bottom-3 right-4 pointer-events-none select-none">
+            <span
+              className="font-serif italic tracking-tight text-black/70"
+              style={{ fontSize: "clamp(12px, 3cqmin, 28px)" }}
+            >aura</span>
+          </div>
+
+          {placed.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-center px-8">
+              <p className="text-muted-foreground text-sm">
+                {t("outfitBuilder.addItemsToStart")}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="mx-6 mt-3 grid grid-cols-4 gap-2">
+        <button onClick={() => setPickerOpen(true)} className="h-11 rounded-2xl bg-foreground text-background inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em]">
+          <Plus size={12} /> {t("outfitBuilder.add")}
+        </button>
+        <button onClick={bringForward} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
+          <ChevronUp size={12} /> {t("outfitBuilder.front")}
+        </button>
+        <button onClick={sendBackward} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
+          <ChevronDown size={12} /> {t("outfitBuilder.back")}
+        </button>
+        <button onClick={removeSelected} disabled={!selectedKey} className="h-11 rounded-2xl border border-border inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.25em] disabled:opacity-40">
+          <Trash2 size={12} /> {t("outfitBuilder.del")}
+        </button>
+      </div>
+
+      {/* Name / notes / save */}
+      <div className="mx-6 mt-3 space-y-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("outfitBuilder.outfitNamePlaceholder")}
+          className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+        />
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder={t("outfitBuilder.notesOptionalPlaceholder")}
+          rows={2}
+          className="w-full bg-secondary/60 rounded-2xl px-4 py-2.5 text-sm outline-none resize-none"
+        />
+       <button
+          onClick={save}
+          disabled={saving || loading || !placed.length}
+          className="w-full h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          {t("outfitBuilder.saveOutfit")}
+        </button>
+               {shareState && (
+          <button
+            onClick={() => setShareOpen(true)}
+            className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
+          >
+            <Share2 size={12} /> {t("outfitBuilder.shareThisLook")}
+          </button>
+        )}
+        {savedOutfitId && (
+          <button
+            onClick={() => setCalendarOpen(true)}
+            className="w-full h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center justify-center gap-2"
+          >
+            <CalendarIcon size={12} /> {t("outfitBuilder.addToCalendar")}
+          </button>
+        )}
+      </div>
+
+      {calendarOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setCalendarOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 space-y-3">
+            <p className="font-serif italic text-lg">{t("outfitBuilder.addToCalendar")}</p>
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(e) => setCalendarDate(e.target.value)}
+              className="w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+            />
+            <button
+              onClick={() => void addToCalendar()}
+              disabled={addingToCalendar}
+              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-60 inline-flex items-center justify-center gap-2"
+            >
+              {addingToCalendar && <Loader2 size={12} className="animate-spin" />}
+              {t("outfitBuilder.saveToCalendar")}
+            </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* Item picker — shared Closet-style grid (search, category and
+          location chips only help find pieces; the whole wardrobe stays
+          selectable). */}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={() => setPickerOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md h-[88vh] bg-background rounded-t-3xl flex flex-col animate-fade-up">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("outfitBuilder.onCanvas", { count: placed.length })}</p>
+                <p className="font-serif text-lg italic">{t("outfitBuilder.addFromCloset")}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
+                  {(["all", "weather"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setPickerFilter(f)}
+                      className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.25em] ${pickerFilter === f ? "bg-foreground text-background" : "text-foreground/70"}`}
+                    >{f === "all" ? t("outfitBuilder.all") : t("outfitBuilder.forSeason", { season })}</button>
+                  ))}
+                </div>
+                <button onClick={() => setPickerOpen(false)} aria-label={t("outfitBuilder.closeAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={15} /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4">
+              <PiecePicker
+                items={pickerItems}
+                signed={signed}
+                loading={loading}
+                selectedIds={placed.map((p) => p.itemId)}
+                onToggle={(id) => {
+                  const already = placed.some((p) => p.itemId === id);
+                  if (already) {
+                    setPlaced((prev) => prev.filter((p) => p.itemId !== id));
+                    setSelectedKey(null);
+                    return;
+                  }
+                  const it = items.find((i) => i.id === id);
+                  if (it) addItem(it);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share sheet */}
+     {shareOpen && shareState && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setShareOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-serif italic text-lg">{t("outfitBuilder.shareYourLook")}</p>
+              <button className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground" onClick={() => setShareOpen(false)}>{t("outfitBuilder.close")}</button>
+            </div>
+            <img src={shareState.dataUrl} alt="preview" className="max-h-40 w-auto mx-auto rounded-xl mb-4" />
+            <div className="grid grid-cols-4 gap-3">
+              <ShareBtn icon={<Share2 size={16} />} label={t("outfitBuilder.share")} onClick={doNativeShare} />
+             <ShareBtn icon={<Download size={16} />} label={t("outfitBuilder.saveButton")} onClick={async () => {
+                // A plain <a download> lands in iOS's Files/Downloads, not
+                // the Camera Roll. The native share sheet's "Save Image"
+                // option is the only web-safe way to reach Photos.
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
+              }} />
+              <ShareBtn icon={<Copy size={16} />} label={t("outfitBuilder.copyLink")} onClick={copyLink} />
+              <ShareBtn icon={<MessageCircle size={16} />} label={t("outfitBuilder.whatsapp")} onClick={shareToWhatsApp} />
+            <ShareBtn icon={<Instagram size={16} />} label={t("outfitBuilder.instagram")} onClick={async () => {
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
+                window.location.href = shareLinks("", "").instagram;
+              }} />
+              <ShareBtn icon={<Music2 size={16} />} label={t("outfitBuilder.tiktok")} onClick={async () => {
+                const file = new File([shareState.blob], "aura-outfit.png", { type: "image/png" });
+                const ok = await nativeShareFile(file, AURA_SHARE_CAPTION);
+                if (!ok) downloadBlob(shareState.blob, "aura-outfit.png");
+                window.location.href = shareLinks("", "").tiktok;
+              }} />
+              <ShareBtn icon={<Facebook size={16} />} label={t("outfitBuilder.facebook")} onClick={() => window.open(shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).facebook, "_blank")} />
+              <ShareBtn icon={<Mail size={16} />} label={t("outfitBuilder.email")} onClick={() => window.location.href = shareLinks(shareState.signedUrl ?? AURA_APP_URL, AURA_SHARE_CAPTION).email} />
+            </div>
+            <p className="mt-4 text-[10px] text-center text-muted-foreground tracking-widest uppercase">
+              {t("outfitBuilder.instagramTiktokNote")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {currentTemp === null && !weather && (
+        <p className="mx-6 mt-3 text-[11px] text-muted-foreground">
+          {t("outfitBuilder.enableLocationHint")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ShareBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 active:scale-95">
+      <span className="h-12 w-12 rounded-full bg-secondary/60 flex items-center justify-center">{icon}</span>
+      <span className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</span>
+    </button>
+  );
+}
