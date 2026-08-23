@@ -6,7 +6,7 @@ import type { Screen } from "../AuraApp";
 import { useProfile } from "@/hooks/use-profile";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
-import { describeWeather, suggestOutfit } from "@/lib/weather";
+import { describeWeather, suggestOutfit, weatherLabelKey } from "@/lib/weather";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { WardrobeItem } from "@/lib/aura-types";
@@ -20,6 +20,12 @@ function todayISO(): string {
 
   return new Date().toISOString().slice(0, 10);
 }
+
+const CURATED_OCCASION_KEYS: Record<string, string> = {
+  Work: "home.occasionWork",
+  Weekend: "home.occasionWeekend",
+  Evening: "home.occasionEvening",
+};
 
 export function Home({ go }: { go: (s: Screen) => void }) {
   const { t } = useTranslation();
@@ -163,6 +169,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   dayEvening: it.day_evening ?? "",
                   styleTags: it.style_tags ?? [],
                 })),
+                language: i18n.language,
               },
             });
             if (res.ok) {
@@ -283,7 +290,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
               </p>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
                 {weather
-                  ? `${describeWeather(weather.current.weatherCode, weather.current.isDay).label} · ${suggestOutfit(weather.current).headline}`
+                  ? `${t(weatherLabelKey(weather.current.weatherCode))} · ${suggestOutfit(weather.current).headline}`
                   : city ? t("home.forTailoredEdits") : t("home.forWeatherStyling")}
               </p>
             </div>
@@ -439,7 +446,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                     );
                   })}
                 </div>
-                               <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{look.occasion || t("home.lookFallback")}</p>
+                               <p className="mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{look.occasion ? (CURATED_OCCASION_KEYS[look.occasion] ? t(CURATED_OCCASION_KEYS[look.occasion]) : look.occasion) : t("home.lookFallback")}</p>
                 <p className="text-xs text-muted-foreground truncate">{look.explanation}</p>
               </button>
             ))}
