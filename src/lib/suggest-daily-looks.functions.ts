@@ -119,7 +119,11 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       "",
       "Each outfit: pick 3-5 items that work together (typically 1 top + 1 bottom OR",
       "1 dress, + shoes, optionally outerwear/accessory). Match colors and style",
-      "coherently. Use subcategory to judge fit-for-purpose when present (e.g. prefer",
+      "coherently. A dress or jumpsuit is a complete base on its own and REPLACES",
+      "both top and bottom — NEVER combine a dress or jumpsuit with a separate",
+      "Bottoms item (trousers, jeans, shorts, skirt) in the same look. If you pick",
+      "a dress or jumpsuit, do not also pick anything from the Bottoms category.",
+      "Use subcategory to judge fit-for-purpose when present (e.g. prefer",
       "sandals over boots in hot weather; heels over sneakers for formal occasions).",
       "NEVER use subcategory \"Running Shoes\" in any look, for any occasion — this",
       "is a styling engine, not a workout planner. \"Sneakers\" (lifestyle) remain",
@@ -197,6 +201,20 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         return false;
       });
 
+    /** Hard exclusion for EVERY occasion: a Dress or Jumpsuit already
+     *  covers top + bottom, so pairing it with a separate Bottoms item
+     *  (shorts, jeans, skirt, trousers) is never a real outfit, no matter
+     *  how well the prompt is worded — enforced in code so the model
+     *  cannot silently ignore it. */
+    const violatesDressPlusBottoms = (ids: string[]): boolean => {
+      const hasFullBody = ids.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        return item?.category === "Dresses" || item?.category === "Jumpsuits";
+      });
+      if (!hasFullBody) return false;
+      return ids.some((id) => catalog.find((c) => c.id === id)?.category === "Bottoms");
+    };
+
 
     // Weather is a hard constraint for EVERY look (today + all curated
     // occasions), not just "today" — enforced in code, mirroring
@@ -251,6 +269,7 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       if (hasSlotViolation(l.item_ids)) return false;
       if (l.occasion === "Work" && violatesWorkFormality(l.item_ids)) return false;
       if (l.occasion === "Work" && violatesWorkModesty(l.item_ids)) return false;
+      if (violatesDressPlusBottoms(l.item_ids)) return false;
       if (violatesWeather(l.item_ids)) return false;
       if (violatesStylingFootwear(l.item_ids)) return false;
       if (seen.some((s) => jaccard(l.item_ids, s) >= TOO_SIMILAR)) return false;
@@ -262,9 +281,20 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       // item(s) rather than discarding the whole look (there's no second
       // candidate to fall back to for "today").
       const todayIds = r.today.item_ids.filter((id) => validIds.has(id));
+      const todayHasFullBody = todayIds.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        return item?.category === "Dresses" || item?.category === "Jumpsuits";
+      });
       const today = {
         ...r.today,
-        item_ids: todayIds.filter((id) => !violatesWeather([id]) && !violatesStylingFootwear([id])),
+        item_ids: todayIds.filter((id) => {
+          if (violatesWeather([id]) || violatesStylingFootwear([id])) return false;
+          // If a dress/jumpsuit is present, drop any separate Bottoms item
+          // instead of the whole look — a dress alone is still valid,
+          // while removing it would leave an incomplete outfit.
+          if (todayHasFullBody && catalog.find((c) => c.id === id)?.category === "Bottoms") return false;
+          return true;
+        }),
       };
       const seen = [today.item_ids];
       const curated: DailyLook[] = [];
