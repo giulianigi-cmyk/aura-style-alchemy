@@ -240,6 +240,23 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
     const violatesStylingFootwear = (ids: string[]): boolean =>
       ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
 
+        const REQUIRED_OCCASIONS = ["Work", "Weekend", "Evening"] as const;
+
+    /** Single-look validation, reused both by the first pass and by the
+     *  retry below — same hard rules, just callable per-look against a
+     *  running "seen" list instead of only inside one big filter chain. */
+    const isValidCuratedLook = (l: DailyLook, seen: string[][]): boolean => {
+      if (!l.item_ids.every((id) => validIds.has(id))) return false;
+      if (l.item_ids.length < 2) return false;
+      if (hasSlotViolation(l.item_ids)) return false;
+      if (l.occasion === "Work" && violatesWorkFormality(l.item_ids)) return false;
+      if (l.occasion === "Work" && violatesWorkModesty(l.item_ids)) return false;
+      if (violatesWeather(l.item_ids)) return false;
+      if (violatesStylingFootwear(l.item_ids)) return false;
+      if (seen.some((s) => jaccard(l.item_ids, s) >= TOO_SIMILAR)) return false;
+      return true;
+    };
+
     const sanitize = (r: DailyLooksResult): DailyLooksResult => {
       // "today" is singular — a violation strips just the offending
       // item(s) rather than discarding the whole look (there's no second
@@ -249,36 +266,14 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         ...r.today,
         item_ids: todayIds.filter((id) => !violatesWeather([id]) && !violatesStylingFootwear([id])),
       };
-            const seen = [today.item_ids];
-      const curated = r.curated
-        // Reject the WHOLE look if it references any item id that isn't
-        // real (a model hallucination), rather than silently truncating
-        // it: truncating leaves a stale explanation that still describes
-        // the dropped piece (e.g. "a breezy shift dress" with no dress
-        // actually shown), which is worse than skipping the occasion.
-        .filter((l) => l.item_ids.every((id) => validIds.has(id)))
-        .filter((l) => l.item_ids.length >= 2)
-        // Structural coherence: no duplicate slots (e.g. two Bottoms).
-        .filter((l) => !hasSlotViolation(l.item_ids))
-        // Hard occasion exclusion: evening-coded pieces never pass for Work.
-        .filter((l) => !(l.occasion === "Work" && violatesWorkFormality(l.item_ids)))
-        // Hard occasion exclusion: shorts / mini skirts never pass for Work.
-        .filter((l) => !(l.occasion === "Work" && violatesWorkModesty(l.item_ids)))
-
-        // Hard weather exclusion: applies to EVERY occasion, not just Work —
-        // a wool coat is wrong for Weekend/Evening at 39°C just as much.
-        .filter((l) => !violatesWeather(l.item_ids))
-        // Hard exclusion: running/performance shoes never belong in a
-        // styled outfit, for any occasion (see violatesStylingFootwear).
-        .filter((l) => !violatesStylingFootwear(l.item_ids))
-        // Drop any curated look that's identical OR near-identical (>=70%
-        // item overlap) to "today" or an earlier curated look — a real
-        // similarity check, not just an exact-match string comparison.
-        .filter((l) => {
-          if (seen.some((s) => jaccard(l.item_ids, s) >= TOO_SIMILAR)) return false;
+      const seen = [today.item_ids];
+      const curated: DailyLook[] = [];
+      for (const l of r.curated) {
+        if (isValidCuratedLook(l, seen)) {
+          curated.push(l);
           seen.push(l.item_ids);
-          return true;
-        });
+        }
+      }
       return { today, curated };
     };
 
@@ -307,11 +302,51 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
         parsed = parseAiJson(r2.text, OutputSchema);
       }
 
-      const clean = sanitize(parsed);
+          const clean = sanitize(parsed);
       if (clean.today.item_ids.length < 2) {
         return { ok: false as const, error: "Couldn't compose a valid look from your wardrobe." };
       }
+
+      // Retry once for any required occasion that didn't survive sanitize
+      // — either the model skipped it or a hard filter rejected it. Gives
+      // the wardrobe a second, more targeted shot before settling for a
+      // partial set of looks.
+      const missingOccasions = REQUIRED_OCCASIONS.filter(
+        (occ) => !clean.curated.some((l) => l.occasion === occ),
+      );
+
+      if (missingOccasions.length > 0) {
+        const seenSoFar = [clean.today.item_ids, ...clean.curated.map((l) => l.item_ids)];
+        const retrySystem = [
+          system,
+          "",
+          `IMPORTANT — this is a retry. Produce ONLY curated looks for these missing occasions: ${missingOccasions.join(", ")}. Do not repeat "today" or any curated look already produced.`,
+        ].join("\n");
+        const RetryOutputSchema = z.object({
+          curated: z.array(LookSchema).min(1).max(missingOccasions.length),
+        });
+
+        try {
+          const retryText = (await generateText({
+            model,
+            system: retrySystem,
+            messages: [{ role: "user", content: userContent }],
+          })).text;
+          const retryParsed = parseAiJson(retryText, RetryOutputSchema);
+          for (const l of retryParsed.curated) {
+            if (missingOccasions.includes(l.occasion) && isValidCuratedLook(l, seenSoFar)) {
+              clean.curated.push(l);
+              seenSoFar.push(l.item_ids);
+            }
+          }
+        } catch (err) {
+          console.error("[AURA daily-looks] retry failed", err);
+          // Best-effort: fall through with whatever survived the first pass.
+        }
+      }
+
       return { ok: true as const, result: clean };
+
     } catch (err) {
       console.error("[AURA daily-looks] failed", err);
       return { ok: false as const, error: err instanceof Error ? err.message : "Generation failed" };
