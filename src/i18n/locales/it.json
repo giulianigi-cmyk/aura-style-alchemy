@@ -1042,5 +1042,44 @@
     "stylist": "Stylist",
     "calendar": "Calendario",
     "you": "Tu"
+  },
+    "myBrands": {
+    "myBrands": "I miei brand",
+    "couldntSaveBrands": "Impossibile salvare i brand",
+    "youHavePieces_one": "Hai {{count}} capo {{brand}}",
+    "youHavePieces_other": "Hai {{count}} capi {{brand}}",
+    "addToYourBrands": "— aggiungere",
+    "acceptSuggestionAria": "Accetta suggerimento",
+    "dismissSuggestionAria": "Ignora suggerimento",
+    "noBrandsYet": "Nessun brand ancora — cerca qui sotto per aggiungere i tuoi preferiti.",
+    "removeAria": "Rimuovi {{name}}",
+    "searchPlaceholder": "Cerca brand o aggiungine uno tuo…",
+    "clearAria": "Cancella",
+    "addQuoted": "Aggiungi \"{{query}}\""
+  },
+  "weather": {
+    "clear": "Sereno",
+    "mostlyClear": "Prevalentemente sereno",
+    "partlyCloudy": "Parzialmente nuvoloso",
+    "overcast": "Coperto",
+    "fog": "Nebbia",
+    "drizzle": "Pioviggine",
+    "rain": "Pioggia",
+    "snow": "Neve",
+    "showers": "Rovesci",
+    "snowShowers": "Rovesci di neve",
+    "thunderstorm": "Temporale",
+    "unknown": "—"
+  },
+  "weatherPanel": {
+    "weather": "Meteo",
+    "setYourLocation": "Imposta la tua posizione",
+    "auto": "Auto",
+    "refreshWeatherAria": "Aggiorna meteo",
+    "enterYourCity": "Inserisci la tua città",
+    "save": "Salva",
+    "locationPermissionDenied": "Permesso di localizzazione negato — inserisci la tua città qui sopra.",
+    "couldntLoadWeather": "Impossibile caricare il meteo.",
+    "today": "Oggi"
   }
 }
