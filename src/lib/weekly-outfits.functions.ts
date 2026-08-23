@@ -77,8 +77,9 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
 
     const [{ data: itemsRaw }, { data: existingPlans }, { data: calEvents }] = await Promise.all([
       supabase.from("wardrobe_items").select("*").eq("user_id", userId),
-      (supabase.from("outfit_plans" as never) as any)
+            (supabase.from("outfit_plans" as never) as any)
         .select("date, calendar_event_id").eq("user_id", userId)
+        .neq("status", "cancelled")
         .gte("date", data.startDate).lt("date", endDateExclusive),
       (supabase.from("calendar_events_cache" as never) as any)
         .select("id, title, start_time, end_time, all_day").eq("user_id", userId)
