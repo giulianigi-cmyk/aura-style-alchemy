@@ -81,7 +81,8 @@ const SHARING_DEFINITIONS = [
 
 export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s: Screen) => void; openConversation?: (id: string) => void; openUserProfile?: (id: string) => void }) {
   const { t } = useTranslation();
-  const { user, signOut } = useAuth();
+    const { user, signOut } = useAuth();
+  const unreadCount = useUnreadNotifications();
   const [qrOpen, setQrOpen] = useState(false);
   const { profile, avatarUrl, loading, update, uploadAvatar } = useProfile();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -390,12 +391,18 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
               { l: t("profileScreen.notifications"), s: "notifications" as Screen },
               { l: t("profileScreen.inviteFriends"), s: "invite" as Screen },
 
-            ]).map(({ l, s }) => (
+                       ]).map(({ l, s }) => (
               <button key={l} onClick={() => _go(s)} className="w-full flex items-center justify-between px-5 py-4 active:bg-secondary/40 transition">
-                <span className="text-sm">{l}</span>
+                <span className="text-sm flex items-center gap-2">
+                  {l}
+                  {s === "notifications" && unreadCount > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-[var(--champagne)]" />
+                  )}
+                </span>
                 <ChevronRight size={14} className="text-muted-foreground" />
               </button>
             ))}
+
           </section>
         </>
       )}
