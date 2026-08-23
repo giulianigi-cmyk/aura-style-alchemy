@@ -1035,5 +1035,12 @@
     "failedCount_other": "{{count}} échouées",
     "review": "Vérifier",
     "removeBatchAria": "Retirer ce lot"
+  },
+    "tabBar": {
+    "home": "Accueil",
+    "closet": "Garde-robe",
+    "stylist": "Styliste",
+    "calendar": "Calendrier",
+    "you": "Vous"
   }
 }
