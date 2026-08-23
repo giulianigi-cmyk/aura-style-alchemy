@@ -54,19 +54,13 @@ export function Home({ go }: { go: (s: Screen) => void }) {
   const [looksSigned, setLooksSigned] = useState<Record<string, string>>({});
   const [looksLoading, setLooksLoading] = useState(true);
   const [looksError, setLooksError] = useState<string | null>(null);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
 
-    useEffect(() => {
-    if (!user || allItems.length === 0) return;
-    // Wait for weather to settle before generating: allItems is usually
-    // ready before the weather fetch (geolocation + Open-Meteo round trip)
-    // completes. Generating immediately would run this effect twice —
-    // once with temperature: null, once with the real reading — and the
-    // cache validity check below (cacheStillValid) only compares date +
-    // wardrobe fingerprint, not weather, so the first "weatherless" run
-    // gets cached and silently blocks the correctly weather-aware one for
-    // the rest of the day. If no location is set at all, weather will
-    // never arrive, so don't wait forever in that case.
-    if (latitude != null && longitude != null && wxLoading) return;
+  // Wardrobe load. This must never be gated on allItems (it is what fills
+  // allItems) nor on the weather round trip — doing either leaves the whole
+  // dashboard permanently empty and the "selected for you" block spinning.
+  useEffect(() => {
+    if (!user) return;
     void (async () => {
       const [itemsRes, outfitsCountRes] = await Promise.all([
         supabase.from("wardrobe_items")
@@ -88,11 +82,24 @@ export function Home({ go }: { go: (s: Screen) => void }) {
       const top = items.slice(0, 3);
       setRecent(top);
       setRecentSigned(await resolveWardrobeUrls(top));
+      setItemsLoaded(true);
     })();
   }, [user]);
 
   useEffect(() => {
-    if (!user || allItems.length === 0) return;
+    if (!user || !itemsLoaded) return;
+    // An empty wardrobe has nothing to suggest from — stop the spinner
+    // instead of waiting for items that will never arrive.
+    if (allItems.length === 0) { setLooksLoading(false); return; }
+    // Wait for weather to settle before generating: generating immediately
+    // would run this effect twice — once with temperature: null, once with
+    // the real reading — and the cache validity check below (cacheStillValid)
+    // only compares date + wardrobe fingerprint, not weather, so the first
+    // "weatherless" run gets cached and silently blocks the correctly
+    // weather-aware one for the rest of the day. If no location is set at
+    // all, weather will never arrive, so don't wait forever in that case.
+    if (latitude != null && longitude != null && wxLoading) return;
+
     void (async () => {
       setLooksLoading(true);
       setLooksError(null);
@@ -209,7 +216,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         setLooksLoading(false);
       }
     })();
-  }, [user, allItems, weather, wxLoading, latitude, longitude]);
+  }, [user, itemsLoaded, allItems, weather, wxLoading, latitude, longitude]);
 
 
   const itemById = useMemo(() => {
