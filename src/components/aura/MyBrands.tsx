@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Search, X, Sparkles, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,7 @@ function saveDismissed(set: Set<string>) {
 }
 
 export function MyBrands() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { profile, update } = useProfile();
   const [brands, setBrands] = useState<string[]>([]);
@@ -46,7 +48,7 @@ export function MyBrands() {
     setSaving(true);
     const { error } = await update({ owned_brands: next });
     setSaving(false);
-    if (error) toast.error("Couldn't save brands");
+    if (error) toast.error(t("myBrands.couldntSaveBrands"));
   };
 
   const addBrand = (name: string) => {
@@ -136,7 +138,7 @@ export function MyBrands() {
   return (
     <section className="mx-6 mt-4 animate-fade-up">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My brands</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("myBrands.myBrands")}</p>
         {saving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
       </div>
 
@@ -144,14 +146,15 @@ export function MyBrands() {
         <div className="mb-3 rounded-2xl border border-[var(--champagne)]/60 bg-[var(--champagne)]/10 p-3 flex items-start gap-3 animate-fade-up">
           <Sparkles size={14} className="mt-0.5 shrink-0" />
           <div className="flex-1 text-xs leading-relaxed">
-            You have {suggestion.count} {suggestion.brand} piece{suggestion.count === 1 ? "" : "s"} —
-            add <span className="font-medium">{suggestion.brand}</span> to your brands?
+            {t("myBrands.youHavePieces", { count: suggestion.count, brand: suggestion.brand })}
+            {" "}
+            {t("myBrands.addToYourBrands")} <span className="font-medium">{suggestion.brand}</span>?
           </div>
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={() => { addBrand(suggestion.brand); setSuggestion(null); }}
               className="h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90"
-              aria-label="Accept suggestion"
+              aria-label={t("myBrands.acceptSuggestionAria")}
             ><Check size={12} /></button>
             <button
               onClick={() => {
@@ -163,7 +166,7 @@ export function MyBrands() {
                 setSuggestion(null);
               }}
               className="h-7 w-7 rounded-full border border-border flex items-center justify-center active:scale-90"
-              aria-label="Dismiss suggestion"
+              aria-label={t("myBrands.dismissSuggestionAria")}
             ><X size={12} /></button>
           </div>
         </div>
@@ -172,7 +175,7 @@ export function MyBrands() {
       {/* Pills */}
       <div className="flex flex-wrap gap-1.5">
         {brands.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">No brands yet — search below to add your favourites.</p>
+          <p className="text-xs text-muted-foreground italic">{t("myBrands.noBrandsYet")}</p>
         )}
         {brands.map(b => (
           <span key={b} className="group inline-flex items-center gap-1 rounded-full bg-secondary/60 border border-border/60 text-foreground pl-2.5 pr-1 py-1 text-[11px]">
@@ -180,7 +183,7 @@ export function MyBrands() {
             <button
               onClick={() => removeBrand(b)}
               className="h-4 w-4 rounded-full bg-foreground/10 flex items-center justify-center active:scale-90"
-              aria-label={`Remove ${b}`}
+              aria-label={t("myBrands.removeAria", { name: b })}
             ><X size={9} /></button>
           </span>
         ))}
@@ -204,11 +207,11 @@ export function MyBrands() {
                 setOpen(false);
               }
             }}
-            placeholder="Search brands or add your own…"
+            placeholder={t("myBrands.searchPlaceholder")}
             className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
           />
           {query && (
-            <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label="Clear">
+            <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label={t("myBrands.clearAria")}>
               <X size={14} className="text-muted-foreground" />
             </button>
           )}
@@ -232,7 +235,7 @@ export function MyBrands() {
                 className="w-full text-left px-4 py-2.5 text-sm border-t border-border hover:bg-secondary/60 flex items-center gap-2"
               >
                 <Plus size={12} />
-                <span>Add "<span className="font-medium">{query.trim()}</span>"</span>
+                <span>{t("myBrands.addQuoted", { query: query.trim() })}</span>
               </button>
             )}
           </div>
