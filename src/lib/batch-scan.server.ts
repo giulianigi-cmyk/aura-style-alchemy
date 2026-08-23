@@ -98,7 +98,7 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
         // mistake a decorative detail — a buckle, an embellishment — for
         // a second item on an isolated product photo).
         const analysis = await analyzeWardrobeImageCore(dataUrl);
-        detectedRows = [{
+                detectedRows = [{
           category: analysis.category || null,
           subcategory: analysis.subcategory || null,
           colors: analysis.colors,
@@ -112,6 +112,8 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           brand: analysis.brand || prefill.brand || null,
           price: prefill.priceValue ?? null,
           currency: prefill.priceCurrency ?? null,
+          formality: analysis.formality ?? null,
+          day_evening: analysis.dayEvening || null,
         }];
       } else {
         const detection = await detectOutfitItems(dataUrl);
