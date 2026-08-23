@@ -1077,8 +1077,10 @@ export type Database = {
           confidence: number | null
           created_at: string
           currency: string | null
+          day_evening: string | null
           description: string | null
           fit: string | null
+          formality: number | null
           gender: string | null
           heel_height: string | null
           id: string
@@ -1107,8 +1109,10 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           currency?: string | null
+          day_evening?: string | null
           description?: string | null
           fit?: string | null
+          formality?: number | null
           gender?: string | null
           heel_height?: string | null
           id?: string
@@ -1137,8 +1141,10 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           currency?: string | null
+          day_evening?: string | null
           description?: string | null
           fit?: string | null
+          formality?: number | null
           gender?: string | null
           heel_height?: string | null
           id?: string
