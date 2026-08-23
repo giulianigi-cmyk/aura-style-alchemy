@@ -1042,5 +1042,44 @@
     "stylist": "Estilista",
     "calendar": "Calendario",
     "you": "Tú"
+  },
+    "myBrands": {
+    "myBrands": "Mis marcas",
+    "couldntSaveBrands": "No se pudieron guardar las marcas",
+    "youHavePieces_one": "Tienes {{count}} prenda {{brand}}",
+    "youHavePieces_other": "Tienes {{count}} prendas {{brand}}",
+    "addToYourBrands": "— añadir",
+    "acceptSuggestionAria": "Aceptar sugerencia",
+    "dismissSuggestionAria": "Descartar sugerencia",
+    "noBrandsYet": "Aún no hay marcas — busca abajo para añadir tus favoritas.",
+    "removeAria": "Eliminar {{name}}",
+    "searchPlaceholder": "Busca marcas o añade la tuya…",
+    "clearAria": "Borrar",
+    "addQuoted": "Añadir \"{{query}}\""
+  },
+  "weather": {
+    "clear": "Despejado",
+    "mostlyClear": "Mayormente despejado",
+    "partlyCloudy": "Parcialmente nublado",
+    "overcast": "Nublado",
+    "fog": "Niebla",
+    "drizzle": "Llovizna",
+    "rain": "Lluvia",
+    "snow": "Nieve",
+    "showers": "Chubascos",
+    "snowShowers": "Chubascos de nieve",
+    "thunderstorm": "Tormenta",
+    "unknown": "—"
+  },
+  "weatherPanel": {
+    "weather": "Clima",
+    "setYourLocation": "Configura tu ubicación",
+    "auto": "Auto",
+    "refreshWeatherAria": "Actualizar clima",
+    "enterYourCity": "Introduce tu ciudad",
+    "save": "Guardar",
+    "locationPermissionDenied": "Permiso de ubicación denegado — introduce tu ciudad arriba.",
+    "couldntLoadWeather": "No se pudo cargar el clima.",
+    "today": "Hoy"
   }
 }
