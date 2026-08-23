@@ -216,7 +216,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         setLooksLoading(false);
       }
     })();
-  }, [user, allItems, weather, wxLoading, latitude, longitude]);
+  }, [user, itemsLoaded, allItems, weather, wxLoading, latitude, longitude]);
 
 
   const itemById = useMemo(() => {
