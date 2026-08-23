@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ShareOutfitSheet } from "../ShareOutfitSheet";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolvePlanSlot } from "@/lib/outfit-plan-slot";
-import { outfitThumbSrc } from "@/lib/outfit-thumb";
+import { outfitThumbSrc, backfillOutfitThumbs } from "@/lib/outfit-thumb";
 import { OutfitThumb } from "../OutfitThumb";
 
 type Outfit = Tables<"outfits">;
@@ -40,7 +40,7 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
     const paths = list.flatMap((o) => [o.thumbnail_path, o.canvas_image_url]).filter(Boolean) as string[];
     if (paths.length) {
 
-      const { data: urls } = await supabase.storage.from("outfits").createSignedUrls(paths, 60 * 60);
+            const { data: urls } = await supabase.storage.from("outfits").createSignedUrls(paths, 60 * 60);
       const map: Record<string, string> = {};
       urls?.forEach((r, i) => { if (r.signedUrl) map[paths[i]] = r.signedUrl; });
       setSigned(map);
@@ -48,7 +48,11 @@ export function SavedOutfits({ go, openBuilder }: { go: (s: Screen) => void; ope
       setSigned({});
     }
     setLoading(false);
+    void backfillOutfitThumbs(user.id).then((done) => {
+      if (done > 0) void load();
+    });
   }, [user]);
+
 
   useEffect(() => { void load(); }, [load]);
 
