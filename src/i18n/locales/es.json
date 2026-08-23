@@ -1035,5 +1035,12 @@
     "failedCount_other": "{{count}} fallidas",
     "review": "Revisar",
     "removeBatchAria": "Eliminar este lote"
+  },
+    "tabBar": {
+    "home": "Inicio",
+    "closet": "Armario",
+    "stylist": "Estilista",
+    "calendar": "Calendario",
+    "you": "Tú"
   }
 }
