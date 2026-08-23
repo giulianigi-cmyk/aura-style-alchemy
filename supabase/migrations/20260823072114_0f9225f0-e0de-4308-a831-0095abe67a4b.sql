@@ -1,0 +1,2 @@
+GRANT EXECUTE ON FUNCTION public.sync_wardrobe_wear_stats() TO authenticated;
+COMMENT ON FUNCTION public.sync_wardrobe_wear_stats() IS 'Trigger-only function on wardrobe_event_items. EXECUTE must stay granted to authenticated: Postgres checks this privilege for the user performing the INSERT that fires the trigger.';
