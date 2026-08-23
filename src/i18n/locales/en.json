@@ -1042,5 +1042,44 @@
     "stylist": "Stylist",
     "calendar": "Calendar",
     "you": "You"
+  },
+    "myBrands": {
+    "myBrands": "My brands",
+    "couldntSaveBrands": "Couldn't save brands",
+    "youHavePieces_one": "You have {{count}} {{brand}} piece",
+    "youHavePieces_other": "You have {{count}} {{brand}} pieces",
+    "addToYourBrands": "— add",
+    "acceptSuggestionAria": "Accept suggestion",
+    "dismissSuggestionAria": "Dismiss suggestion",
+    "noBrandsYet": "No brands yet — search below to add your favourites.",
+    "removeAria": "Remove {{name}}",
+    "searchPlaceholder": "Search brands or add your own…",
+    "clearAria": "Clear",
+    "addQuoted": "Add \"{{query}}\""
+  },
+  "weather": {
+    "clear": "Clear",
+    "mostlyClear": "Mostly clear",
+    "partlyCloudy": "Partly cloudy",
+    "overcast": "Overcast",
+    "fog": "Fog",
+    "drizzle": "Drizzle",
+    "rain": "Rain",
+    "snow": "Snow",
+    "showers": "Showers",
+    "snowShowers": "Snow showers",
+    "thunderstorm": "Thunderstorm",
+    "unknown": "—"
+  },
+  "weatherPanel": {
+    "weather": "Weather",
+    "setYourLocation": "Set your location",
+    "auto": "Auto",
+    "refreshWeatherAria": "Refresh weather",
+    "enterYourCity": "Enter your city",
+    "save": "Save",
+    "locationPermissionDenied": "Location permission denied — enter your city above.",
+    "couldntLoadWeather": "Couldn't load weather.",
+    "today": "Today"
   }
    }
