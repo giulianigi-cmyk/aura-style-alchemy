@@ -90,6 +90,25 @@ export function describeWeather(code: number, isDay = true): { label: string; ic
   return { label: "—", icon: "🌡️" };
 }
 
+/** Same WMO code mapping as describeWeather, but returns an i18n key
+ *  instead of an English label. describeWeather's English label is used
+ *  internally (AI prompts, DB storage) and must stay in English; this
+ *  function is for anything actually displayed to the user. */
+export function weatherLabelKey(code: number): string {
+  if (code === 0) return "weather.clear";
+  if (code === 1) return "weather.mostlyClear";
+  if (code === 2) return "weather.partlyCloudy";
+  if (code === 3) return "weather.overcast";
+  if (code === 45 || code === 48) return "weather.fog";
+  if (code >= 51 && code <= 57) return "weather.drizzle";
+  if (code >= 61 && code <= 67) return "weather.rain";
+  if (code >= 71 && code <= 77) return "weather.snow";
+  if (code >= 80 && code <= 82) return "weather.showers";
+  if (code === 85 || code === 86) return "weather.snowShowers";
+  if (code >= 95) return "weather.thunderstorm";
+  return "weather.unknown";
+}
+
 export type WeatherBand = "cold" | "cool" | "mild" | "warm" | "hot";
 
 export function classifyTemp(tempC: number): WeatherBand {
@@ -182,4 +201,3 @@ export function suggestOutfit(
     materials: rainy ? [...base.materials, "Waterproof"] : base.materials,
   };
 }
-
