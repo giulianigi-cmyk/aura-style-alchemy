@@ -91,7 +91,19 @@ function Inner({ username }: { username: string }) {
     <div className="h-full w-full overflow-y-auto no-scrollbar bg-background flex flex-col items-center justify-center px-8 text-center">
       {state === "loading" || authLoading ? (
         <Loader2 size={18} className="animate-spin text-muted-foreground" />
+      ) : state === "signedout" ? (
+        <>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Aura invite</p>
+          <p className="mt-5 font-serif text-3xl italic">@{username}</p>
+          <p className="mt-3 text-sm text-muted-foreground">Sign in to view this profile and send a friend request.</p>
+          <button
+            onClick={signIn}
+            className="mt-8 w-full max-w-xs h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-95"
+          >Sign in to add</button>
+          <p className="mt-3 text-[11px] text-muted-foreground">You'll come back here right after signing in.</p>
+        </>
       ) : state === "missing" ? (
+
         <>
           <p className="font-serif text-3xl italic">Profile not found</p>
           <p className="mt-3 text-sm text-muted-foreground">No AURA member goes by @{username}.</p>
