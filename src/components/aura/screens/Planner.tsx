@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
-import { describeWeather, classifyTemp, suggestOutfit, type DailyForecast } from "@/lib/weather";
+import { describeWeather, classifyTemp, suggestOutfit, weatherLabelKey, type DailyForecast } from "@/lib/weather";
 import type { WardrobeItem } from "@/lib/aura-types";
 import type { Tables } from "@/integrations/supabase/types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
@@ -561,7 +561,7 @@ function DayDetail({
             {Math.round(weather.tempMax)}° / {Math.round(weather.tempMin)}°
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {describeWeather(weather.weatherCode).label} · {t("planner.rainPct", { pct: weather.precipitationProbability })}
+            {t(weatherLabelKey(weather.weatherCode))} · {t("planner.rainPct", { pct: weather.precipitationProbability })}
           </p>
         </div>
         <span className="text-4xl">{describeWeather(weather.weatherCode).icon}</span>
