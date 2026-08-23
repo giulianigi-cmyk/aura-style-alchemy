@@ -96,6 +96,10 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       brand: it.brand,
       material: it.material ?? [],
       locationId: it.location_id ?? null,
+      formality: it.formality ?? null,
+      dayEvening: it.day_evening ?? "",
+      sleeveLength: it.sleeve_length ?? "",
+      styleTags: it.style_tags ?? [],
     }));
 
     const eventById = new Map(
