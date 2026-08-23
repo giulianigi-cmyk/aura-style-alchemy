@@ -185,6 +185,10 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             brand: it.brand,
             material: it.material ?? [],
             locationId: (it as unknown as { location_id?: string | null }).location_id ?? null,
+            formality: it.formality ?? null,
+            dayEvening: it.day_evening ?? "",
+            sleeveLength: it.sleeve_length ?? "",
+            styleTags: it.style_tags ?? [],
           })),
         },
       });
