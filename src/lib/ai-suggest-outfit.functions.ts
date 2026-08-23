@@ -15,6 +15,10 @@ const ItemSchema = z.object({
   brand: z.string().nullable().optional(),
   material: z.array(z.string()).nullable().optional(),
   locationId: z.string().nullable().optional(),
+  formality: z.number().nullable().optional(),
+  dayEvening: z.string().nullable().optional(),
+  sleeveLength: z.string().nullable().optional(),
+  styleTags: z.array(z.string()).nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -117,6 +121,10 @@ export async function suggestOutfitCore(params: {
     season: it.season ?? "",
     brand: it.brand ?? "",
     material: it.material ?? [],
+    formality: it.formality ?? null,
+    dayEvening: it.dayEvening ?? "",
+    sleeveLength: it.sleeveLength ?? "",
+    styleTags: it.styleTags ?? [],
   }));
 
   const genderLine = params.gender === "Man"
@@ -164,7 +172,7 @@ export async function suggestOutfitCore(params: {
     "If the occasion mentions a pool, swimming, the beach or the sea (pool, piscina, swim, beach, spiaggia, mare, snorkeling): the outfit MUST be built around a Swimwear item — a one-piece swimsuit, or a bikini top AND bikini bottom together — instead of the usual top + bottom. Add a cover-up, a light top/shorts or a dress only as a layer over it, plus sandals/flats and sunglasses if available — never a bag. Never return a city outfit for a swim occasion, and never pair a bikini top with trousers or a skirt.",
     "If the occasion is Sport or mentions yoga, gym, running, hiking, training, pilates, tennis or cycling: the outfit MUST be built from Activewear pieces (sports bra / training top + leggings, bike shorts or running shorts) with sneakers or the appropriate sport shoe. Exclude denim, tailoring, dresses, heels and anything delicate, and honour the specific activity named — hiking wants covered, sturdy shoes, yoga wants soft stretch pieces.",
     "If the occasion is Travel (a flight, a transfer, a long drive): prioritise comfort and layers — soft, non-restrictive pieces, closed comfortable shoes (sneakers or flats, no heels), and one light layer that can go on and off.",
-    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, or overtly evening/party-coded (check the material field for sequin/sparkle/lurex/metallic), exclude cocktail or evening dresses, and exclude very short skirts (mini-length) — these read as going-out wear, not workwear, even if the color/formality score looks fine on paper.",
+    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, feathered, fringed, or overtly evening/party-coded (check the material and styleTags fields), exclude cocktail or evening dresses, exclude very short skirts (mini-length), and exclude off-shoulder, strapless, halter, one-shoulder, or otherwise bare-shoulder tops/dresses — check the sleeveLength field: only Short, Three-Quarter, or Long sleeves are workwear-appropriate, never None/Strapless/Halter/Off-shoulder. Also treat dayEvening \"evening\" or formality 4-5 as a strong signal the piece belongs in an Evening look, not Work — these read as going-out wear, not workwear, even if the color looks fine on paper.",
     "Color palette by occasion, when choosing between otherwise-equal options: 'Formal'/'Business Formal' favors navy, grey, black, black-and-white; 'Work'/'Business Casual' favors khaki, light grey, navy, brown as a base with bordeaux, olive, camel, or light blue as accents; 'Smart Casual'/'Weekend' allows one clearly colorful statement piece against a simple base. This is a preference between similarly-fitting options, not a hard exclusion — don't reject an otherwise great outfit purely for using an off-palette color.",
     "Sequins, sparkle, or lurex/metallic fabric are for evening only — never pick a sequinned or sparkly piece for a Day segment, regardless of occasion, even outside a Work context specifically.",
     "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
