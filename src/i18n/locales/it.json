@@ -1035,5 +1035,12 @@
     "failedCount_other": "{{count}} non riuscite",
     "review": "Rivedi",
     "removeBatchAria": "Rimuovi questo batch"
+  },
+    "tabBar": {
+    "home": "Home",
+    "closet": "Guardaroba",
+    "stylist": "Stylist",
+    "calendar": "Calendario",
+    "you": "Tu"
   }
 }
