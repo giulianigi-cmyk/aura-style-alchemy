@@ -355,7 +355,7 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
         continue;
       }
       try {
-                const { error: insErr } = await supabase.from("wardrobe_items").insert({
+                        const { error: insErr } = await supabase.from("wardrobe_items").insert({
           user_id: userId,
           image_url: it.image_path,
           thumbnail_path: it.thumbnail_path ?? null,
@@ -368,6 +368,8 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
           season: it.season || null,
           style: it.style || null,
           occasion: it.occasion || null,
+          formality: it.formality ?? null,
+          day_evening: it.day_evening || null,
          price: it.price ?? null,
           currency: it.price != null ? it.currency || null : null,
           size: it.size || null,
@@ -375,6 +377,7 @@ export const confirmDetectedItems = createServerFn({ method: "POST" })
           source: "batch_scan",
           location_id: activeLocationId,
         } as never);
+
 
         if (insErr) throw new Error(insErr.message);
 
