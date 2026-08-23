@@ -285,6 +285,11 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
             style: it.style ? [it.style] : [],
             season: it.season,
             brand: it.brand,
+            material: it.material ?? [],
+            formality: it.formality ?? null,
+            dayEvening: it.day_evening ?? "",
+            sleeveLength: it.sleeve_length ?? "",
+            styleTags: it.style_tags ?? [],
           })),
         },
       });
