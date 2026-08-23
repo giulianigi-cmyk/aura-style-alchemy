@@ -740,20 +740,29 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   >{c}</button>
                 ))}
               </div>
-              <div className="mt-3 overflow-y-auto grid grid-cols-3 gap-2 pb-4">
+                           <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-5 pb-4">
                 {matches.length === 0 ? (
-                  <p className="col-span-3 text-sm text-muted-foreground py-6 text-center">{t("aiStylist.noPiecesMatch")}</p>
+                  <p className="col-span-2 text-sm text-muted-foreground py-6 text-center">{t("aiStylist.noPiecesMatch")}</p>
                 ) : matches.map((it) => {
                   const path = toStoragePath(it.image_url);
                   const src = path ? itemSigned[path] : null;
+                  const label = it.colors?.[0] ?? it.color ?? it.category ?? "";
                   return (
                     <button
                       key={it.id}
                       onClick={() => addToPlan(pickerForPlan, it.id)}
-                      className="aspect-square rounded-xl overflow-hidden border border-border/60"
-                      style={{ background: "#FFFFFF" }}
+                      className="text-left"
                     >
-                      {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                      <div
+                        className="relative overflow-hidden rounded-[1.25rem] border border-border/50 aspect-[4/5]"
+                        style={{ background: "#FFFFFF" }}
+                      >
+                        {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                      </div>
+                      <div className="px-0.5 mt-1.5">
+                        <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
+                        <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
+                      </div>
                     </button>
                   );
                 })}
