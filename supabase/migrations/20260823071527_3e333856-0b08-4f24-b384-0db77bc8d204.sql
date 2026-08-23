@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.sync_wardrobe_wear_stats() FROM authenticated;
+COMMENT ON FUNCTION public.sync_wardrobe_wear_stats() IS 'Trigger-only function on wardrobe_event_items. Not callable directly by client roles.';
