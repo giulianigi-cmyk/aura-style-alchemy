@@ -270,7 +270,7 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
     setAiExplanation("");
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
-            const dressRules = await loadDressRules(user?.id);
+                        const dressRules = await loadDressRules(user?.id, occasion);
       const res = await suggestOutfitAI({
         data: {
           dressRules,
