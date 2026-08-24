@@ -4,7 +4,7 @@
 import { generateText } from "ai";
 import type { z } from "zod";
 import { COLOR_NAMES } from "./color-palette";
-import { MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS } from "./wardrobe-options";
+import { MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS, SLEEVE_LENGTH_OPTIONS } from "./wardrobe-options";
 import { parseAiJson } from "./ai-json";
 import {
   DETECT_CATEGORIES,
@@ -24,14 +24,17 @@ function buildPrompt(): string {
     `- colors: 1-2 items picked EXACTLY from this fixed palette (verbatim names): ${COLOR_NAMES.join(", ")}.`,
     `- materials: 0-2 items from: ${MATERIAL_OPTIONS.join(", ")}. Best guess from visible texture and garment type; empty array if genuinely unclear.`,
         `- seasons: 0-2 items from: ${DETECT_SEASONS.join(", ")}. Never combine "All Seasons" with a specific season — pick either "All Seasons" alone, or 1-2 specific seasons. Reason from material and coverage: heavy/insulating (wool, cashmere, shearling, coats, boots) → Autumn/Winter; light/breathable or minimal coverage (linen, thin cotton, shorts, sandals) → Spring/Summer. Reserve "All Seasons" for versatile mid-weight basics with no strong seasonal signal, not as a default when unsure.`,
-    '- description: 3-6 words, e.g. "cropped denim jacket".',
+        '- description: 3-6 words, e.g. "cropped denim jacket".',
+    "- formality: an integer 1-5, purely about how dressed-up this specific piece reads: 1 = very casual/sport, 2 = casual, 3 = smart casual, 4 = elegant, 5 = formal/very elegant. Always give your best estimate.",
+    "- dayEvening: EXACTLY one of \"day\", \"evening\", \"both\" — whether this piece reads as daytime wear, an evening/going-out piece, or works for either.",
+    "- sleeveLength: for Tops, Dresses, Outerwear or Jumpsuits only, EXACTLY one of \"Sleeveless\", \"Short Sleeve\", \"Three-Quarter Sleeve\", \"Long Sleeve\". Leave as an empty string for any other category.",
     "- confidence: 0 to 1, how sure you are this is a distinct, correctly identified item.",
     "- bbox: the item's bounding box as FRACTIONS of the full image (0 to 1): x and y are the top-left corner, width and height the box size. Be generous enough to include the whole item.",
     "Do not detect skin, hair, or background as items. Do not detect the same physical item twice. Return between 1 and 12 items, ordered roughly top-to-bottom on the body.",
     "If the photo does not clearly show a person wearing clothes, return an empty items array.",
     "",
     "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-    '{"items": [{"category": "", "subcategory": "", "colors": [], "description": "", "materials": [], "seasons": [], "confidence": 0.9, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}}]}',
+    '{"items": [{"category": "", "subcategory": "", "colors": [], "description": "", "materials": [], "seasons": [], "confidence": 0.9, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}, "formality": 3, "dayEvening": "day", "sleeveLength": ""}]}',
   ].join("\n");
 }
 
@@ -53,13 +56,16 @@ function sanitize(output: z.infer<typeof DetectOutputSchema>): DetectedOutfitIte
           const s = it.seasons.filter((x) => (DETECT_SEASONS as readonly string[]).includes(x));
           return s.length > 1 && s.includes("All Seasons") ? s.filter((x) => x !== "All Seasons") : s;
         })(),
-        confidence: Math.max(0, Math.min(1, it.confidence)),
+                confidence: Math.max(0, Math.min(1, it.confidence)),
         bbox: {
           x: clamp01(b.x),
           y: clamp01(b.y),
           width: Math.max(0.05, Math.min(1, b.width || 0.3)),
           height: Math.max(0.05, Math.min(1, b.height || 0.3)),
         },
+        formality: it.formality != null ? Math.max(1, Math.min(5, Math.round(it.formality))) : undefined,
+        dayEvening: ["day", "evening", "both"].includes(it.dayEvening ?? "") ? it.dayEvening : undefined,
+        sleeveLength: SLEEVE_LENGTH_OPTIONS.includes(it.sleeveLength ?? "") ? it.sleeveLength : undefined,
       };
     });
 }
