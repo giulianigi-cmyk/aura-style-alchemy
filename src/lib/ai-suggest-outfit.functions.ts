@@ -192,6 +192,42 @@ export async function suggestOutfitCore(params: {
 
   const userContent = `${wx} ${occ}\nWardrobe:\n${JSON.stringify(catalog)}`;
 
+  // Hard, code-level guardrails — mirrors the pattern in
+  // suggest-daily-looks.functions.ts. The prompt above ALSO asks for all
+  // of this, but a text instruction is a request the model can silently
+  // ignore; these checks are what actually rejects a bad result instead
+  // of trusting the model got it right.
+  const SLOT_LIMITS: Record<string, number> = {
+    Tops: 1, Bottoms: 1, Dresses: 1, Jumpsuits: 1, Shoes: 1, Bags: 1, Outerwear: 1,
+  };
+  const hasSlotViolation = (ids: string[]): boolean => {
+    const counts: Record<string, number> = {};
+    for (const id of ids) {
+      const cat = catalog.find((c) => c.id === id)?.category;
+      if (!cat) continue;
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    }
+    return Object.entries(SLOT_LIMITS).some(([cat, limit]) => (counts[cat] ?? 0) > limit);
+  };
+  const BARE_SLEEVE = new Set(["None", "Strapless", "Halter", "Off-shoulder", "One-shoulder"]);
+  const EVENING_SIGNAL = /rhinestone|embellish|diamant|strappy|sequin|paillette|feather|piuma|fringe|frange|tulle/i;
+  const violatesWorkRules = (ids: string[]): boolean =>
+    ids.some((id) => {
+      const item = catalog.find((c) => c.id === id);
+      if (!item) return false;
+      if (BARE_SLEEVE.has(item.sleeveLength ?? "")) return true;
+      if ((item.dayEvening ?? "") === "evening" && (item.formality ?? 0) >= 4) return true;
+      const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
+      return EVENING_SIGNAL.test(text);
+    });
+  const isWorkOccasion = (params.occasion ?? "").toLowerCase().startsWith("work");
+  const isValidResult = (ids: string[]): boolean => {
+    if (!ids.length) return false;
+    if (hasSlotViolation(ids)) return false;
+    if (isWorkOccasion && violatesWorkRules(ids)) return false;
+    return true;
+  };
+
   try {
     let text: string;
     try {
@@ -226,7 +262,40 @@ export async function suggestOutfitCore(params: {
     }
 
     const validIds = new Set(catalog.map((c) => c.id));
-    const item_ids = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
+    let item_ids = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
+
+    // If the first attempt breaks a hard rule (two tops, a bare-shoulder
+    // piece for Work, etc.), ask once more instead of returning it —
+    // mirrors the retry pattern used for daily looks.
+    if (!isValidResult(item_ids)) {
+      try {
+        const retry = await generateText({
+          model,
+          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, or an evening-coded/bare-shoulder piece for a Work occasion). Try again, respecting every rule strictly this time.",
+          messages: [{ role: "user", content: userContent }],
+        });
+        const retryParsed = parseAiJson(retry.text, OutputSchema);
+        const retryIds = retryParsed.item_ids.filter((id) => validIds.has(id)).slice(0, 5);
+        if (isValidResult(retryIds)) {
+          item_ids = retryIds;
+        } else if (hasSlotViolation(item_ids)) {
+          // Neither attempt was clean and the original has a structural
+          // slot conflict (e.g. two tops) — drop the lowest-priority
+          // duplicate items rather than ship a visibly broken outfit.
+          const seen = new Set<string>();
+          item_ids = item_ids.filter((id) => {
+            const cat = catalog.find((c) => c.id === id)?.category ?? "";
+            const key = SLOT_LIMITS[cat] ? cat : id;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+      } catch (err) {
+        console.error("[AURA suggest-outfit] retry failed", err);
+      }
+    }
+
     return {
       ok: true as const,
       item_ids,
