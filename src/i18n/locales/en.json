@@ -411,7 +411,15 @@
     "seasonLabel": "Season",
     "styleLabel": "Style",
     "sizePlaceholder": "e.g. 42 or M — optional",
-    "purchaseDateLabel": "Purchase date"
+    "purchaseDateLabel": "Purchase date",
+        "formality1": "1 · Very casual",
+    "formality2": "2 · Casual",
+    "formality3": "3 · Smart casual",
+    "formality4": "4 · Elegant",
+    "formality5": "5 · Formal",
+    "dayEveningDay": "Day",
+    "dayEveningEvening": "Evening",
+    "dayEveningBoth": "Both"
   },
   "stylistChat": {
     "feedbackLiked": "I like this outfit",
