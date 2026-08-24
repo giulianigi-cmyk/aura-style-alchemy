@@ -46,11 +46,11 @@ const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "h
 // Same 1-5 scale the outfit/trip engine already scores every piece on
 // (see the Outfit Engine spec) — surfaced here so it's visible and
 // correctable, not just something the AI silently assigns.
-const FORMALITY_OPTIONS = ["1 · Very casual", "2 · Casual", "3 · Smart casual", "4 · Elegant", "5 · Formal"];
-const DAY_EVENING_OPTIONS: { value: string; label: string }[] = [
-  { value: "day", label: "Day" },
-  { value: "evening", label: "Evening" },
-  { value: "both", label: "Both" },
+const FORMALITY_KEYS = ["addItem.formality1", "addItem.formality2", "addItem.formality3", "addItem.formality4", "addItem.formality5"];
+const DAY_EVENING_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "day", labelKey: "addItem.dayEveningDay" },
+  { value: "evening", labelKey: "addItem.dayEveningEvening" },
+  { value: "both", labelKey: "addItem.dayEveningBoth" },
 ];
 
 function isImageFile(file: File) {
@@ -1207,15 +1207,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.formalityLabel")}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">{t("addItem.formalityHint")}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {FORMALITY_OPTIONS.map((label, i) => {
+                                {FORMALITY_KEYS.map((label, i) => {
                   const level = i + 1;
                   const on = formality === level;
                   return (
                     <button key={label} onClick={() => setFormality(level)}
                       className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                      {label}
+                      {t(label)}
                     </button>
                   );
+                })}
                 })}
               </div>
             </div>
@@ -1224,12 +1225,12 @@ export function AddItem({ onClose }: { onClose: () => void }) {
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.dayEveningLabel")}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">{t("addItem.dayEveningHint")}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {DAY_EVENING_OPTIONS.map(({ value, label }) => {
+               {DAY_EVENING_OPTIONS.map(({ value, labelKey }) => {
                   const on = dayEvening === value;
                   return (
                     <button key={value} onClick={() => setDayEvening(value)}
                       className={`rounded-full px-3 py-1.5 text-xs transition ${on ? "bg-foreground text-background" : "bg-secondary/60"}`}>
-                      {label}
+                      {t(labelKey)}
                     </button>
                   );
                 })}
