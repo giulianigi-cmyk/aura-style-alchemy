@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { ColorPicker } from "@/components/aura/ColorPicker";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import {
@@ -8,8 +9,19 @@ import {
   STYLE_OPTIONS,
   OCCASION_OPTIONS,
   CURRENCY_OPTIONS,
+  SLEEVE_LENGTH_OPTIONS,
   subcategoriesFor,
 } from "@/lib/wardrobe-options";
+
+const FORMALITY_KEYS = ["addItem.formality1", "addItem.formality2", "addItem.formality3", "addItem.formality4", "addItem.formality5"];
+const DAY_EVENING_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "day", labelKey: "addItem.dayEveningDay" },
+  { value: "evening", labelKey: "addItem.dayEveningEvening" },
+  { value: "both", labelKey: "addItem.dayEveningBoth" },
+];
+/** Sleeve length is only meaningful for garments with sleeves/shoulders —
+ *  showing it for Shoes or Bags would be noise, not a useful field. */
+const SLEEVE_APPLIES_TO = new Set(["Tops", "Dresses", "Outerwear", "Jumpsuits"]);
 
 export type DetectedItemDraft = {
   category: string;
@@ -25,6 +37,9 @@ export type DetectedItemDraft = {
   styles: string[];
   occasions: string[];
   purchaseDate: string;
+  sleeveLength: string;
+  formality: number | null;
+  dayEvening: string;
 };
 
 export function DetectedItemCard({
@@ -40,6 +55,7 @@ export function DetectedItemCard({
   onRemove?: () => void;
   footer?: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const subs = subcategoriesFor(item.category);
 
   return (
@@ -47,7 +63,7 @@ export function DetectedItemCard({
       {onRemove && (
         <button
           onClick={onRemove}
-          aria-label="Remove item"
+          aria-label={t("detectedItem.removeItemAria")}
           className="absolute top-3 right-3 h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
         ><Trash2 size={14} /></button>
       )}
@@ -60,7 +76,7 @@ export function DetectedItemCard({
       )}
 
       <div className="mt-4">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.category")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {ITEM_CATEGORIES.map((c) => (
             <button
@@ -74,7 +90,7 @@ export function DetectedItemCard({
 
       {subs.length > 0 && (
         <div className="mt-3">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Type</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.type")}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {subs.map((s) => (
               <button
@@ -93,7 +109,7 @@ export function DetectedItemCard({
 
       <div className="mt-3">
         <MaterialCombobox
-          label="Material"
+          label={t("detectedItem.material")}
           options={MATERIAL_OPTIONS}
           values={item.materials}
           onChange={(v) => onChange({ materials: v })}
@@ -101,7 +117,7 @@ export function DetectedItemCard({
       </div>
 
       <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Season</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.season")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
                    {SEASON_OPTIONS.map((s) => {
             const on = item.seasons.includes(s);
@@ -122,18 +138,68 @@ export function DetectedItemCard({
         </div>
       </div>
 
+      {SLEEVE_APPLIES_TO.has(item.category) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.sleeve")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {SLEEVE_LENGTH_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ sleeveLength: item.sleeveLength === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.sleeveLength === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Brand</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.formality")}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{t("detectedItem.formalityHint")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {FORMALITY_KEYS.map((key, i) => {
+            const level = i + 1;
+            const on = item.formality === level;
+            return (
+              <button
+                key={key}
+                onClick={() => onChange({ formality: level })}
+                className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{t(key)}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.dayEvening")}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">{t("detectedItem.dayEveningHint")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {DAY_EVENING_OPTIONS.map(({ value, labelKey }) => {
+            const on = item.dayEvening === value;
+            return (
+              <button
+                key={value}
+                onClick={() => onChange({ dayEvening: value })}
+                className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{t(labelKey)}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.brand")}</p>
         <input
           value={item.brand}
           onChange={(e) => onChange({ brand: e.target.value })}
-          placeholder="leave empty if unknown"
+          placeholder={t("detectedItem.brandPlaceholder")}
           className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
         />
       </div>
 
       <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Style</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.style")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {STYLE_OPTIONS.map((s) => {
             const on = item.styles.includes(s);
@@ -149,7 +215,7 @@ export function DetectedItemCard({
       </div>
 
       <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Occasion</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.occasion")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {OCCASION_OPTIONS.map((o) => {
             const on = item.occasions.includes(o);
@@ -166,16 +232,16 @@ export function DetectedItemCard({
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Size</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.size")}</p>
           <input
             value={item.size}
             onChange={(e) => onChange({ size: e.target.value })}
-            placeholder="e.g. M, 40"
+            placeholder={t("detectedItem.sizePlaceholder")}
             className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Price</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.price")}</p>
           <div className="mt-2 flex items-center gap-1.5">
             <input
               value={item.price}
@@ -196,7 +262,7 @@ export function DetectedItemCard({
       </div>
 
       <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Purchase date</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.purchaseDate")}</p>
         <input
           type="date"
           value={item.purchaseDate}
