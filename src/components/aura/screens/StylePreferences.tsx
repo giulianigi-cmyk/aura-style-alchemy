@@ -13,21 +13,46 @@ const WEEKDAYS: { code: string; label: string }[] = [
   { code: "TH", label: "Thu" }, { code: "FR", label: "Fri" }, { code: "SA", label: "Sat" }, { code: "SU", label: "Sun" },
 ];
 
-const DRESS_CODE_DEFINITIONS: { term: string; description: string }[] = [
-  { term: "None", description: "No specific dress code — wear whatever you like." },
-  { term: "Casual", description: "Relaxed everyday clothes: jeans, t-shirts, sneakers." },
-  { term: "Smart Casual", description: "Neat and put-together without being formal — chinos, blouses, loafers." },
-  { term: "Business Casual", description: "Professional but relaxed — no tie needed, but polished (dress pants, collared shirts)." },
-  { term: "Business Formal", description: "Fully professional — suits, blazers, structured tailoring." },
-  { term: "Uniform", description: "A required uniform is provided or specified by the employer." },
-];
-const FORMALITY_DEFINITIONS: { term: string; description: string }[] = [
-  { term: "Very casual", description: "Almost always in relaxed, comfortable clothing." },
-  { term: "Casual", description: "Generally relaxed, dressed up only occasionally." },
-  { term: "Smart Casual", description: "Put-together most days without going fully formal." },
-  { term: "Elegant", description: "Prefers polished, refined outfits most of the time." },
-  { term: "Very elegant", description: "Consistently dresses in a formal, elevated style." },
-];
+const DRESS_CODE_KEYS: Record<string, string> = {
+  "None": "styleTerms.dressCodeNone",
+  "Casual": "styleTerms.dressCodeCasual",
+  "Smart Casual": "styleTerms.dressCodeSmartCasual",
+  "Business Casual": "styleTerms.dressCodeBusinessCasual",
+  "Business Formal": "styleTerms.dressCodeBusinessFormal",
+  "Uniform": "styleTerms.dressCodeUniform",
+};
+const DRESS_CODE_DESC_KEYS: Record<string, string> = {
+  "None": "styleTerms.dressCodeNoneDesc",
+  "Casual": "styleTerms.dressCodeCasualDesc",
+  "Smart Casual": "styleTerms.dressCodeSmartCasualDesc",
+  "Business Casual": "styleTerms.dressCodeBusinessCasualDesc",
+  "Business Formal": "styleTerms.dressCodeBusinessFormalDesc",
+  "Uniform": "styleTerms.dressCodeUniformDesc",
+};
+const FORMALITY_KEYS: Record<string, string> = {
+  "Very casual": "styleTerms.formalityVeryCasual",
+  "Casual": "styleTerms.formalityCasual",
+  "Smart Casual": "styleTerms.formalitySmartCasual",
+  "Elegant": "styleTerms.formalityElegant",
+  "Very elegant": "styleTerms.formalityVeryElegant",
+};
+const FORMALITY_DESC_KEYS: Record<string, string> = {
+  "Very casual": "styleTerms.formalityVeryCasualDesc",
+  "Casual": "styleTerms.formalityCasualDesc",
+  "Smart Casual": "styleTerms.formalitySmartCasualDesc",
+  "Elegant": "styleTerms.formalityElegantDesc",
+  "Very elegant": "styleTerms.formalityVeryElegantDesc",
+};
+const BOLDNESS_KEYS: Record<string, string> = {
+  "Classic": "styleTerms.boldnessClassic",
+  "Balanced": "styleTerms.boldnessBalanced",
+  "Creative": "styleTerms.boldnessCreative",
+  "Bold": "styleTerms.boldnessBold",
+};
+const WEEKDAY_KEYS: Record<string, string> = {
+  "MO": "styleTerms.weekdayMon", "TU": "styleTerms.weekdayTue", "WE": "styleTerms.weekdayWed",
+  "TH": "styleTerms.weekdayThu", "FR": "styleTerms.weekdayFri", "SA": "styleTerms.weekdaySat", "SU": "styleTerms.weekdaySun",
+};
 
 export function StylePreferences({ go }: { go: (s: Screen) => void }) {
   const { t } = useTranslation();
@@ -88,7 +113,7 @@ export function StylePreferences({ go }: { go: (s: Screen) => void }) {
             {WORK_DRESS_CODES.map(w => (
               <button key={w} onClick={() => setWorkDressCode(w)}
                 className={`rounded-full px-3 py-1.5 text-xs border transition ${workDressCode === w ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                {w}
+                {t(DRESS_CODE_KEYS[w])}
               </button>
             ))}
           </div>
@@ -106,7 +131,7 @@ export function StylePreferences({ go }: { go: (s: Screen) => void }) {
             {PERSONAL_FORMALITY.map(f => (
               <button key={f} onClick={() => setPersonalFormality(f)}
                 className={`rounded-full px-3 py-1.5 text-xs border transition ${personalFormality === f ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                {f}
+                {t(FORMALITY_KEYS[f])}
               </button>
             ))}
           </div>
@@ -119,7 +144,7 @@ export function StylePreferences({ go }: { go: (s: Screen) => void }) {
             {STYLE_BOLDNESS.map(b => (
               <button key={b} onClick={() => setStyleBoldness(styleBoldness === b ? "" : b)}
                 className={`rounded-full px-3 py-1.5 text-xs border transition ${styleBoldness === b ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                {b}
+                {t(BOLDNESS_KEYS[b])}
               </button>
             ))}
           </div>
@@ -128,13 +153,13 @@ export function StylePreferences({ go }: { go: (s: Screen) => void }) {
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("settings.workDays")}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">{t("settings.workDaysHint")}</p>
-          <div className="mt-1 flex flex-wrap gap-2">
+          <div className="mt-1 grid grid-cols-7 gap-1">
             {WEEKDAYS.map(d => {
               const on = workDays.includes(d.code);
               return (
                 <button key={d.code} onClick={() => setWorkDays(on ? workDays.filter(c => c !== d.code) : [...workDays, d.code])}
-                  className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                  {d.label}
+                  className={`rounded-full px-1 py-1.5 text-[11px] border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                  {t(WEEKDAY_KEYS[d.code])}
                 </button>
               );
             })}
@@ -182,10 +207,10 @@ export function StylePreferences({ go }: { go: (s: Screen) => void }) {
               </button>
             </div>
             <div className="mt-4 space-y-3">
-              {(infoPopup === "work" ? DRESS_CODE_DEFINITIONS : FORMALITY_DEFINITIONS).map((d) => (
-                <div key={d.term}>
-                  <p className="text-sm font-medium">{d.term}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
+              {(infoPopup === "work" ? WORK_DRESS_CODES : PERSONAL_FORMALITY).map((term) => (
+                <div key={term}>
+                  <p className="text-sm font-medium">{t(infoPopup === "work" ? DRESS_CODE_KEYS[term] : FORMALITY_KEYS[term])}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t(infoPopup === "work" ? DRESS_CODE_DESC_KEYS[term] : FORMALITY_DESC_KEYS[term])}</p>
                 </div>
               ))}
             </div>
