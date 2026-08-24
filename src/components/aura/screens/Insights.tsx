@@ -1,5 +1,6 @@
 import { ArrowLeft, Sparkles, BarChart3, PiggyBank, TrendingDown, Eye, EyeOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -7,9 +8,10 @@ import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { convertCurrency, RATES_AS_OF } from "@/lib/currency-rates";
 import { Loader2 } from "lucide-react";
+import i18n from "@/i18n/config";
 
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
-const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${Math.round(n).toLocaleString("it-IT")}`;
+const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${Math.round(n).toLocaleString(i18n.language)}`;
 // Deliberately simple and stated plainly, not tuned to feel precise:
 // linear decline from 100% at purchase to a 25% floor by year 5, flat
 // after that. This is a general rule of thumb, not a market appraisal —
@@ -27,6 +29,7 @@ function retentionFactor(ageYears: number): number {
 }
 
 export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; openWardrobeGap: (filter: "price" | "purchase_date") => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [showValues, setShowValues] = useState(() => {
@@ -129,19 +132,19 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
           <button onClick={() => go("profile")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
             <ArrowLeft size={15} />
           </button>
-          <p className="font-serif text-lg italic">Wardrobe insights</p>
+          <p className="font-serif text-lg italic">{t("insights.wardrobeInsights")}</p>
           <span className="w-10" />
         </header>
         <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-8 text-center shadow-soft animate-fade-up">
           <div className="mx-auto h-14 w-14 rounded-full bg-background flex items-center justify-center mb-4">
             <BarChart3 size={20} />
           </div>
-          <h2 className="font-serif text-2xl italic">No insights yet</h2>
+          <h2 className="font-serif text-2xl italic">{t("insights.noInsightsYet")}</h2>
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            Add a few pieces to your wardrobe and we'll surface value, cost-per-wear and wear rate here.
+            {t("insights.addPiecesHint")}
           </p>
           <button onClick={() => go("add")} className="mt-6 h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] inline-flex items-center gap-2">
-            <Sparkles size={12} /> Add a piece
+            <Sparkles size={12} /> {t("insights.addAPiece")}
           </button>
         </section>
       </div>
@@ -154,17 +157,17 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         <button onClick={() => go("profile")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90">
           <ArrowLeft size={15} />
         </button>
-        <p className="font-serif text-lg italic">Wardrobe insights</p>
+        <p className="font-serif text-lg italic">{t("insights.wardrobeInsights")}</p>
         <span className="w-10" />
       </header>
 
       <section className="mx-6 mt-4 rounded-3xl gradient-warm border border-border/60 p-6 animate-fade-up">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Total wardrobe value</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.totalWardrobeValue")}</p>
           {stats.pricedCount > 0 && (
             <button
               onClick={toggleShowValues}
-              aria-label={showValues ? "Hide values" : "Show values"}
+              aria-label={showValues ? t("insights.hideValuesAria") : t("insights.showValuesAria")}
               className="text-muted-foreground active:scale-90"
             >{showValues ? <Eye size={14} /> : <EyeOff size={14} />}</button>
           )}
@@ -173,13 +176,13 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
           <>
             <p className="font-serif text-4xl mt-1">{showValues ? fmt(stats.totalValue, stats.primaryCurrency) : "••••"}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Based on {stats.pricedCount} of {items.length} pieces with a price on file
-              {stats.convertedCount > 0 ? ` · ${stats.convertedCount} converted from other currencies (approx., rates as of ${RATES_AS_OF})` : ""}
+              {t("insights.basedOnPieces", { priced: stats.pricedCount, total: items.length })}
+              {stats.convertedCount > 0 ? ` · ${t("insights.convertedFromOther", { count: stats.convertedCount, date: RATES_AS_OF })}` : ""}
             </p>
           </>
         ) : (
           <p className="mt-1 text-sm text-muted-foreground">
-            No prices on file yet — add a price to your pieces to see this.
+            {t("insights.noPricesYet")}
           </p>
         )}
       </section>
@@ -192,7 +195,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
               className="flex-1 rounded-2xl border border-dashed border-border bg-card px-4 py-3 text-left active:scale-[0.98] transition"
             >
               <p className="font-serif text-lg">{stats.missingPriceCount}</p>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Without a price →</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("insights.withoutPrice")}</p>
             </button>
           )}
           {stats.missingPurchaseDateCount > 0 && (
@@ -201,7 +204,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
               className="flex-1 rounded-2xl border border-dashed border-border bg-card px-4 py-3 text-left active:scale-[0.98] transition"
             >
               <p className="font-serif text-lg">{stats.missingPurchaseDateCount}</p>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Without a purchase date →</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("insights.withoutPurchaseDate")}</p>
             </button>
           )}
         </section>
@@ -209,23 +212,23 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
 
       <section className="mx-6 mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-card border border-border/60 p-4">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Avg cost per wear</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.avgCostPerWear")}</p>
           <p className="font-serif text-2xl mt-1">
             {stats.avgCpw != null ? fmt(stats.avgCpw, stats.primaryCurrency) : "—"}
           </p>
           <p className="mt-1 text-[10px] text-muted-foreground">
-            {stats.avgCpw != null ? "Priced pieces you've actually worn" : "No priced, worn pieces yet"}
+            {stats.avgCpw != null ? t("insights.pricedPiecesWorn") : t("insights.noPricedWornPieces")}
           </p>
         </div>
         <div className="rounded-2xl bg-card border border-border/60 p-4">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Never worn</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.neverWorn")}</p>
           <p className="font-serif text-2xl mt-1">{stats.neverWornPct}%</p>
-          <p className="mt-1 text-[10px] text-muted-foreground">{stats.neverWornCount} of {items.length} pieces</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">{t("insights.piecesOfTotal", { count: stats.neverWornCount, total: items.length })}</p>
         </div>
       </section>
 
       <section className="mx-6 mt-6 animate-fade-up">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">By category</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("insights.byCategory")}</p>
         <div className="rounded-2xl bg-card border border-border/60 divide-y divide-border/60 overflow-hidden">
           {stats.categoryRows.map((c) => {
             const pct = items.length ? Math.round((c.count / items.length) * 100) : 0;
@@ -233,7 +236,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
               <div key={c.category} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm">{c.category}</p>
-                  <p className="text-[10px] text-muted-foreground">{c.count} piece{c.count === 1 ? "" : "s"} · {pct}%</p>
+                  <p className="text-[10px] text-muted-foreground">{t("insights.piecesCount", { count: c.count })} · {pct}%</p>
                 </div>
                 <p className="text-sm font-serif shrink-0">
                   {c.value > 0 ? fmt(c.value, stats.primaryCurrency) : "—"}
@@ -244,7 +247,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         </div>
         {stats.topCategory && (
           <p className="mt-2 text-[11px] text-muted-foreground px-1">
-            <span className="font-medium text-foreground">{stats.topCategory.category}</span> is your highest-value category.
+            {t("insights.highestValueCategory", { category: stats.topCategory.category })}
           </p>
         )}
       </section>
@@ -253,7 +256,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         <section className="mx-6 mt-6 animate-fade-up">
           <div className="flex items-center gap-1.5 mb-2">
             <PiggyBank size={12} className="text-muted-foreground" />
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Best value pieces</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.bestValuePieces")}</p>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar">
             {stats.bestValue.map(({ item, cpw }) => (
@@ -262,7 +265,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
                   {thumb(item) ? <img src={thumb(item)!} alt="" className="h-full w-full object-contain p-1.5" loading="lazy" /> : null}
                 </div>
                 <p className="mt-1.5 text-[10px] uppercase tracking-widest text-muted-foreground truncate">{item.brand ?? item.category}</p>
-                <p className="text-xs font-serif">{fmt(cpw, stats.primaryCurrency)}/wear</p>
+                <p className="text-xs font-serif">{t("insights.perWear", { amount: fmt(cpw, stats.primaryCurrency) })}</p>
               </div>
             ))}
           </div>
@@ -273,7 +276,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         <section className="mx-6 mt-6 animate-fade-up">
           <div className="flex items-center gap-1.5 mb-2">
             <TrendingDown size={12} className="text-muted-foreground" />
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Never worn ({stats.neverWornCount})</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.neverWornCount", { count: stats.neverWornCount })}</p>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar">
             {items.filter((it) => !(it.worn_count ?? 0)).slice(0, 10).map((item) => (
@@ -288,18 +291,18 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
       )}
 
       <section className="mx-6 mt-6 mb-2 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Estimated current value</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.estimatedCurrentValue")}</p>
         {stats.estimatedValueCount > 0 ? (
           <>
             <p className="font-serif text-2xl mt-1">{showValues ? fmt(stats.estimatedValue, stats.primaryCurrency) : "••••"}</p>
             <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-              Estimated — based on {stats.estimatedValueCount} piece{stats.estimatedValueCount === 1 ? "" : "s"} with a purchase date, assuming value tapers gradually to about {Math.round(RETENTION_FLOOR * 100)}% of the original price by year {RETENTION_CLIFF_YEARS}. Not a market appraisal — it doesn't know brand, condition or trends.
-              {stats.estimatedValueExcluded > 0 ? ` ${stats.estimatedValueExcluded} more priced piece${stats.estimatedValueExcluded === 1 ? "" : "s"} ${stats.estimatedValueExcluded === 1 ? "doesn't" : "don't"} have a purchase date, so ${stats.estimatedValueExcluded === 1 ? "isn't" : "aren't"} included.` : ""}
+              {t("insights.estimatedBasedOn", { count: stats.estimatedValueCount, pct: Math.round(RETENTION_FLOOR * 100), years: RETENTION_CLIFF_YEARS })}
+              {stats.estimatedValueExcluded > 0 ? ` ${t("insights.moreNotIncluded", { count: stats.estimatedValueExcluded })}` : ""}
             </p>
           </>
         ) : (
           <p className="mt-1 text-sm text-muted-foreground">
-            Add a purchase date to your pieces to see this.
+            {t("insights.addPurchaseDateHint")}
           </p>
         )}
       </section>
