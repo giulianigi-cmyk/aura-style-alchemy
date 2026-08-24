@@ -411,7 +411,15 @@
     "seasonLabel": "Saison",
     "styleLabel": "Style",
     "sizePlaceholder": "ex. 42 ou M — facultatif",
-    "purchaseDateLabel": "Date d'achat"
+    "purchaseDateLabel": "Date d'achat",
+        "formality1": "1 · Très décontracté",
+    "formality2": "2 · Décontracté",
+    "formality3": "3 · Smart casual",
+    "formality4": "4 · Élégant",
+    "formality5": "5 · Formel",
+    "dayEveningDay": "Jour",
+    "dayEveningEvening": "Soir",
+    "dayEveningBoth": "Les deux"
   },
   "stylistChat": {
     "feedbackLiked": "J'aime cette tenue",
