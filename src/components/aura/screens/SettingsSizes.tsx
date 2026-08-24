@@ -7,21 +7,22 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { sizeEquivalences } from "@/lib/size-conversion";
 
-type SizeKey = "tops" | "bottoms" | "dresses" | "shoes";
-const SIZE_FIELDS: { key: SizeKey; label: string; shoes?: boolean; wardrobeCategory: string }[] = [
-  { key: "tops", label: "Tops", wardrobeCategory: "Tops" },
-  { key: "bottoms", label: "Bottoms", wardrobeCategory: "Bottoms" },
-  { key: "dresses", label: "Dresses", wardrobeCategory: "Dresses" },
-  { key: "shoes", label: "Shoes", shoes: true, wardrobeCategory: "Shoes" },
+type SizeKey = "tops" | "bottoms" | "dresses" | "shoes" | "bra" | "underwear";
+const SIZE_FIELDS: { key: SizeKey; labelKey: string; shoes?: boolean; wardrobeCategory: string }[] = [
+  { key: "tops", labelKey: "sizes.tops", wardrobeCategory: "Tops" },
+  { key: "bottoms", labelKey: "sizes.bottoms", wardrobeCategory: "Bottoms" },
+  { key: "dresses", labelKey: "sizes.dresses", wardrobeCategory: "Dresses" },
+  { key: "shoes", labelKey: "sizes.shoes", shoes: true, wardrobeCategory: "Shoes" },
 ];
 
 export function SettingsSizes({ go }: { go: (s: Screen) => void }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const userId = user?.id;
-  const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "" };
+  const empty: Record<SizeKey, string> = { tops: "", bottoms: "", dresses: "", shoes: "", bra: "", underwear: "" };
   const [values, setValues] = useState<Record<SizeKey, string>>(empty);
   const [inferred, setInferred] = useState<Record<SizeKey, string>>(empty);
+  const [gender, setGender] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -31,13 +32,15 @@ export function SettingsSizes({ go }: { go: (s: Screen) => void }) {
     (async () => {
       setLoading(true);
       const [{ data, error }, { data: items }] = await Promise.all([
-        supabase.from("profiles").select("sizes").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("sizes, gender").eq("id", userId).maybeSingle(),
         supabase.from("wardrobe_items").select("category, size").eq("user_id", userId),
       ]);
       if (cancelled) return;
       if (error) console.error("[AURA sizes] load", error);
-      const s = (data as { sizes?: Partial<Record<SizeKey, string>> } | null)?.sizes ?? {};
-      setValues({ tops: s.tops ?? "", bottoms: s.bottoms ?? "", dresses: s.dresses ?? "", shoes: s.shoes ?? "" });
+      const profileRow = data as { sizes?: Partial<Record<SizeKey, string>>; gender?: string | null } | null;
+      const s = profileRow?.sizes ?? {};
+      setGender(profileRow?.gender ?? null);
+      setValues({ tops: s.tops ?? "", bottoms: s.bottoms ?? "", dresses: s.dresses ?? "", shoes: s.shoes ?? "", bra: s.bra ?? "", underwear: s.underwear ?? "" });
 
       const counts: Record<SizeKey, Map<string, number>> = { tops: new Map(), bottoms: new Map(), dresses: new Map(), shoes: new Map() };
       for (const it of (items ?? []) as { category: string | null; size: string | null }[]) {
@@ -97,7 +100,7 @@ export function SettingsSizes({ go }: { go: (s: Screen) => void }) {
           const hint = sizeEquivalences(shown, f.shoes ? { shoes: true } : undefined);
           return (
             <div key={f.key} className="min-w-0 border-b border-border/60 pb-1.5">
-              <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{f.label}</p>
+              <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{t(f.labelKey)}</p>
               <input
                 value={v}
                 onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
@@ -109,6 +112,28 @@ export function SettingsSizes({ go }: { go: (s: Screen) => void }) {
             </div>
           );
         })}
+        {gender === "Woman" && (
+          <div className="min-w-0 border-b border-border/60 pb-1.5">
+            <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{t("sizes.bra")}</p>
+            <input
+              value={values.bra}
+              onChange={(e) => setValues((prev) => ({ ...prev, bra: e.target.value }))}
+              placeholder={loading ? "…" : "70B"}
+              className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+            />
+          </div>
+        )}
+        {gender === "Man" && (
+          <div className="min-w-0 border-b border-border/60 pb-1.5">
+            <p className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{t("sizes.underwear")}</p>
+            <input
+              value={values.underwear}
+              onChange={(e) => setValues((prev) => ({ ...prev, underwear: e.target.value }))}
+              placeholder={loading ? "…" : "M"}
+              className="mt-0.5 w-full min-w-0 bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+            />
+          </div>
+        )}
       </section>
 
       <section className="mx-6 mt-8">
