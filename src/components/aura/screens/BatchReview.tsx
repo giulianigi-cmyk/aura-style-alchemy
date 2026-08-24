@@ -145,9 +145,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               price: it.price != null ? String(it.price) : "",
               currency: it.currency ?? "EUR",
               size: "",
-              styles: it.style ? it.style.split(",").map((s) => s.trim()).filter(Boolean) : [],
+                            styles: it.style ? it.style.split(",").map((s) => s.trim()).filter(Boolean) : [],
               occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
               purchaseDate: new Date().toISOString().slice(0, 10),
+              sleeveLength: it.sleeve_length ?? "",
+              formality: it.formality ?? null,
+              dayEvening: it.day_evening ?? "",
               dedupe,
               included: dedupe.verdict !== "certain",
               bgRemoved: false,
@@ -384,9 +387,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           price: priceNum,
           currency: priceNum != null ? d.currency : null,
           size: d.size.trim() || null,
-          style: d.styles.join(", ") || null,
+                    style: d.styles.join(", ") || null,
           occasion: d.occasions.join(", ") || null,
           purchase_date: d.purchaseDate || null,
+          sleeve_length: d.sleeveLength || null,
+          formality: d.formality,
+          day_evening: d.dayEvening || null,
         });
       }
 
