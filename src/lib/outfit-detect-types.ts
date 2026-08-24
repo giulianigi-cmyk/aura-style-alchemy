@@ -26,6 +26,9 @@ export const DetectedItemSchema = z.object({
     width: z.number(),
     height: z.number(),
   }),
+  formality: z.number().optional(),
+  dayEvening: z.string().optional(),
+  sleeveLength: z.string().optional(),
 });
 
 export const DetectOutputSchema = z.object({
