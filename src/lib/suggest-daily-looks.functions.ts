@@ -15,10 +15,11 @@ const ItemSchema = z.object({
   formality: z.number().nullable().optional(),
     dayEvening: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
-  // Skirt/dress length ("Mini" | "Midi" | "Maxi"), needed to hard-enforce
+   // Skirt/dress length ("Mini" | "Midi" | "Maxi"), needed to hard-enforce
   // the "no short skirts for Work" rule below — without it, a Mini skirt
   // and a Maxi skirt are indistinguishable to both the model and the code.
   length: z.string().nullable().optional(),
+  sleeveLength: z.string().nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -78,7 +79,8 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       formality: it.formality ?? null,
             dayEvening: it.dayEvening ?? "",
       styleTags: it.styleTags ?? [],
-      length: it.length ?? "",
+            length: it.length ?? "",
+      sleeveLength: it.sleeveLength ?? "",
     }));
 
 
