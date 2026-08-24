@@ -168,7 +168,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     setAiBusy(true);
     try {
       const desc = weather ? describeWeather(weather.current.weatherCode, weather.current.isDay).label : null;
-      const dressRules = await loadDressRules(user?.id);
+            const dressRules = await loadDressRules(user?.id, occasion);
       const res = await suggestOutfitAI({
         data: {
           dressRules,
