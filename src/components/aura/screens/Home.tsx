@@ -168,6 +168,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   formality: it.formality ?? null,
                   dayEvening: it.day_evening ?? "",
                   styleTags: it.style_tags ?? [],
+                  sleeveLength: it.sleeve_length ?? "",
                 })),
                 language: i18n.language,
               },
