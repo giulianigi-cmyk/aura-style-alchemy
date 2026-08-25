@@ -48,6 +48,9 @@ export const ConfirmItemSchema = z.object({
   currency: z.string().nullable().optional(),
   size: z.string().nullable().optional(),
   purchase_date: z.string().nullable().optional(),
+  sleeve_length: z.string().nullable().optional(),
+  formality: z.number().nullable().optional(),
+  day_evening: z.string().nullable().optional(),
 });
 
 export const ConfirmDetectedItemsSchema = z.object({
