@@ -1217,7 +1217,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                     </button>
                   );
                 })}
-                })}
               </div>
             </div>
 
