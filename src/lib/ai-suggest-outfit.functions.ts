@@ -209,13 +209,11 @@ export async function suggestOutfitCore(params: {
     }
     return Object.entries(SLOT_LIMITS).some(([cat, limit]) => (counts[cat] ?? 0) > limit);
   };
-  const BARE_SLEEVE = new Set(["None", "Strapless", "Halter", "Off-shoulder", "One-shoulder"]);
-  const EVENING_SIGNAL = /rhinestone|embellish|diamant|strappy|sequin|paillette|feather|piuma|fringe|frange|tulle/i;
+      const EVENING_SIGNAL = /rhinestone|embellish|diamant|strappy|sequin|paillette|feather|piuma|fringe|frange|tulle/i;
   const violatesWorkRules = (ids: string[]): boolean =>
     ids.some((id) => {
       const item = catalog.find((c) => c.id === id);
       if (!item) return false;
-      if (BARE_SLEEVE.has(item.sleeveLength ?? "")) return true;
       if ((item.dayEvening ?? "") === "evening" && (item.formality ?? 0) >= 4) return true;
       const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
       return EVENING_SIGNAL.test(text);
