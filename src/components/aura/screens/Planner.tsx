@@ -159,7 +159,7 @@ export function Planner({ go, openStylistChat, focus }: {
   const today = toISO(new Date());
   const monthLabel = view === "month"
     ? new Date(anchor.getFullYear(), anchor.getMonth(), 1).toLocaleDateString(i18n.language, { month: "long", year: "numeric" })
-    : t("planner.weekOf", { day: cells[0].getDate(), month: cells[0].toLocaleDateString(i18n.language, { month: "short" }) });
+        : t("planner.weekOf", { day: cells[0].getDate(), month: cells[0].toLocaleDateString(i18n.language, { month: "long" }) });
 
   const shift = (n: number) => {
     if (view === "month") {
@@ -188,7 +188,7 @@ export function Planner({ go, openStylistChat, focus }: {
       <header className="px-6 pt-14 pb-3">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("planner.calendar")}</p>
         <div className="flex items-center justify-between mt-1">
-                    <h1 className="font-serif text-3xl leading-tight">{monthLabel}</h1>
+                              <h1 className="font-serif text-2xl leading-tight">{monthLabel}</h1>
           <div className="flex gap-1">
             <button onClick={() => shift(-1)} aria-label={t("planner.previousPeriodAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronLeft size={16} /></button>
             <button onClick={() => shift(1)} aria-label={t("planner.nextPeriodAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90"><ChevronRight size={16} /></button>
