@@ -99,16 +99,24 @@ export function dressPreferencesToPrompt(p: DressPreferences | null | undefined)
   ].join("\n");
 }
 
-export async function loadDressRules(userId: string | undefined): Promise<string | null> {
+export async function loadDressRules(userId: string | undefined, occasion?: string | null): Promise<string | null> {
   if (!userId) return null;
   const { supabase } = await import("@/integrations/supabase/client");
+  const isWork = (occasion ?? "").toLowerCase().startsWith("work");
   const { data } = await supabase
     .from("profiles")
-    .select("dress_preferences")
+    .select(isWork ? "dress_preferences, work_dress_preferences" : "dress_preferences")
     .eq("id", userId)
     .maybeSingle();
-  const p = (data as { dress_preferences?: DressPreferences } | null)?.dress_preferences ?? null;
-  return dressPreferencesToPrompt(p);
+  const row = data as { dress_preferences?: DressPreferences; work_dress_preferences?: DressPreferences } | null;
+  // Work-specific preferences, when the person has set any, fully
+  // replace the general ones for a Work occasion — not merged, to avoid
+  // ambiguous rule conflicts. Falls back to the general preferences when
+  // no work-specific ones exist yet.
+  if (isWork && hasAnyPreference(row?.work_dress_preferences)) {
+    return dressPreferencesToPrompt(row!.work_dress_preferences);
+  }
+  return dressPreferencesToPrompt(row?.dress_preferences ?? null);
 }
 
 export async function loadDressPreferencesRaw(userId: string | undefined): Promise<DressPreferences | null> {
