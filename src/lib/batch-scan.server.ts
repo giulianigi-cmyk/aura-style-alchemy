@@ -85,10 +85,11 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
         }
       }
 
-      let detectedRows: {
+            let detectedRows: {
         category: string | null; subcategory: string | null; colors: string[]; material: string[];
         season: string | null; style: string | null; occasion: string | null; description: string | null;
         confidence: number; bbox: unknown; brand: string | null; price: number | null; currency: string | null;
+        formality: number | null; day_evening: string | null; sleeve_length: string | null;
       }[];
 
       if (prefill) {
@@ -114,6 +115,7 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           currency: prefill.priceCurrency ?? null,
           formality: analysis.formality ?? null,
           day_evening: analysis.dayEvening || null,
+          sleeve_length: analysis.sleeveLength || null,
         }];
       } else {
         const detection = await detectOutfitItems(dataUrl);
@@ -132,6 +134,9 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           brand: null,
           price: null,
           currency: null,
+          formality: it.formality ?? null,
+          day_evening: it.dayEvening || null,
+          sleeve_length: it.sleeveLength || null,
         }));
       }
 
