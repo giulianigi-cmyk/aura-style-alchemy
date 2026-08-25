@@ -81,7 +81,7 @@
     "personalFormality": "Your everyday formality",
     "personalFormalityHint": "So AURA never suggests a blazer to someone who hates them, even when \"technically correct\".",
     "styleBoldness": "How much do you like to experiment?",
-    "styleBoldnessHint": "For occasions that aren't strictly formal (weekend, work depending on your job, casual dinners) — AURA will lean toward this instead of asking each time. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.",
+    "styleBoldnessHint": "Indicate the level of formality you prefer in your everyday outfits. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.",
     "workDays": "Work days",
     "workDaysHint": "Used when generating a week of work outfits at once.",
     "from": "From",
