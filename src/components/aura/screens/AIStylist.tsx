@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Outfit, WardrobeItem } from "@/lib/aura-types";
 import { useAuth } from "@/hooks/use-auth";
 import { ShareOutfitSheet } from "../ShareOutfitSheet";
+import { ItemImageViewer } from "../ItemImageViewer";
 import { useLocation } from "@/hooks/use-location";
 import { useWeather } from "@/hooks/use-weather";
 import { describeWeather } from "@/lib/weather";
@@ -71,6 +72,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const [confirmingPlanId, setConfirmingPlanId] = useState<string | null>(null);
   const [editedItems, setEditedItems] = useState<Record<string, string[]>>({});
   const [pickerForPlan, setPickerForPlan] = useState<string | null>(null);
+  const [viewerImage, setViewerImage] = useState<{ src: string; alt: string } | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerCat, setPickerCat] = useState("All");
   const [locations, setLocations] = useState<WardrobeLocation[]>([]);
@@ -841,6 +843,9 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
           </div>
         </div>
       )}
+      {viewerImage && (
+  <ItemImageViewer src={viewerImage.src} alt={viewerImage.alt} onClose={() => setViewerImage(null)} />
+)}
     </div>
   );
 }
