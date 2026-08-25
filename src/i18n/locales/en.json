@@ -79,7 +79,7 @@
     "workDressCode": "Usual work dress code",
     "whatDoesThisMean": "What do these terms mean?",
     "personalFormality": "Your everyday formality",
-    "personalFormalityHint": "So AURA never suggests a blazer to someone who hates them, even when \"technically correct\".",
+    "personalFormalityHint": "Indicate the level of formality you prefer in your everyday outfits.",
     "styleBoldness": "How much do you like to experiment?",
     "styleBoldnessHint": "For occasions that aren't strictly formal (weekend, work depending on your job, casual dinners) — AURA will lean toward this instead of asking each time. It doesn't apply where the occasion itself calls for something classic, like a black-tie event.",
     "workDays": "Work days",
