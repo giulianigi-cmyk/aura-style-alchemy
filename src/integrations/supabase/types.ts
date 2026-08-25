@@ -980,6 +980,7 @@ export type Database = {
           value: string | null
           work_days: string[]
           work_dress_code: string | null
+          work_dress_preferences: Json | null
           work_end_time: string
           work_start_time: string
         }
@@ -1017,6 +1018,7 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_dress_preferences?: Json | null
           work_end_time?: string
           work_start_time?: string
         }
@@ -1054,6 +1056,7 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_dress_preferences?: Json | null
           work_end_time?: string
           work_start_time?: string
         }
