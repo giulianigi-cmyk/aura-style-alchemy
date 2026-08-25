@@ -88,6 +88,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               description: string | null; bbox: BBox | null;
               brand: string | null; price: number | null; currency: string | null;
               style: string | null; occasion: string | null;
+               sleeve_length: string | null; formality: number | null; day_evening: string | null;
             }>;
             jobs: Array<{ id: string; image_path: string }>;
           }>,
@@ -341,6 +342,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         brand: string; colors: string[]; material: string[]; season: string | null;
         price: number | null; currency: string | null; size: string | null;
         style: string | null; occasion: string | null; purchase_date: string | null;
+         sleeve_length: string | null; formality: number | null; day_evening: string | null;
       }> = [];
 
       for (let i = 0; i < finalToSave.length; i++) {
