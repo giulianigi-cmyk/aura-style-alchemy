@@ -39,6 +39,9 @@ type ScanItem = {
   styles: string[];
   occasions: string[];
   purchaseDate: string;
+  sleeveLength: string;
+  formality: number | null;
+  dayEvening: string;
 };
 
 
@@ -141,6 +144,9 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           styles: [],
           occasions: [],
           purchaseDate: new Date().toISOString().slice(0, 10),
+          sleeveLength: "",
+          formality: null,
+          dayEvening: "",
         });
       }
 
@@ -198,6 +204,9 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           })(),
           currency: it.price.trim() ? it.currency : null,
           purchase_date: it.purchaseDate || null,
+          sleeve_length: it.sleeveLength || null,
+          formality: it.formality,
+          day_evening: it.dayEvening || null,
           source: "outfit_scan",
         } as unknown as TablesInsert<"wardrobe_items">;
 
