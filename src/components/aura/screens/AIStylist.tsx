@@ -190,6 +190,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             formality: it.formality ?? null,
             dayEvening: it.day_evening ?? "",
             sleeveLength: it.sleeve_length ?? "",
+            length: it.length ?? "",
+            fit: it.fit ?? "",
             styleTags: it.style_tags ?? [],
           })),
         },
@@ -296,9 +298,9 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     } as never, { onConflict: resolvePlanSlot({}).onConflict }).select("id").single();
     if (error) { toast.error(error.message); return; }
     const { error: eventErr } = await logWardrobeEvent({
-      userId: user.id,
+            userId: user.id,
       eventType: "planned",
-            date: assignDate,
+      date: assignDate,
       itemIds: assignFor.item_ids,
       outfitPlanId: (data as { id: string }).id,
       outfitId: assignFor.id,
@@ -596,9 +598,9 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                         </div>
                       </button>
                       {outfitTab === "saved" && (
-                        <>
+                                              <>
                           <button
-                                                        onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
+                            onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
                             aria-label={t("aiStylist.duplicateOutfitAria")}
                             className="absolute top-2 right-20 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                           ><Copy size={14} /></button>
