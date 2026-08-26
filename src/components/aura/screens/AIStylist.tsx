@@ -298,7 +298,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     const { error: eventErr } = await logWardrobeEvent({
       userId: user.id,
       eventType: "planned",
-      date: assignDate,
+            date: assignDate,
       itemIds: assignFor.item_ids,
       outfitPlanId: (data as { id: string }).id,
       outfitId: assignFor.id,
@@ -374,10 +374,17 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         const it = items.find((x) => x.id === id);
         const path = it ? toStoragePath(it.image_url) : null;
         const src = path ? itemSigned[path] : null;
+        const alt = it ? [it.brand, it.category].filter(Boolean).join(" ") : "";
         return (
-          <div key={id} className={`${size} shrink-0 rounded-xl overflow-hidden border border-border/60`} style={{ background: "#FFFFFF" }}>
+          <button
+            key={id}
+            type="button"
+            onClick={() => src && setViewerImage({ src, alt })}
+            className={`${size} shrink-0 rounded-xl overflow-hidden border border-border/60`}
+            style={{ background: "#FFFFFF" }}
+          >
             {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -392,11 +399,17 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         const it = items.find((x) => x.id === id);
         const path = it ? toStoragePath(it.image_url) : null;
         const src = path ? itemSigned[path] : null;
+        const alt = it ? [it.brand, it.category].filter(Boolean).join(" ") : "";
         return (
-          <div key={id} className={`${size} shrink-0 relative rounded-xl overflow-hidden border border-border/60`} style={{ background: "#FFFFFF" }}>
+          <div
+            key={id}
+            onClick={() => src && setViewerImage({ src, alt })}
+            className={`${size} shrink-0 relative rounded-xl overflow-hidden border border-border/60`}
+            style={{ background: "#FFFFFF" }}
+          >
             {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
             <button
-              onClick={() => removeFromPlan(planId, id)}
+              onClick={(e) => { e.stopPropagation(); removeFromPlan(planId, id); }}
               aria-label={t("aiStylist.removeThisPieceAria")}
               className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/90 border border-border flex items-center justify-center"
             ><X size={10} /></button>
@@ -585,7 +598,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                       {outfitTab === "saved" && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
+                                                        onClick={(e) => { e.stopPropagation(); duplicateOutfit(o); }}
                             aria-label={t("aiStylist.duplicateOutfitAria")}
                             className="absolute top-2 right-20 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center active:scale-90 shadow-soft"
                           ><Copy size={14} /></button>
@@ -844,8 +857,8 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         </div>
       )}
       {viewerImage && (
-  <ItemImageViewer src={viewerImage.src} alt={viewerImage.alt} onClose={() => setViewerImage(null)} />
-)}
+        <ItemImageViewer src={viewerImage.src} alt={viewerImage.alt} onClose={() => setViewerImage(null)} />
+      )}
     </div>
   );
 }
