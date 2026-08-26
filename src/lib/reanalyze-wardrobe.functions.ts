@@ -40,24 +40,32 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Gate on formality OR occasion, not attrs_backfilled_at — that flag
-    // was already set for everyone during the PREVIOUS taxonomy backfill
-    // (length/sleeveLength/fit/etc.), so gating on it again here would
-    // mean this new round silently finds zero candidates for anyone
-    // who's already run the wand once. formality/occasion are the fields
-    // THIS round actually needs to fill, so they're the correct
-    // completion markers now — an item that already has formality but
-    // still lacks occasion (e.g. already ran a previous round of this
-    // same wand before the occasion fix shipped) must still be picked
-    // up here, hence the OR rather than a single .is() filter.
-    // Items with no image at all are excluded — they can never get a
-    // formality/occasion value and would otherwise loop forever as
-    // candidates.
+    // Gate on formality OR occasion OR season OR day_evening, not
+    // attrs_backfilled_at — that flag was already set for everyone during
+    // the PREVIOUS taxonomy backfill (length/sleeveLength/fit/etc.), so
+    // gating on it again here would mean this new round silently finds
+    // zero candidates for anyone who's already run the wand once. These
+    // four are the fields THIS round actually needs to fill, so they're
+    // the correct completion markers now — an item that already has
+    // formality but still lacks season (e.g. it ran an earlier round of
+    // this same wand before this fix shipped, or its original AI
+    // analysis call partially failed silently at upload) must still be
+    // picked up here, hence the OR rather than a single .is() filter.
+    // material is deliberately NOT part of this gate: it's an array
+    // column, and Postgres array "is empty" isn't a plain IS NULL check
+    // the same way — it's instead backfilled opportunistically below,
+    // whenever an item is already a candidate for one of these four
+    // reasons. An item with everything else complete except material
+    // alone won't be picked up by this query; if that turns out to
+    // matter in practice, worth a dedicated pass rather than guessing at
+    // the array-emptiness filter syntax now.
+    // Items with no image at all are excluded — they can never get any
+    // of these values and would otherwise loop forever as candidates.
     const { data: candidates, error: qErr } = await context.supabase
       .from("wardrobe_items")
-      .select("id, image_url, category")
+      .select("id, image_url, category, material")
       .eq("user_id", context.userId)
-      .or("formality.is.null,occasion.is.null")
+      .or("formality.is.null,occasion.is.null,season.is.null,day_evening.is.null")
       .not("image_url", "is", null)
       .limit(BATCH_SIZE);
     if (qErr) throw new Error(qErr.message);
@@ -106,14 +114,21 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
         // falsy and silently dropped otherwise).
         patch.formality = result.formality;
         if (result.dayEvening) patch.day_evening = result.dayEvening;
-        // occasion: same format as the upload-time flow in AddItem.tsx
-        // (a comma-joined string of the AI-picked occasion tags). Only
-        // written when the AI actually returned at least one — never a
-        // blind default the way purchase_date is (that one's handled
-        // separately, directly in SQL, precisely because "today" is a
-        // reasonable stand-in for a missing date but not for something
-        // the AI needs to genuinely infer from the photo).
+        // occasion/season: same format as the upload-time flow in
+        // AddItem.tsx (a comma-joined string of the AI-picked tags).
+        // Only written when the AI actually returned at least one —
+        // never a blind default the way purchase_date is (that one's
+        // handled separately, directly in SQL, precisely because "today"
+        // is a reasonable stand-in for a missing date but not for
+        // something the AI needs to genuinely infer from the photo).
         if (result.occasions?.length) patch.occasion = result.occasions.join(", ");
+        if (result.seasons?.length) patch.season = result.seasons.join(", ");
+        // material: opportunistic fill (see gate comment above) — only
+        // when the item's current material is genuinely empty, so a
+        // manual correction is never overwritten.
+        if (result.materials?.length && !(item as { material?: string[] }).material?.length) {
+          patch.material = result.materials;
+        }
 
         const { error: updErr } = await context.supabase
           .from("wardrobe_items")
@@ -130,7 +145,7 @@ export const reanalyzeWardrobeBatch = createServerFn({ method: "POST" })
       .from("wardrobe_items")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .or("formality.is.null,occasion.is.null");
+      .or("formality.is.null,occasion.is.null,season.is.null,day_evening.is.null");
 
     return { processed: items.length, updated, remaining: remaining ?? 0 };
   });
