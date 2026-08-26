@@ -17,6 +17,7 @@ import { resolvePlanSlot, validateEventSlot } from "@/lib/outfit-plan-slot";
 import { useServerFn } from "@tanstack/react-start";
 import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
+import { ItemImageViewer } from "../ItemImageViewer";
 import i18n from "@/i18n/config";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
@@ -297,7 +298,7 @@ export function Planner({ go, openStylistChat, focus }: {
                 {daily && (
                   <span className={`text-[8px] uppercase tracking-wider pl-1 ${isToday ? "opacity-80" : "text-muted-foreground"}`}>
                     {Math.round(daily.tempMax)}°
-                  </span>
+                                      </span>
                 )}
                 {thumb ? (
                   <div className="mt-auto relative rounded-md overflow-hidden aspect-square" style={{ background: "#FFFFFF" }}>
@@ -375,6 +376,7 @@ function DayDetail({
   // so a work outfit and an evening-event outfit never collide.
   const hasMultipleSlots = calendarEvents.length > 0 || plans.length > 0;
   const [activeSlot, setActiveSlot] = useState<Slot | null>(hasMultipleSlots ? null : { type: "general" });
+  const [viewerImage, setViewerImage] = useState<{ src: string; alt: string } | null>(null);
 
   const plan = !activeSlot ? null : activeSlot.type === "general" ? generalPlan : planForEvent(activeSlot.event.id);
   const activeEventId = activeSlot?.type === "event" ? activeSlot.event.id : null;
@@ -595,8 +597,8 @@ function DayDetail({
     label: string; sublabel: string | null; slotPlan: OutfitPlan | null; onOpen: () => void; onAsk: () => void;
   }) => (
     <div className="rounded-2xl bg-secondary/40 p-4">
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
+      <button onClick={onOpen} className="flex items-center justify-between w-full text-left">
+                <div className="min-w-0">
           <p className="text-sm font-medium truncate">{label}</p>
           {sublabel && <p className="text-[11px] text-muted-foreground">{sublabel}</p>}
         </div>
@@ -605,20 +607,27 @@ function DayDetail({
             {slotPlan.status === "worn" ? t("planner.worn") : t("planner.planned")}
           </span>
         )}
-      </div>
+      </button>
       {slotPlan ? (
-        <button onClick={onOpen} className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar w-full">
+        <div className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar w-full">
           {slotPlan.item_ids.map((id) => {
             const it = items.find((i) => i.id === id);
             const path = it ? toStoragePath(it.image_url) : null;
             const src = path ? signed[path] : "";
+            const alt = it ? [it.brand, it.category].filter(Boolean).join(" ") : "";
             return (
-              <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+              <button
+                key={id}
+                type="button"
+                onClick={() => src && setViewerImage({ src, alt })}
+                className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60"
+                style={{ background: "#FFFFFF" }}
+              >
                 {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
-              </div>
+              </button>
             );
           })}
-        </button>
+        </div>
       ) : (
         <div className="mt-2 flex gap-2">
           <button onClick={onOpen} className="flex-1 h-9 rounded-full border border-border text-[10px] uppercase tracking-[0.2em]">{t("planner.choosePieces")}</button>
@@ -716,10 +725,17 @@ function DayDetail({
                         const it = items.find((i) => i.id === id);
                         const path = it ? toStoragePath(it.image_url) : null;
                         const src = path ? signed[path] : "";
+                        const alt = it ? [it.brand, it.category].filter(Boolean).join(" ") : "";
                         return (
-                          <div key={id} className="aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => src && setViewerImage({ src, alt })}
+                            className="aspect-square rounded-xl overflow-hidden"
+                            style={{ background: "#FFFFFF" }}
+                          >
                             {src ? <img src={src} className="h-full w-full object-contain p-1.5" alt="" loading="lazy" /> : null}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -872,6 +888,9 @@ function DayDetail({
             </div>
           </div>
         </div>
+      )}
+      {viewerImage && (
+        <ItemImageViewer src={viewerImage.src} alt={viewerImage.alt} onClose={() => setViewerImage(null)} />
       )}
     </div>
   );
