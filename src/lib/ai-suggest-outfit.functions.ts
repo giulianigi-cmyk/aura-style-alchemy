@@ -1,9 +1,251 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
+import { suggestOutfitCore, type SuggestOutfitItem } from "./ai-suggest-outfit.functions";
+import { dressPreferencesToPrompt, hasAnyPreference, type DressPreferences } from "./dress-preferences";
+import { resolvePlanSlot, validateEventSlot } from "./outfit-plan-slot";
+import { describeWeather } from "./weather";
+
+const DailyWeatherSchema = z.object({
+  date: z.string(),
+  tempMin: z.number(),
+  tempMax: z.number(),
+  weatherCode: z.number(),
+});
+
+const InputSchema = z.object({
+  startDate: z.string(), // YYYY-MM-DD
+  numDays: z.union([z.literal(7), z.literal(14)]),
+  locationId: z.string().nullable(),
+  dailyWeather: z.array(DailyWeatherSchema).default([]),
+});
+
+const WEEKDAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+
+function addDaysIso(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Pure string slicing on purpose — an ISO timestamp like
+// "2026-08-15T20:30:00+02:00" already carries the intended wall-clock
+// time before the offset. Going through Date object math instead would
+// silently convert to the server's own runtime timezone, which is wrong
+// for a person anywhere else in the world.
+function clockTime(iso: string): string {
+  return iso.slice(11, 16);
+}
+
+function timeRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+/**
+ * Fills in the General outfit slot (see calendar_event_id on outfit_plans)
+ * for each work day in the range that doesn't already have one — never
+ * touches a day that's already planned, and never touches event-specific
+ * slots (a dinner or gym outfit already set for that day stays exactly
+ * as it is). An event-linked plan only blocks the General slot if that
+ * event actually falls within the person's work hours; an evening plan
+ * outside those hours doesn't stop the work outfit from being generated
+ * too. Weather comes from the client's own forecast data since the
+ * server has no location fix of its own; the wardrobe location is an
+ * explicit per-run choice, not silently assumed from whatever's active
+ * right now.
+ */
+export const generateWeeklyOutfits = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: profileRow } = await (supabase.from("profiles" as never) as any)
+            .select("work_days, work_start_time, work_end_time, dress_preferences, work_dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle();
+    const profile = profileRow as {
+      work_days?: string[]; work_start_time?: string; work_end_time?: string;
+      dress_preferences?: DressPreferences; work_dress_preferences?: DressPreferences;
+      gender?: string | null; style_boldness?: string | null;
+    } | null;
+    const workDays = profile?.work_days ?? ["MO", "TU", "WE", "TH", "FR"];
+    const workStart = profile?.work_start_time ?? "09:00";
+    const workEnd = profile?.work_end_time ?? "18:00";
+    // Work-specific dress preferences, when the person has set any, fully
+    // replace the general ones for this generator — it only ever produces
+    // Work-occasion outfits. Falls back to the general preferences when
+    // no work-specific ones exist yet.
+    const dressRules = hasAnyPreference(profile?.work_dress_preferences)
+      ? dressPreferencesToPrompt(profile!.work_dress_preferences)
+      : dressPreferencesToPrompt(profile?.dress_preferences ?? null);
+    const gender = profile?.gender ?? null;
+    const styleBoldness = profile?.style_boldness ?? null;
+
+    const endDateExclusive = addDaysIso(data.startDate, data.numDays);
+
+    const [{ data: itemsRaw }, { data: existingPlans }, { data: calEvents }] = await Promise.all([
+      supabase.from("wardrobe_items").select("*").eq("user_id", userId),
+            (supabase.from("outfit_plans" as never) as any)
+        .select("date, calendar_event_id").eq("user_id", userId)
+        .neq("status", "cancelled")
+        .gte("date", data.startDate).lt("date", endDateExclusive),
+      (supabase.from("calendar_events_cache" as never) as any)
+        .select("id, title, start_time, end_time, all_day").eq("user_id", userId)
+        .gte("start_time", `${data.startDate}T00:00:00`).lt("start_time", `${endDateExclusive}T00:00:00`),
+    ]);
+
+    const items: SuggestOutfitItem[] = ((itemsRaw ?? []) as any[]).map((it) => ({
+      id: it.id,
+      category: it.category,
+      subcategory: it.subcategory,
+      colors: it.colors,
+      style: it.style ? [it.style] : [],
+      season: it.season,
+      brand: it.brand,
+      material: it.material ?? [],
+      locationId: it.location_id ?? null,
+      formality: it.formality ?? null,
+      dayEvening: it.day_evening ?? "",
+      sleeveLength: it.sleeve_length ?? "",
+      length: it.length ?? "",
+      fit: it.fit ?? "",
+      styleTags: it.style_tags ?? [],
+    }));
+
+    const eventById = new Map(
+      ((calEvents ?? []) as { id: string; title: string | null; start_time: string; end_time: string | null; all_day: boolean }[])
+        .map((e) => [e.id, e]),
+    );
+
+    const plansByDate = new Map<string, { date: string; calendar_event_id: string | null }[]>();
+    ((existingPlans ?? []) as { date: string; calendar_event_id: string | null }[]).forEach((p) => {
+      const arr = plansByDate.get(p.date) ?? [];
+      arr.push(p);
+      plansByDate.set(p.date, arr);
+    });
+
+    const isWorkHoursEvent = (ev: { all_day: boolean; start_time: string; end_time: string | null }): boolean => {
+      if (ev.all_day) return true;
+      const evStart = clockTime(ev.start_time);
+      const evEnd = ev.end_time ? clockTime(ev.end_time) : evStart;
+      return timeRangesOverlap(evStart, evEnd, workStart, workEnd);
+    };
+
+    // The real work event for a day, if there is one. When it exists the
+    // work outfit is written into THAT event's slot (unique on
+    // calendar_event_id) rather than the day's general slot — which is what
+    // lets a work outfit and a generic/evening outfit coexist on one date.
+    const workEventByDate = new Map<string, { id: string; title: string | null }>();
+    eventById.forEach((e) => {
+      const d = e.start_time.slice(0, 10);
+      if (!workEventByDate.has(d) && isWorkHoursEvent(e)) workEventByDate.set(d, { id: e.id, title: e.title });
+    });
+
+    // A day is "already handled" only if its target slot is taken: the
+    // event slot when there's a work event, otherwise the general slot.
+    // An evening dinner plan never blocks the work outfit.
+    const isSlotTaken = (date: string, eventId: string | null): boolean => {
+      const dayPlans = plansByDate.get(date) ?? [];
+      return eventId
+        ? dayPlans.some((p) => p.calendar_event_id === eventId)
+        : dayPlans.some((p) => !p.calendar_event_id);
+    };
+
+    const eventTitleByDate = new Map<string, string>();
+    eventById.forEach((e) => {
+      const d = e.start_time.slice(0, 10);
+      if (!eventTitleByDate.has(d) && e.title) eventTitleByDate.set(d, e.title);
+    });
+
+    const weatherByDate = new Map(data.dailyWeather.map((d) => [d.date, d]));
+
+    const usedThisBatch: string[] = [];
+    const created: { date: string }[] = [];
+    const skippedExisting: string[] = [];
+    const failed: { date: string; error: string }[] = [];
+
+    for (let i = 0; i < data.numDays; i++) {
+      const date = addDaysIso(data.startDate, i);
+      const dow = WEEKDAY_CODES[new Date(`${date}T00:00:00`).getDay()];
+      if (!workDays.includes(dow)) continue;
+
+      const workEvent = workEventByDate.get(date) ?? null;
+      const calendarEventId = workEvent?.id ?? null;
+      if (isSlotTaken(date, calendarEventId)) { skippedExisting.push(date); continue; }
+
+      // Event-linked writes are validated first: same owner, matching day.
+      if (calendarEventId) {
+        const problem = await validateEventSlot(supabase, userId, calendarEventId, date);
+        if (problem) { failed.push({ date, error: problem }); continue; }
+      }
+
+      const w = weatherByDate.get(date);
+      const occasionHint = eventTitleByDate.get(date) ? `Work · ${eventTitleByDate.get(date)}` : "Work";
+
+      const result = await suggestOutfitCore({
+        supabase, userId,
+        temperature: w ? (w.tempMin + w.tempMax) / 2 : null,
+        condition: w ? describeWeather(w.weatherCode).label : null,
+        occasion: occasionHint,
+        dressRules,
+        gender,
+        styleBoldness,
+        items,
+        avoidItemIds: usedThisBatch,
+        locationIdOverride: data.locationId,
+      });
+
+      if (!result.ok || !result.item_ids.length) {
+        failed.push({ date, error: !result.ok ? result.error : "No matching pieces" });
+        continue;
+      }
+
+      usedThisBatch.push(...result.item_ids);
+
+      const { onConflict } = resolvePlanSlot({ calendarEventId });
+      const { data: planRow, error: insErr } = await supabase.from("outfit_plans").upsert({
+        user_id: userId,
+        date,
+        item_ids: result.item_ids,
+        occasion: "Work",
+        notes: result.explanation || null,
+        weather_temp: w ? Math.round((w.tempMin + w.tempMax) / 2) : null,
+        status: "planned",
+        calendar_event_id: calendarEventId,
+      } as never, { onConflict }).select("id").single();
+
+
+      if (insErr || !planRow) {
+        failed.push({ date, error: insErr?.message ?? "Could not save" });
+        continue;
+      }
+
+      const { data: eventRow, error: evErr } = await (supabase.from("wardrobe_events" as never) as any)
+        .insert({
+          user_id: userId,
+          event_type: "planned",
+          event_date: date,
+          outfit_plan_id: (planRow as { id: string }).id,
+          occasion: "Work",
+        })
+        .select("id")
+        .single();
+      if (!evErr && eventRow) {
+        const rows = result.item_ids.map((item_id) => ({ event_id: (eventRow as { id: string }).id, item_id }));
+        await (supabase.from("wardrobe_event_items" as never) as any).insert(rows);
+      }
+
+      created.push({ date });
+    }
+
+    return { created: created.length, skippedExisting: skippedExisting.length, failed };
+  });
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
 import { isItemAtLocation } from "./wardrobe-location";
+import { isItemAllowedByDressPreferences, hasAnyPreference, type DressPreferences } from "./dress-preferences";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -18,6 +260,8 @@ const ItemSchema = z.object({
   formality: z.number().nullable().optional(),
   dayEvening: z.string().nullable().optional(),
   sleeveLength: z.string().nullable().optional(),
+  length: z.string().nullable().optional(),
+  fit: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
 });
 
@@ -83,6 +327,24 @@ export async function suggestOutfitCore(params: {
   }
   let eligibleItems = params.items.filter((it) =>
     isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
+
+  // Hard filter, not just prompt text: SOLO le preferenze impostate per il
+  // lavoro quando esistono (mai mischiate con quelle generali), altrimenti
+  // le preferenze generali. Prima solo la chat applicava questo come
+  // esclusione reale — gli altri motori (weekly, on-demand) lo passavano
+  // solo come testo nel prompt, che il modello può ignorare in silenzio.
+  const isWorkOccasionForPrefs = (params.occasion ?? "").toLowerCase().startsWith("work");
+  const { data: prefsRow } = await (params.supabase.from("profiles" as never) as any)
+    .select(isWorkOccasionForPrefs ? "dress_preferences, work_dress_preferences" : "dress_preferences")
+    .eq("id", params.userId).maybeSingle();
+  const prefsRowTyped = prefsRow as { dress_preferences?: DressPreferences; work_dress_preferences?: DressPreferences } | null;
+  const activeDressPrefs: DressPreferences | null =
+    isWorkOccasionForPrefs && hasAnyPreference(prefsRowTyped?.work_dress_preferences)
+      ? prefsRowTyped!.work_dress_preferences!
+      : (prefsRowTyped?.dress_preferences ?? null);
+  if (activeDressPrefs) {
+    eligibleItems = eligibleItems.filter((it) => isItemAllowedByDressPreferences(it, activeDressPrefs));
+  }
 
   // Excluding items already used earlier in a multi-day batch is how
   // repeats get avoided across a generated week — done per category so a
@@ -216,13 +478,52 @@ export async function suggestOutfitCore(params: {
       if (!item) return false;
       if ((item.dayEvening ?? "") === "evening" && (item.formality ?? 0) >= 4) return true;
       const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
-      return EVENING_SIGNAL.test(text);
+      if (EVENING_SIGNAL.test(text)) return true;
+      // Bare shoulders is a hard rule for Work regardless of personal
+      // dress preferences — a workwear norm, not just something the
+      // person has to opt into. sleeveLength is the only attribute the
+      // wardrobe currently records for this; a true off-shoulder/halter
+      // tag doesn't exist yet, so this catches genuinely sleeveless
+      // pieces (tank, cami, sleeveless top/dress) for now.
+      if (["Tops", "Dresses", "Jumpsuits"].includes(item.category ?? "") && (item.sleeveLength ?? "") === "Sleeveless") return true;
+      return false;
     });
+
+  // Weather is a hard constraint for EVERY occasion, not just Work —
+  // mirrors the same rule already enforced in suggest-daily-looks.functions.ts
+  // (Home). A wool sweater or wool trousers are never correct at 30°C in
+  // Empoli in August, no matter how good the rest of the outfit reads.
+  const HOT_THRESHOLD_C = 26;
+  const COLD_THRESHOLD_C = 10;
+  const HEAVY_SIGNAL = /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool|lana|maglione|sweater|felted|fleece|boots?\b|stivali|tweed|corduroy|velluto a coste|flannel|flanella|cashmere|cachemire/i;
+  const LIGHT_SIGNAL = /tank|canotta|sandal|sandalo|shorts?\b|infradito|flip.?flop|sleeveless|senza maniche/i;
+  const violatesWeather = (ids: string[]): boolean => {
+    if (params.temperature == null) return false;
+    const hot = params.temperature >= HOT_THRESHOLD_C;
+    const cold = params.temperature <= COLD_THRESHOLD_C;
+    if (!hot && !cold) return false;
+    return ids.some((id) => {
+      const item = catalog.find((c) => c.id === id);
+      if (!item) return false;
+      const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
+      const season = (item.season ?? "").toLowerCase();
+      if (hot) {
+        if (season === "winter") return true;
+        if (HEAVY_SIGNAL.test(text)) return true;
+      }
+      if (cold) {
+        if (season === "summer" && LIGHT_SIGNAL.test(text)) return true;
+      }
+      return false;
+    });
+  };
+
   const isWorkOccasion = (params.occasion ?? "").toLowerCase().startsWith("work");
   const isValidResult = (ids: string[]): boolean => {
     if (!ids.length) return false;
     if (hasSlotViolation(ids)) return false;
     if (isWorkOccasion && violatesWorkRules(ids)) return false;
+    if (violatesWeather(ids)) return false;
     return true;
   };
 
@@ -269,7 +570,7 @@ export async function suggestOutfitCore(params: {
       try {
         const retry = await generateText({
           model,
-          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, or an evening-coded/bare-shoulder piece for a Work occasion). Try again, respecting every rule strictly this time.",
+          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, an evening-coded/bare-shoulder piece for a Work occasion, an item excluded by the person's stated dress preferences, or a piece unsuitable for the actual temperature — e.g. a wool/heavy piece when it's hot, or a bare/light piece when it's cold). Try again, respecting every rule strictly this time.",
           messages: [{ role: "user", content: userContent }],
         });
         const retryParsed = parseAiJson(retry.text, OutputSchema);
@@ -286,6 +587,19 @@ export async function suggestOutfitCore(params: {
             const key = SLOT_LIMITS[cat] ? cat : id;
             if (seen.has(key)) return false;
             seen.add(key);
+            return true;
+          });
+        } else {
+          // Not a slot conflict — a weather- or work-rule violation
+          // (a wool piece in summer, a bare-shoulder top for Work, an
+          // item outside the person's stated dress preferences). Strip
+          // just the offending piece(s) rather than shipping a wrong
+          // outfit — mirrors the "today" sanitize pattern in
+          // suggest-daily-looks.functions.ts. Missing a shoe/top after
+          // this is preferable to a materially wrong suggestion.
+          item_ids = item_ids.filter((id) => {
+            if (violatesWeather([id])) return false;
+            if (isWorkOccasion && violatesWorkRules([id])) return false;
             return true;
           });
         }
