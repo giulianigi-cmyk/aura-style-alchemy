@@ -592,7 +592,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         </div>
                 <div className="flex gap-2">
           {(() => {
-            const unclassifiedCount = items.filter((it) => it.formality == null).length;
+                        // Mirrors the exact gate in reanalyzeWardrobeBatch — this
+            // badge undercounted before (only checked formality), so it
+            // could show 0 pending while season/occasion/day_evening
+            // were still genuinely missing on plenty of items.
+            const unclassifiedCount = items.filter((it) =>
+              it.formality == null || !it.occasion || !it.season || !it.day_evening
+            ).length;
             const hasPending = migrating || unclassifiedCount > 0;
             return (
               <button
