@@ -266,12 +266,16 @@ export async function suggestOutfitCore(params: {
       if (!item) return false;
       const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
       const season = (item.season ?? "").toLowerCase();
-      if (hot) {
-        if (season === "winter") return true;
+           if (hot) {
+        // season is stored as a comma-joined multi-value string (e.g.
+        // "Autumn, Winter"), never a single exact value — an === check
+        // silently never matches a piece tagged for two seasons, which
+        // is most cold-weather garments. .includes() is correct here.
+        if (season.includes("winter")) return true;
         if (HEAVY_SIGNAL.test(text)) return true;
       }
       if (cold) {
-        if (season === "summer" && LIGHT_SIGNAL.test(text)) return true;
+        if (season.includes("summer") && LIGHT_SIGNAL.test(text)) return true;
       }
       return false;
     });
