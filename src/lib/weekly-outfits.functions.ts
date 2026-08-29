@@ -126,6 +126,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       fit: it.fit ?? "",
       heelHeight: it.heel_height ?? "",
       styleTags: it.style_tags ?? [],
+      activeLoanId: it.active_loan_id ?? null,
     }));
 
     const eventById = new Map(
