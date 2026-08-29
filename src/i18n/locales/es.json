@@ -701,7 +701,7 @@
     "nDays_one": "{{count}} día",
     "nDays_other": "{{count}} días",
     "wardrobeToUse": "Armario a usar",
-    "splitAcrossTwoPlaces": "Si este periodo se divide entre dos lugares, ejecuta esto una vez por lugar.",
+       "multiLocationHint": "Selecciona más de una para incluir prendas de todas en esta generación.",
     "fillsInWorkDaysOnly": "Rellena solo tus días laborables (definidos en tu perfil). Nunca toca un día que ya hayas planificado, ni un outfit ya vinculado a un evento específico.",
     "generate": "Generar"
   },
