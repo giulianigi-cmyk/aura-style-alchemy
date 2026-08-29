@@ -21,6 +21,7 @@ const ItemSchema = z.object({
   sleeveLength: z.string().nullable().optional(),
   length: z.string().nullable().optional(),
   fit: z.string().nullable().optional(),
+  heelHeight: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
 });
 
@@ -145,6 +146,7 @@ export async function suggestOutfitCore(params: {
     formality: it.formality ?? null,
     dayEvening: it.dayEvening ?? "",
     sleeveLength: it.sleeveLength ?? "",
+    heelHeight: it.heelHeight ?? "",
     styleTags: it.styleTags ?? [],
   }));
 
