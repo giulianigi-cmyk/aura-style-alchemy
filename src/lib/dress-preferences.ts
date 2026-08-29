@@ -212,6 +212,16 @@ export function isItemAllowedByDressPreferences(
   const isArmRelevantCategory = ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category);
   if (p.cover_arms && isArmRelevantCategory && !coversArms(item)) return false;
 
+  // cover_shoulders has no dedicated attribute of its own — sleeveLength
+  // is the only signal the wardrobe records for this today (there's no
+  // separate off-shoulder/halter/strapless tag), so it uses the same
+  // coversArms() check as cover_arms. This was previously described only
+  // in the AI prompt text (dressPreferencesToPrompt below) and never
+  // actually enforced here — meaning toggling "Cover shoulders" on had
+  // no real effect on what got excluded, only a soft suggestion the
+  // model could ignore.
+  if (p.cover_shoulders && isArmRelevantCategory && !coversArms(item)) return false;
+
   if (p.avoid_tight && item.fit === "Slim") return false;
 
   return true;
