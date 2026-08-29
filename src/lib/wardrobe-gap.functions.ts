@@ -209,20 +209,62 @@ export const analyzeWardrobeGap = createServerFn({ method: "POST" })
       // same color family scores well, everything else in a whitelisted
       // category is still eligible (real outfits mix colors) but ranks
       // lower. This replaces the old "same color, else random 12" fallback.
+      //
+      // Fixed a real bias here: neutral-on-neutral used to stack TWO
+      // separate +2 bonuses (once for "the suggestion is neutral", once
+      // for "this item is neutral") on top of each other, so whenever the
+      // suggested piece was neutral - which is most of the time, since
+      // that's the safe/versatile color an AI tends to suggest - every
+      // neutral item in the wardrobe outscored everything else combined.
+      // In practice that meant the "would pair with" preview was almost
+      // always a wall of white/black/beige pieces regardless of what was
+      // actually in the wardrobe. Neutral-on-neutral is still rewarded
+      // (it's a genuinely strong pairing) but no longer double-stacked.
       const suggestedIsNeutral = colors.length === 0 || colors.every(isNeutralColor);
       const suggestedFamilies = new Set(colors.map(colorFamily).filter((f): f is string => !!f));
 
       const scored = others.map((it) => {
         const itColors = it.colors ?? [];
+        const itemIsNeutral = itColors.some(isNeutralColor);
         let score = 0;
         if (itColors.some((c) => colors.includes(c))) score += 3; // exact color match
-        if (itColors.some(isNeutralColor)) score += 2; // neutrals always pair
-        if (suggestedIsNeutral) score += 2; // a neutral suggestion pairs with anything
+        if (suggestedIsNeutral && itemIsNeutral) score += 2; // both neutral: strong pairing, counted once
+        else if (suggestedIsNeutral || itemIsNeutral) score += 1; // only one side neutral: still helps, less aggressively
         if (itColors.some((c) => suggestedFamilies.has(colorFamily(c) ?? ""))) score += 1; // same family
         return { it, score };
       });
-      scored.sort((a, b) => b.score - a.score);
-      const pairsWithIds = scored.slice(0, MAX_PAIRS).map((s) => s.it.id);
+
+      // Diversity, not just a global top-N by score: several items in
+      // the same category (e.g. four pairs of light trousers) can easily
+      // tie for the top score, and showing all four told the person
+      // nothing new about their wardrobe. Round-robin across categories
+      // instead - best-scoring item from each eligible category first,
+      // then second-best from each, and so on - so the preview actually
+      // reflects the breadth of what they own.
+      const byCategory = new Map<string, typeof scored>();
+      for (const s of scored) {
+        const cat = s.it.category ?? "";
+        const arr = byCategory.get(cat) ?? [];
+        arr.push(s);
+        byCategory.set(cat, arr);
+      }
+      for (const arr of byCategory.values()) arr.sort((a, b) => b.score - a.score);
+      const categoryOrder = [...byCategory.keys()].sort(
+        (a, b) => (byCategory.get(b)![0]?.score ?? 0) - (byCategory.get(a)![0]?.score ?? 0)
+      );
+      const pairsWithIds: string[] = [];
+      for (let round = 0; pairsWithIds.length < MAX_PAIRS; round++) {
+        let addedThisRound = false;
+        for (const cat of categoryOrder) {
+          const arr = byCategory.get(cat)!;
+          if (arr[round]) {
+            pairsWithIds.push(arr[round].it.id);
+            addedThisRound = true;
+            if (pairsWithIds.length >= MAX_PAIRS) break;
+          }
+        }
+        if (!addedThisRound) break;
+      }
 
       const suggestion: GapSuggestion = {
         category,
