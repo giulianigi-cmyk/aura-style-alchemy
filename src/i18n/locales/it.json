@@ -701,7 +701,7 @@
     "nDays_one": "{{count}} giorno",
     "nDays_other": "{{count}} giorni",
     "wardrobeToUse": "Guardaroba da usare",
-    "splitAcrossTwoPlaces": "Se questo periodo è diviso tra due luoghi, esegui questo una volta per ciascun luogo.",
+    "multiLocationHint": "Seleziona più case per includere i capi di tutte nella stessa generazione.",
     "fillsInWorkDaysOnly": "Riempie solo i tuoi giorni lavorativi (impostati nel profilo). Non tocca mai un giorno già pianificato, né un outfit già collegato a un evento specifico.",
     "generate": "Genera"
   },
