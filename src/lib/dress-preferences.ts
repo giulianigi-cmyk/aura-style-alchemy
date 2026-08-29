@@ -5,6 +5,10 @@
 
 export type SkirtLength = "mini" | "knee" | "midi" | "long";
 export type SleeveLength = "none" | "short" | "three-quarter" | "long";
+// Reuses the exact enum already on wardrobe_items.heel_height (see
+// HEEL_HEIGHT_OPTIONS in wardrobe-options.ts) — no new/incompatible
+// value introduced. "Flat" doubles as the "no heels" option.
+export type HeelHeight = "Flat" | "Low" | "Mid" | "High";
 
 export type DressPreferences = {
   cover_head?: boolean;
@@ -16,6 +20,12 @@ export type DressPreferences = {
   avoid_low_neckline?: boolean;
   min_skirt_length?: SkirtLength;
   min_sleeve_length?: SleeveLength;
+  // Maximum acceptable heel height. Stored per-scope, same as everything
+  // else here: this field lives independently in dress_preferences
+  // (Outside Work) and in work_dress_preferences (Work) — no schema
+  // change needed, the general/work split already exists at the profile
+  // column level and this type is shared by both.
+  max_heel_height?: HeelHeight;
   custom_notes?: string;
 };
 
@@ -43,6 +53,14 @@ export const SLEEVE_OPTIONS: { value: SleeveLength; label: string }[] = [
   { value: "long", label: "Long" },
 ];
 
+export const HEEL_OPTIONS: { value: HeelHeight; label: string }[] = [
+  { value: "Flat", label: "No heels" },
+  { value: "Low", label: "Low" },
+  { value: "Mid", label: "Mid" },
+  { value: "High", label: "High" },
+];
+const HEEL_ORDER: Record<HeelHeight, number> = { Flat: 0, Low: 1, Mid: 2, High: 3 };
+
 const BOOL_PROMPT_TEXT: Record<string, string> = {
   cover_head: "Cover head or hair in every look — only suggest headwear (scarf, hat) that achieves this, or explicitly note that no current wardrobe item covers the head.",
   cover_shoulders: "Shoulders must be fully covered — exclude strapless, off-shoulder, halter, or bare-shoulder pieces of any kind.",
@@ -58,7 +76,7 @@ export function hasAnyPreference(p: DressPreferences | null | undefined): boolea
   return Boolean(
     p.cover_head || p.cover_shoulders || p.cover_arms || p.cover_legs ||
     p.avoid_tight || p.avoid_sheer || p.avoid_low_neckline ||
-    p.min_skirt_length || p.min_sleeve_length ||
+    p.min_skirt_length || p.min_sleeve_length || p.max_heel_height ||
     (p.custom_notes && p.custom_notes.trim())
   );
 }
@@ -73,6 +91,10 @@ export function activePreferenceLabels(p: DressPreferences): string[] {
   if (p.min_sleeve_length) {
     const o = SLEEVE_OPTIONS.find((x) => x.value === p.min_sleeve_length);
     if (o) out.push(`Sleeves: ${o.label}${p.min_sleeve_length === "none" ? "" : " or longer"}`);
+  }
+  if (p.max_heel_height) {
+    const o = HEEL_OPTIONS.find((x) => x.value === p.max_heel_height);
+    if (o) out.push(p.max_heel_height === "Flat" ? "No heels" : `Heels: up to ${o.label.toLowerCase()}`);
   }
   if (p.custom_notes?.trim()) out.push(p.custom_notes.trim());
   return out;
@@ -89,6 +111,13 @@ export function dressPreferencesToPrompt(p: DressPreferences | null | undefined)
   if (p!.min_sleeve_length && p!.min_sleeve_length !== "none") {
     const o = SLEEVE_OPTIONS.find((x) => x.value === p!.min_sleeve_length);
     if (o) rules.push(`Sleeves: ${o.label} length or longer only.`);
+  }
+  if (p!.max_heel_height) {
+    rules.push(
+      p!.max_heel_height === "Flat"
+        ? "No heels — flat shoes only (heelHeight must be Flat)."
+        : `Heel height must not exceed ${p!.max_heel_height} (heelHeight: Flat${p!.max_heel_height === "Mid" ? ", Low, or Mid" : p!.max_heel_height === "High" ? ", Low, Mid, or High" : " or Low"} only).`
+    );
   }
   if (p!.custom_notes?.trim()) rules.push(p!.custom_notes.trim());
   return [
@@ -186,8 +215,24 @@ export function coversArms(item: { category?: string | null; sleeveLength?: stri
   return item.sleeveLength !== "Sleeveless";
 }
 
+// Sleeveless is NOT bare shoulders — a plain sleeveless top is normal
+// and should never be excluded by "cover shoulders". Bare shoulders is
+// about garment construction that exposes the shoulder itself
+// (off-shoulder, bardot, halter, strapless, one-shoulder, bandeau),
+// which sleeve length alone can't tell you. No dedicated attribute
+// exists for this in the schema, so this reads the same free-text
+// signal (subcategory + styleTags) the AI itself already produces,
+// rather than inventing a new enum value nothing else uses.
+const BARE_SHOULDER_SIGNAL = /off.?shoulder|bardot|halter|strapless|one.?shoulder|cold.?shoulder|bandeau|tube top/i;
+export function coversShoulders(item: { category?: string | null; subcategory?: string | null; styleTags?: string[] | null }): boolean {
+  const category = item.category ?? "";
+  if (!["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) return true;
+  const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")}`;
+  return !BARE_SHOULDER_SIGNAL.test(text);
+}
+
 export function isItemAllowedByDressPreferences(
-  item: { category?: string | null; subcategory?: string | null; length?: string | null; sleeveLength?: string | null; fit?: string | null },
+  item: { category?: string | null; subcategory?: string | null; length?: string | null; sleeveLength?: string | null; fit?: string | null; styleTags?: string[] | null; heelHeight?: string | null },
   p: DressPreferences | null | undefined,
 ): boolean {
   if (!p) return true;
@@ -212,17 +257,18 @@ export function isItemAllowedByDressPreferences(
   const isArmRelevantCategory = ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category);
   if (p.cover_arms && isArmRelevantCategory && !coversArms(item)) return false;
 
-  // cover_shoulders has no dedicated attribute of its own — sleeveLength
-  // is the only signal the wardrobe records for this today (there's no
-  // separate off-shoulder/halter/strapless tag), so it uses the same
-  // coversArms() check as cover_arms. This was previously described only
-  // in the AI prompt text (dressPreferencesToPrompt below) and never
-  // actually enforced here — meaning toggling "Cover shoulders" on had
-  // no real effect on what got excluded, only a soft suggestion the
-  // model could ignore.
-  if (p.cover_shoulders && isArmRelevantCategory && !coversArms(item)) return false;
+  // Previously this reused coversArms() (sleeveLength-based), which was
+  // wrong — see coversShoulders() above. Fixed to use the correct signal
+  // for actual bare-shoulder construction instead of sleeve length.
+  if (p.cover_shoulders && isArmRelevantCategory && !coversShoulders(item)) return false;
 
   if (p.avoid_tight && item.fit === "Slim") return false;
+
+  if (category === "Shoes" && p.max_heel_height && item.heelHeight) {
+    const have = HEEL_ORDER[item.heelHeight as HeelHeight];
+    const max = HEEL_ORDER[p.max_heel_height];
+    if (have !== undefined && have > max) return false;
+  }
 
   return true;
 }
