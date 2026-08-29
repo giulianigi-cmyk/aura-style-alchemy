@@ -6,11 +6,12 @@ import { isShoeCategory, sizeEquivalences } from "@/lib/size-conversion";
 import { MaterialCombobox } from "@/components/aura/MaterialCombobox";
 import { AddSourceSheet } from "@/components/aura/AddSourceSheet";
 
-import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Wand2, Archive, ArchiveRestore, Check } from "lucide-react";
+import { Plus, Filter, Search, Loader2, Trash2, X, Pencil, Wand2, Archive, ArchiveRestore, Check, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { migrateLegacyTaxonomy } from "@/lib/migrate-legacy-taxonomy.functions";
 import { reanalyzeWardrobeBatch } from "@/lib/reanalyze-wardrobe.functions";
+import { lendItem, listActiveLoans, returnLoan, type WardrobeLoan } from "@/lib/wardrobe-loans.functions";
 import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { ItemCropAdjuster } from "@/components/aura/ItemCropAdjuster";
 import type { FractionalBox } from "@/components/aura/ItemCropAdjuster";
@@ -70,6 +71,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const [bulkMovePicker, setBulkMovePicker] = useState(false);
   const [detail, setDetail] = useState<WardrobeItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showLoaned, setShowLoaned] = useState(false);
+  const [loansByItemId, setLoansByItemId] = useState<Record<string, WardrobeLoan>>({});
+  const [loanSheetOpen, setLoanSheetOpen] = useState(false);
+  const [borrowerName, setBorrowerName] = useState("");
+  const [lending, setLending] = useState(false);
+  const [returnPickerOpen, setReturnPickerOpen] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [colorWheelOpen, setColorWheelOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -82,6 +90,9 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
   const fetchLocations = useServerFn(listLocations);
   const moveItems = useServerFn(moveItemsToLocation);
   const reanalyzeBatch = useServerFn(reanalyzeWardrobeBatch);
+  const lendItemFn = useServerFn(lendItem);
+  const fetchActiveLoans = useServerFn(listActiveLoans);
+  const returnLoanFn = useServerFn(returnLoan);
   const [edit, setEdit] = useState({
     brand: "",
     size: "",
@@ -416,6 +427,60 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     }
   };
 
+  const loadLoans = useCallback(async () => {
+    try {
+      const res = await fetchActiveLoans({} as never);
+      const map: Record<string, WardrobeLoan> = {};
+      res.loans.forEach((l) => { map[l.item_id] = l; });
+      setLoansByItemId(map);
+    } catch (e) {
+      console.error("[AURA wardrobe] loans load failed", e);
+    }
+  }, [fetchActiveLoans]);
+
+  useEffect(() => { void loadLoans(); }, [loadLoans]);
+
+  const lendDetailItem = async () => {
+    if (!detail || !borrowerName.trim()) return;
+    setLending(true);
+    try {
+      const res = await lendItemFn({ data: { itemId: detail.id, borrowerName: borrowerName.trim() } });
+      setItems((prev) => prev.map((it) => (it.id === detail.id ? { ...it, active_loan_id: res.loan.id } as WardrobeItem : it)));
+      setDetail((d) => (d ? ({ ...d, active_loan_id: res.loan.id } as WardrobeItem) : d));
+      setLoansByItemId((prev) => ({ ...prev, [detail.id]: res.loan }));
+      setLoanSheetOpen(false);
+      setBorrowerName("");
+      toast.success(t("wardrobe.toastLoaned"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastLoanFailed"));
+    } finally {
+      setLending(false);
+    }
+  };
+
+  // Revoking always asks where the item physically goes (even with a
+  // single location, so the choice is explicit rather than silently
+  // assumed) - passing null only when the person truly has no locations
+  // set up at all yet, in which case there's nothing to choose between.
+  const returnDetailItem = async (locationId: string | null) => {
+    if (!detail) return;
+    const loan = loansByItemId[detail.id];
+    if (!loan) return;
+    setReturning(true);
+    try {
+      await returnLoanFn({ data: { loanId: loan.id, returnToLocationId: locationId } });
+      setItems((prev) => prev.map((it) => (it.id === detail.id ? { ...it, active_loan_id: null, location_id: locationId } as WardrobeItem : it)));
+      setDetail((d) => (d ? ({ ...d, active_loan_id: null, location_id: locationId } as WardrobeItem) : d));
+      setLoansByItemId((prev) => { const next = { ...prev }; delete next[detail.id]; return next; });
+      setReturnPickerOpen(false);
+      toast.success(t("wardrobe.toastReturned"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("wardrobe.toastReturnFailed"));
+    } finally {
+      setReturning(false);
+    }
+  };
+
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -558,6 +623,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     [items],
   );
 
+  const loanedCount = useMemo(
+    () => items.filter((i) => (i as unknown as { active_loan_id?: string | null }).active_loan_id).length,
+    [items],
+  );
+
   const filtered = useMemo(() => {
     if (gapFilter) {
       return items.filter((i) => {
@@ -569,16 +639,21 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     }
     return items.filter(i => {
       const isArchived = Boolean((i as unknown as { archived?: boolean }).archived);
+      const isLoaned = Boolean((i as unknown as { active_loan_id?: string | null }).active_loan_id);
+      // Loaned and Archived are separate, mutually exclusive views, same
+      // pattern as each other - a loaned piece isn't physically here to
+      // browse in the main closet any more than an archived one is.
+      if (showLoaned) return isLoaned;
       if (showArchived) return isArchived;
       const locId = (i as unknown as { location_id?: string | null }).location_id ?? null;
       const matchesLocation = viewLocationId === "all" || locId === viewLocationId;
-      return !isArchived && matchesLocation &&
+      return !isArchived && !isLoaned && matchesLocation &&
         (cat === "All" || i.category === cat) &&
         (!seasonOnly || seasonMatches.has(i.id)) &&
         (q === "" || [i.category, i.brand, i.color, i.style, i.occasion, i.season, ...(i.colors ?? [])]
           .some(v => v?.toLowerCase().includes(q.toLowerCase())));
     });
-  }, [items, cat, q, seasonOnly, seasonMatches, showArchived, viewLocationId, gapFilter]);
+  }, [items, cat, q, seasonOnly, seasonMatches, showArchived, showLoaned, viewLocationId, gapFilter]);
 
   const w = weather?.current;
   const wLabel = w ? describeWeather(w.weatherCode, w.isDay) : null;
@@ -710,10 +785,18 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
 
       {(archivedCount > 0 || showArchived) && (
         <button
-          onClick={() => setShowArchived((v) => !v)}
+          onClick={() => { setShowArchived((v) => !v); setShowLoaned(false); }}
           className="mx-6 mt-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
         >
           {showArchived ? <><X size={11} /> {t("wardrobe.backToCloset")}</> : <><Archive size={11} /> {t("wardrobe.archivedCount", { count: archivedCount })}</>}
+        </button>
+      )}
+      {(loanedCount > 0 || showLoaned) && (
+        <button
+          onClick={() => { setShowLoaned((v) => !v); setShowArchived(false); }}
+          className="mx-6 mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+        >
+          {showLoaned ? <><X size={11} /> {t("wardrobe.backToCloset")}</> : <><Users size={11} /> {t("wardrobe.loanedCount", { count: loanedCount })}</>}
         </button>
       )}
       {locations.length > 1 && !showArchived && (
@@ -776,6 +859,8 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
             const src = thumbSrc(it, signed);
             const label = (it.colors?.[0] ?? it.color ?? it.category ?? t("wardrobe.wardrobePieceFallback"));
             const isSelected = selectedIds.has(it.id);
+            const isLoaned = Boolean((it as unknown as { active_loan_id?: string | null }).active_loan_id);
+            const loan = loansByItemId[it.id];
             return (
             <button
               key={it.id}
@@ -793,6 +878,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                 ) : (
                   <div className="h-full w-full animate-pulse" style={{ background: "#EDEDED" }} />
                 )}
+                {isLoaned && (
+                  <span className="absolute top-2 left-2 rounded-full bg-foreground/90 text-background px-2 py-0.5 text-[8px] uppercase tracking-widest">
+                    {t("wardrobe.loanedBadge")}
+                  </span>
+                )}
                 {selectMode && (
                   <span className={`absolute top-2 right-2 h-6 w-6 rounded-full border flex items-center justify-center ${isSelected ? "bg-foreground border-foreground" : "bg-background/80 border-border"}`}>
                     {isSelected && <Check size={13} className="text-background" />}
@@ -802,6 +892,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
               <div className="px-0.5 mt-1.5">
                 <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground truncate">{it.brand ?? it.category}</p>
                 <p className="font-serif text-[15px] leading-tight truncate">{[label, it.category].filter(Boolean).join(" ")}</p>
+                {showLoaned && loan && (
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    {t("wardrobe.loanedToLabel", { name: loan.borrower_name })} · {new Date(`${loan.loaned_at}T00:00:00`).toLocaleDateString(i18n.language, { month: "short", day: "numeric" })}
+                  </p>
+                )}
               </div>
             </button>
             );
@@ -973,6 +1068,26 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                     ? <><ArchiveRestore size={12} /> {t("wardrobe.restoreToCloset")}</>
                     : <><Archive size={12} /> {t("wardrobe.archiveOutOfRotation")}</>}
                 </button>
+                {(detail as unknown as { active_loan_id?: string | null }).active_loan_id ? (
+                  <div className="mt-3 rounded-2xl border border-border bg-secondary/30 p-3 text-center">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.loanedLabel")}</p>
+                    <p className="font-serif text-lg mt-1">{loansByItemId[detail.id]?.borrower_name ?? "…"}</p>
+                    {loansByItemId[detail.id] && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t("wardrobe.loanedSinceLabel", { date: new Date(`${loansByItemId[detail.id].loaned_at}T00:00:00`).toLocaleDateString(i18n.language, { month: "short", day: "numeric", year: "numeric" }) })}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setReturnPickerOpen(true)}
+                      className="mt-3 w-full h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]"
+                    >{t("wardrobe.revokeLoanButton")}</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLoanSheetOpen(true)}
+                    className="mt-3 w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
+                  ><Users size={12} /> {t("wardrobe.lendItemButton")}</button>
+                )}
                 {locations.length > 1 && (
                   <div className="mt-3">
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">{t("wardrobe.keptAt")}</p>
@@ -1023,6 +1138,81 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                           {t("wardrobe.deleteButton")}
                         </button>
                       </div>
+                    </div>
+                  </div>
+                )}
+                {loanSheetOpen && (
+                  <div
+                    className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+                    onClick={() => !lending && setLoanSheetOpen(false)}
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe"
+                    >
+                      <p className="font-serif text-lg text-center">{t("wardrobe.lendItemTitle")}</p>
+                      <input
+                        autoFocus
+                        value={borrowerName}
+                        onChange={(e) => setBorrowerName(e.target.value)}
+                        placeholder={t("wardrobe.borrowerNamePlaceholder")}
+                        className="mt-3 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
+                      />
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setLoanSheetOpen(false)}
+                          disabled={lending}
+                          className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+                        >{t("wardrobe.cancel")}</button>
+                        <button
+                          onClick={() => void lendDetailItem()}
+                          disabled={lending || !borrowerName.trim()}
+                          className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {lending && <Loader2 size={12} className="animate-spin" />}
+                          {t("wardrobe.confirmLoanButton")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {returnPickerOpen && (
+                  <div
+                    className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+                    onClick={() => !returning && setReturnPickerOpen(false)}
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe"
+                    >
+                      <p className="font-serif text-lg text-center">{t("wardrobe.revokeLoanTitle")}</p>
+                      <p className="text-xs text-muted-foreground text-center mt-1">{t("wardrobe.chooseReturnLocation")}</p>
+                      {locations.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                          {locations.map((loc) => (
+                            <button
+                              key={loc.id}
+                              onClick={() => void returnDetailItem(loc.id)}
+                              disabled={returning}
+                              className="rounded-full px-3 py-1.5 text-xs border border-border bg-background active:scale-95 disabled:opacity-60"
+                            >{loc.name}</button>
+                          ))}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => void returnDetailItem(null)}
+                          disabled={returning}
+                          className="mt-4 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {returning && <Loader2 size={12} className="animate-spin" />}
+                          {t("wardrobe.confirmReturnButton")}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setReturnPickerOpen(false)}
+                        disabled={returning}
+                        className="mt-4 w-full h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+                      >{t("wardrobe.cancel")}</button>
                     </div>
                   </div>
                 )}
@@ -1201,4 +1391,3 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     </div>
   );
 }
-
