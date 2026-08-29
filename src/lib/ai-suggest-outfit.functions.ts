@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
-import { isItemAtLocation } from "./wardrobe-location";
+import { isItemAtAnyLocation } from "./wardrobe-location";
 import { isItemAllowedByDressPreferences, hasAnyPreference, type DressPreferences } from "./dress-preferences";
 
 const ItemSchema = z.object({
@@ -54,6 +54,14 @@ export async function suggestOutfitCore(params: {
   avoidItemIds?: string[];
   locationIdOverride?: string | null;
   /**
+   * Explicit multi-location selection (e.g. "use my main wardrobe AND
+   * the beach house while I'm on this trip") — when provided, this
+   * REPLACES the single active-location lookup entirely rather than
+   * combining with it. An empty array is treated the same as omitting
+   * it: no location restriction, everything eligible.
+   */
+  locationIdsOverride?: string[] | null;
+  /**
    * Items of an outfit that already exists and is being ADAPTED (e.g. the
    * weather re-check). Soft constraint on purpose: the prompt asks to swap
    * only what the new weather makes wrong and keep the rest, but nothing
@@ -69,24 +77,37 @@ export async function suggestOutfitCore(params: {
   const gateway = createLovableAiGatewayProvider(key);
   const model = gateway("google/gemini-2.5-flash");
 
-  // A caller (like the weekly generator) can explicitly choose which
-  // location to build from for this run, rather than always defaulting
-  // to whatever's currently active — useful when generating outfits for
-  // a period spent somewhere other than the active location.
-  let locationId = params.locationIdOverride;
-  if (locationId === undefined) {
-    const { data: profileRow } = await (params.supabase.from("profiles" as never) as any)
-      .select("active_location_id").eq("id", params.userId).maybeSingle();
-    locationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
+  // A caller can explicitly choose which location(s) to build from for
+  // this run, rather than always defaulting to whatever's currently
+  // active — useful when generating outfits for a period spent
+  // somewhere other than the active location, or across more than one
+  // (a trip where both the main wardrobe and a second home are in
+  // scope). locationIdsOverride (plural) takes priority when provided;
+  // otherwise falls back to the single-location behavior this always
+  // had.
+  let activeLocations: { id: string; is_primary: boolean }[] = [];
+  if (params.locationIdsOverride?.length) {
+    const { data: locRows } = await (params.supabase.from("wardrobe_locations" as never) as any)
+      .select("id, is_primary").in("id", params.locationIdsOverride).eq("user_id", params.userId);
+    activeLocations = (locRows ?? []) as { id: string; is_primary: boolean }[];
+  } else if (params.locationIdsOverride === undefined) {
+    let locationId = params.locationIdOverride;
+    if (locationId === undefined) {
+      const { data: profileRow } = await (params.supabase.from("profiles" as never) as any)
+        .select("active_location_id").eq("id", params.userId).maybeSingle();
+      locationId = (profileRow as { active_location_id: string | null } | null)?.active_location_id ?? null;
+    }
+    if (locationId) {
+      const { data: locRow } = await (params.supabase.from("wardrobe_locations" as never) as any)
+        .select("id, is_primary").eq("id", locationId).eq("user_id", params.userId).maybeSingle();
+      if (locRow) activeLocations = [locRow as { id: string; is_primary: boolean }];
+    }
   }
-  let activeLocation: { id: string; is_primary: boolean } | null = null;
-  if (locationId) {
-    const { data: locRow } = await (params.supabase.from("wardrobe_locations" as never) as any)
-      .select("id, is_primary").eq("id", locationId).eq("user_id", params.userId).maybeSingle();
-    if (locRow) activeLocation = locRow as { id: string; is_primary: boolean };
-  }
+  // locationIdsOverride === [] (explicitly empty) or === null both fall
+  // through with activeLocations staying [], which isItemAtAnyLocation
+  // already treats as "no restriction" — same as never scoping at all.
   let eligibleItems = params.items.filter((it) =>
-    isItemAtLocation({ location_id: it.locationId ?? null }, activeLocation));
+    isItemAtAnyLocation({ location_id: it.locationId ?? null }, activeLocations));
 
   // Hard filter, not just prompt text: SOLO le preferenze impostate per il
   // lavoro quando esistono (mai mischiate con quelle generali), altrimenti
