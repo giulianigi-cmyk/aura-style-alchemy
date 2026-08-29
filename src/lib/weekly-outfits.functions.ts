@@ -16,7 +16,10 @@ const DailyWeatherSchema = z.object({
 const InputSchema = z.object({
   startDate: z.string(), // YYYY-MM-DD
   numDays: z.union([z.literal(7), z.literal(14)]),
-  locationId: z.string().nullable(),
+  // One or more wardrobe locations in scope for this batch — e.g. main
+  // wardrobe + a second home while travelling. Empty array = no
+  // restriction (same as never scoping a location at all).
+  locationIds: z.array(z.string()).default([]),
   dailyWeather: z.array(DailyWeatherSchema).default([]),
 });
 
@@ -82,7 +85,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
 
     const endDateExclusive = addDaysIso(data.startDate, data.numDays);
 
-    const [{ data: itemsRaw }, { data: existingPlans }, { data: calEvents }] = await Promise.all([
+    const [{ data: itemsRaw }, { data: existingPlans }, { data: calEvents }, { data: locationRows }] = await Promise.all([
       supabase.from("wardrobe_items").select("*").eq("user_id", userId),
             (supabase.from("outfit_plans" as never) as any)
         .select("date, calendar_event_id").eq("user_id", userId)
@@ -91,7 +94,20 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       (supabase.from("calendar_events_cache" as never) as any)
         .select("id, title, start_time, end_time, all_day").eq("user_id", userId)
         .gte("start_time", `${data.startDate}T00:00:00`).lt("start_time", `${endDateExclusive}T00:00:00`),
+      data.locationIds.length
+        ? (supabase.from("wardrobe_locations" as never) as any)
+            .select("id, end_date").in("id", data.locationIds).eq("user_id", userId)
+        : Promise.resolve({ data: [] as { id: string; end_date: string | null }[] }),
     ]);
+
+    // A location with an end_date (e.g. a rental valid only through a
+    // certain day) stops counting for any day of the batch past that
+    // date — this is the "availability must consider the outfit's date"
+    // requirement: a vacation house selected for the whole batch is
+    // still only actually available for the days it's genuinely in use.
+    const selectedLocations = (locationRows ?? []) as { id: string; end_date: string | null }[];
+    const locationIdsForDate = (date: string): string[] =>
+      selectedLocations.filter((l) => !l.end_date || l.end_date >= date).map((l) => l.id);
 
     const items: SuggestOutfitItem[] = ((itemsRaw ?? []) as any[]).map((it) => ({
       id: it.id,
@@ -192,7 +208,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
         styleBoldness,
         items,
         avoidItemIds: usedThisBatch,
-        locationIdOverride: data.locationId,
+        locationIdsOverride: locationIdsForDate(date),
       });
 
       if (!result.ok || !result.item_ids.length) {
