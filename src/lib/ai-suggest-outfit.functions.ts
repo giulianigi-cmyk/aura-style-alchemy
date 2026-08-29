@@ -193,7 +193,7 @@ export async function suggestOutfitCore(params: {
     "If the occasion mentions a pool, swimming, the beach or the sea (pool, piscina, swim, beach, spiaggia, mare, snorkeling): the outfit MUST be built around a Swimwear item — a one-piece swimsuit, or a bikini top AND bikini bottom together — instead of the usual top + bottom. Add a cover-up, a light top/shorts or a dress only as a layer over it, plus sandals/flats and sunglasses if available — never a bag. Never return a city outfit for a swim occasion, and never pair a bikini top with trousers or a skirt.",
     "If the occasion is Sport or mentions yoga, gym, running, hiking, training, pilates, tennis or cycling: the outfit MUST be built from Activewear pieces (sports bra / training top + leggings, bike shorts or running shorts) with sneakers or the appropriate sport shoe. Exclude denim, tailoring, dresses, heels and anything delicate, and honour the specific activity named — hiking wants covered, sturdy shoes, yoga wants soft stretch pieces.",
     "If the occasion is Travel (a flight, a transfer, a long drive): prioritise comfort and layers — soft, non-restrictive pieces, closed comfortable shoes (sneakers or flats, no heels), and one light layer that can go on and off.",
-    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, feathered, fringed, or overtly evening/party-coded (check the material and styleTags fields), exclude cocktail or evening dresses, exclude very short skirts (mini-length), and exclude off-shoulder, strapless, halter, one-shoulder, or otherwise bare-shoulder tops/dresses — check the sleeveLength field: only Short, Three-Quarter, or Long sleeves are workwear-appropriate, never None/Strapless/Halter/Off-shoulder. Also treat dayEvening \"evening\" or formality 4-5 as a strong signal the piece belongs in an Evening look, not Work — these read as going-out wear, not workwear, even if the color looks fine on paper.",
+    "For a 'Work' occasion specifically, exclude anything sequinned, sparkly, feathered, fringed, or overtly evening/party-coded (check the material and styleTags fields), exclude cocktail or evening dresses, and exclude very short skirts (mini-length). Separately, exclude genuinely bare-shoulder construction — off-shoulder, bardot, halter, strapless, one-shoulder, bandeau (check subcategory and styleTags for these terms) — but a plain sleeveless top or dress (sleeveLength: Sleeveless, no other bare-shoulder signal) is completely normal workwear and must NOT be excluded just for having no sleeves; judge it on formality/coverage like any other piece. Also treat dayEvening \"evening\" or formality 4-5 as a strong signal the piece belongs in an Evening look, not Work — these read as going-out wear, not workwear, even if the color looks fine on paper.",
     "Color palette by occasion, when choosing between otherwise-equal options: 'Formal'/'Business Formal' favors navy, grey, black, black-and-white; 'Work'/'Business Casual' favors khaki, light grey, navy, brown as a base with bordeaux, olive, camel, or light blue as accents; 'Smart Casual'/'Weekend' allows one clearly colorful statement piece against a simple base. This is a preference between similarly-fitting options, not a hard exclusion — don't reject an otherwise great outfit purely for using an off-palette color.",
     "Sequins, sparkle, or lurex/metallic fabric are for evening only — never pick a sequinned or sparkly piece for a Day segment, regardless of occasion, even outside a Work context specifically.",
     "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
@@ -231,6 +231,16 @@ export async function suggestOutfitCore(params: {
     return Object.entries(SLOT_LIMITS).some(([cat, limit]) => (counts[cat] ?? 0) > limit);
   };
       const EVENING_SIGNAL = /rhinestone|embellish|diamant|strappy|sequin|paillette|feather|piuma|fringe|frange|tulle/i;
+  // Sleeveless is NOT bare shoulders — a plain sleeveless tank/top is a
+  // completely normal piece of workwear at the right formality. Bare
+  // shoulders is specifically about garment construction that exposes
+  // the shoulder itself (off-shoulder, bardot, halter, strapless,
+  // one-shoulder, bandeau) — a different thing sleeve length alone
+  // can't tell you (an off-shoulder top can have full-length sleeves).
+  // No dedicated attribute exists for this in the schema, so this reads
+  // the same signal the AI itself uses when tagging subcategory/style —
+  // free text, not sleeveLength.
+  const BARE_SHOULDER_SIGNAL = /off.?shoulder|bardot|halter|strapless|one.?shoulder|cold.?shoulder|bandeau|tube top/i;
   const violatesWorkRules = (ids: string[]): boolean =>
     ids.some((id) => {
       const item = catalog.find((c) => c.id === id);
@@ -238,13 +248,7 @@ export async function suggestOutfitCore(params: {
       if ((item.dayEvening ?? "") === "evening" && (item.formality ?? 0) >= 4) return true;
       const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
       if (EVENING_SIGNAL.test(text)) return true;
-      // Bare shoulders is a hard rule for Work regardless of personal
-      // dress preferences — a workwear norm, not just something the
-      // person has to opt into. sleeveLength is the only attribute the
-      // wardrobe currently records for this; a true off-shoulder/halter
-      // tag doesn't exist yet, so this catches genuinely sleeveless
-      // pieces (tank, cami, sleeveless top/dress) for now.
-      if (["Tops", "Dresses", "Jumpsuits"].includes(item.category ?? "") && (item.sleeveLength ?? "") === "Sleeveless") return true;
+      if (["Tops", "Dresses", "Jumpsuits"].includes(item.category ?? "") && BARE_SHOULDER_SIGNAL.test(text)) return true;
       return false;
     });
 
@@ -282,11 +286,28 @@ export async function suggestOutfitCore(params: {
   };
 
   const isWorkOccasion = (params.occasion ?? "").toLowerCase().startsWith("work");
+
+  // A bag is a mandatory component for a woman's outfit, not just a
+  // prompt suggestion the model can skip — same principle as every other
+  // hard rule here: the genderLine text above already asks for this, but
+  // asking isn't enforcing. Never required for Sport/pool/beach, where a
+  // handbag genuinely has no place, and never required when the wardrobe
+  // simply has no eligible bag at all (nothing to enforce).
+  const NO_BAG_OCCASION_SIGNAL = /sport|gym|yoga|running|hiking|training|pilates|tennis|cycling|pool|piscina|swim|beach|spiaggia|mare|snorkeling/i;
+  const catalogHasBag = catalog.some((c) => c.category === "Bags");
+  const missingMandatoryBag = (ids: string[]): boolean => {
+    if (params.gender !== "Woman") return false;
+    if (!catalogHasBag) return false;
+    if (NO_BAG_OCCASION_SIGNAL.test(params.occasion ?? "")) return false;
+    return !ids.some((id) => catalog.find((c) => c.id === id)?.category === "Bags");
+  };
+
   const isValidResult = (ids: string[]): boolean => {
     if (!ids.length) return false;
     if (hasSlotViolation(ids)) return false;
     if (isWorkOccasion && violatesWorkRules(ids)) return false;
     if (violatesWeather(ids)) return false;
+    if (missingMandatoryBag(ids)) return false;
     return true;
   };
 
@@ -333,7 +354,7 @@ export async function suggestOutfitCore(params: {
       try {
         const retry = await generateText({
           model,
-          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, an evening-coded/bare-shoulder piece for a Work occasion, an item excluded by the person's stated dress preferences, or a piece unsuitable for the actual temperature — e.g. a wool/heavy piece when it's hot, or a bare/light piece when it's cold). Try again, respecting every rule strictly this time.",
+          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, an evening-coded/bare-shoulder piece for a Work occasion, an item excluded by the person's stated dress preferences, a piece unsuitable for the actual temperature — e.g. a wool/heavy piece when it's hot, or a bare/light piece when it's cold — or missing the mandatory bag for a women's outfit). Try again, respecting every rule strictly this time.",
           messages: [{ role: "user", content: userContent }],
         });
         const retryParsed = parseAiJson(retry.text, OutputSchema);
@@ -369,6 +390,19 @@ export async function suggestOutfitCore(params: {
       } catch (err) {
         console.error("[AURA suggest-outfit] retry failed", err);
       }
+    }
+
+    // Last resort, after the retry/sanitize logic above has already run:
+    // if the outfit is still missing its mandatory bag (the model simply
+    // never included one), append the best available one directly rather
+    // than shipping an incomplete women's outfit. Prefers a bag not
+    // already excluded by avoidItemIds filtering upstream, and among the
+    // eligible ones just takes the first — eligibleItems is already
+    // filtered by dress preferences and location, so anything here is
+    // already a legitimate candidate.
+    if (missingMandatoryBag(item_ids)) {
+      const bag = catalog.find((c) => c.category === "Bags" && !item_ids.includes(c.id));
+      if (bag) item_ids = [...item_ids, bag.id];
     }
 
     return {
