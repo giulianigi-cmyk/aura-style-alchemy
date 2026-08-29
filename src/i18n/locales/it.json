@@ -1227,6 +1227,12 @@
     "sleeveLong": "Lunga",
     "lockedLong": "Bloccato su Lunga. Copri le gambe richiede copertura completa.",
     "lockedLongArms": "Bloccato su Lunga. Copri le braccia richiede copertura completa del braccio.",
+    "maxHeelHeight": "Altezza massima tacco",
+    "heelFlat": "Niente tacchi",
+    "heelLow": "Basso",
+    "heelMid": "Medio",
+    "heelHigh": "Alto",
+
     "otherRules": "Altre regole (testo libero)",
     "otherRulesPlaceholder": "es. mai gonne corte, mai tacchi…",
     "otherRulesWorkPlaceholder": "es. niente jeans, niente scarpe aperte…",
