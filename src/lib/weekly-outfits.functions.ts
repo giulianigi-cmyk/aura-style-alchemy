@@ -108,6 +108,7 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       sleeveLength: it.sleeve_length ?? "",
       length: it.length ?? "",
       fit: it.fit ?? "",
+      heelHeight: it.heel_height ?? "",
       styleTags: it.style_tags ?? [],
     }));
 
