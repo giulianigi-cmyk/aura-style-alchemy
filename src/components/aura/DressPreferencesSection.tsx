@@ -7,11 +7,13 @@ import {
   BOOL_PREFS,
   SKIRT_OPTIONS,
   SLEEVE_OPTIONS,
+  HEEL_OPTIONS,
   activePreferenceLabels,
   hasAnyPreference,
   type DressPreferences,
   type SkirtLength,
   type SleeveLength,
+  type HeelHeight,
 } from "@/lib/dress-preferences";
 
 const BOOL_PREF_KEYS: Record<string, string> = {
@@ -28,6 +30,9 @@ const SKIRT_KEYS: Record<string, string> = {
 };
 const SLEEVE_KEYS: Record<string, string> = {
   none: "dressPrefs.sleeveNone", short: "dressPrefs.sleeveShort", "three-quarter": "dressPrefs.sleeveThreeQuarter", long: "dressPrefs.sleeveLong",
+};
+const HEEL_KEYS: Record<string, string> = {
+  Flat: "dressPrefs.heelFlat", Low: "dressPrefs.heelLow", Mid: "dressPrefs.heelMid", High: "dressPrefs.heelHigh",
 };
 
 type Scope = "general" | "work";
@@ -205,6 +210,19 @@ export function DressPreferencesSection({ userId }: { userId: string | undefined
             {prefs.cover_arms && (
               <p className="mt-1 text-[10px] text-muted-foreground">{t("dressPrefs.lockedLongArms")}</p>
             )}
+          </div>
+
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("dressPrefs.maxHeelHeight")}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {HEEL_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setPrefs((p) => ({ ...p, max_heel_height: p.max_heel_height === o.value ? undefined : (o.value as HeelHeight) }))}
+                  className={chip(prefs.max_heel_height === o.value)}
+                >{t(HEEL_KEYS[o.value])}</button>
+              ))}
+            </div>
           </div>
 
           <div>
