@@ -701,7 +701,7 @@
     "nDays_one": "{{count}} day",
     "nDays_other": "{{count}} days",
     "wardrobeToUse": "Wardrobe to use",
-    "splitAcrossTwoPlaces": "If this period splits across two places, run this once per place instead.",
+        "multiLocationHint": "Select more than one to include items from all of them in this batch.",
     "fillsInWorkDaysOnly": "Fills in your work days only (set in your profile) — never touches a day you've already planned, and never touches an outfit already linked to a specific event.",
     "generate": "Generate"
   },
