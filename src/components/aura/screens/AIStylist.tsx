@@ -78,7 +78,10 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
   const [locations, setLocations] = useState<WardrobeLocation[]>([]);
   const [weeklySheetOpen, setWeeklySheetOpen] = useState(false);
   const [weeklyDays, setWeeklyDays] = useState<7 | 14>(7);
-  const [weeklyLocationId, setWeeklyLocationId] = useState<string | null>(null);
+    // Multi-select on purpose (see suggestOutfitCore's locationIdsOverride):
+  // a trip means both the main wardrobe and a second home can be
+  // eligible for the same batch, not an either/or choice.
+  const [weeklyLocationIds, setWeeklyLocationIds] = useState<string[]>([]);
   const [weeklyGenerating, setWeeklyGenerating] = useState(false);
   const [weeklyResult, setWeeklyResult] = useState<{ created: number; skippedExisting: number; failed: number } | null>(null);
 
@@ -148,7 +151,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
   useEffect(() => {
     listLocations()
-      .then((res) => { setLocations(res.locations); setWeeklyLocationId(res.activeLocationId); })
+            .then((res) => { setLocations(res.locations); setWeeklyLocationIds(res.activeLocationId ? [res.activeLocationId] : []); })
       .catch((e) => console.error("[AURA stylist] locations load failed", e));
   }, []);
 
@@ -235,7 +238,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         .map((d) => ({ date: d.date, tempMin: d.tempMin, tempMax: d.tempMax, weatherCode: d.weatherCode }));
 
       const res = await generateWeeklyOutfits({
-        data: { startDate, numDays: weeklyDays, locationId: weeklyLocationId, dailyWeather },
+                data: { startDate, numDays: weeklyDays, locationIds: weeklyLocationIds, dailyWeather },
       });
       setWeeklyResult({ created: res.created, skippedExisting: res.skippedExisting, failed: res.failed.length });
       if (res.created > 0) void load();
@@ -826,20 +829,25 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     ))}
                   </div>
                 </div>
-                {locations.length > 1 && (
+                                {locations.length > 1 && (
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("aiStylist.wardrobeToUse")}</p>
                     <div className="flex flex-wrap gap-2">
-                      {locations.map((loc) => (
-                        <button
-                          key={loc.id}
-                          onClick={() => setWeeklyLocationId(loc.id)}
-                          className={`rounded-full px-3 py-1.5 text-xs border ${weeklyLocationId === loc.id ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}
-                        >{loc.name}</button>
-                      ))}
+                      {locations.map((loc) => {
+                        const on = weeklyLocationIds.includes(loc.id);
+                        return (
+                          <button
+                            key={loc.id}
+                            onClick={() => setWeeklyLocationIds((prev) =>
+                              on ? prev.filter((id) => id !== loc.id) : [...prev, loc.id]
+                            )}
+                            className={`rounded-full px-3 py-1.5 text-xs border ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}
+                          >{loc.name}</button>
+                        );
+                      })}
                     </div>
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      {t("aiStylist.splitAcrossTwoPlaces")}
+                      {t("aiStylist.multiLocationHint")}
                     </p>
                   </div>
                 )}
