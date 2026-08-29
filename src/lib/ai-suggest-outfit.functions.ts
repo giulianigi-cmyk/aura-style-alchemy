@@ -23,6 +23,11 @@ const ItemSchema = z.object({
   fit: z.string().nullable().optional(),
   heelHeight: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
+  // Set while the item is out on loan (see wardrobe-loans.functions.ts).
+  // A loaned item is physically not in the wardrobe right now, so it's
+  // excluded before anything else runs — same hard-filter treatment as
+  // location and dress preferences, not a prompt-level suggestion.
+  activeLoanId: z.string().nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -106,8 +111,10 @@ export async function suggestOutfitCore(params: {
   // locationIdsOverride === [] (explicitly empty) or === null both fall
   // through with activeLocations staying [], which isItemAtAnyLocation
   // already treats as "no restriction" — same as never scoping at all.
-  let eligibleItems = params.items.filter((it) =>
-    isItemAtAnyLocation({ location_id: it.locationId ?? null }, activeLocations));
+  let eligibleItems = params.items
+    .filter((it) => !it.activeLoanId)
+    .filter((it) =>
+      isItemAtAnyLocation({ location_id: it.locationId ?? null }, activeLocations));
 
   // Hard filter, not just prompt text: SOLO le preferenze impostate per il
   // lavoro quando esistono (mai mischiate con quelle generali), altrimenti
