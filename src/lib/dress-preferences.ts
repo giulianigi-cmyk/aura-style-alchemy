@@ -186,8 +186,24 @@ export function coversArms(item: { category?: string | null; sleeveLength?: stri
   return item.sleeveLength !== "Sleeveless";
 }
 
+// Sleeveless is NOT bare shoulders — a plain sleeveless top is normal
+// and should never be excluded by "cover shoulders". Bare shoulders is
+// about garment construction that exposes the shoulder itself
+// (off-shoulder, bardot, halter, strapless, one-shoulder, bandeau),
+// which sleeve length alone can't tell you. No dedicated attribute
+// exists for this in the schema, so this reads the same free-text
+// signal (subcategory + styleTags) the AI itself already produces,
+// rather than inventing a new enum value nothing else uses.
+const BARE_SHOULDER_SIGNAL = /off.?shoulder|bardot|halter|strapless|one.?shoulder|cold.?shoulder|bandeau|tube top/i;
+export function coversShoulders(item: { category?: string | null; subcategory?: string | null; styleTags?: string[] | null }): boolean {
+  const category = item.category ?? "";
+  if (!["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category)) return true;
+  const text = `${item.subcategory ?? ""} ${(item.styleTags ?? []).join(" ")}`;
+  return !BARE_SHOULDER_SIGNAL.test(text);
+}
+
 export function isItemAllowedByDressPreferences(
-  item: { category?: string | null; subcategory?: string | null; length?: string | null; sleeveLength?: string | null; fit?: string | null },
+  item: { category?: string | null; subcategory?: string | null; length?: string | null; sleeveLength?: string | null; fit?: string | null; styleTags?: string[] | null },
   p: DressPreferences | null | undefined,
 ): boolean {
   if (!p) return true;
@@ -212,15 +228,10 @@ export function isItemAllowedByDressPreferences(
   const isArmRelevantCategory = ["Tops", "Dresses", "Outerwear", "Jumpsuits"].includes(category);
   if (p.cover_arms && isArmRelevantCategory && !coversArms(item)) return false;
 
-  // cover_shoulders has no dedicated attribute of its own — sleeveLength
-  // is the only signal the wardrobe records for this today (there's no
-  // separate off-shoulder/halter/strapless tag), so it uses the same
-  // coversArms() check as cover_arms. This was previously described only
-  // in the AI prompt text (dressPreferencesToPrompt below) and never
-  // actually enforced here — meaning toggling "Cover shoulders" on had
-  // no real effect on what got excluded, only a soft suggestion the
-  // model could ignore.
-  if (p.cover_shoulders && isArmRelevantCategory && !coversArms(item)) return false;
+  // Previously this reused coversArms() (sleeveLength-based), which was
+  // wrong — see coversShoulders() above. Fixed to use the correct signal
+  // for actual bare-shoulder construction instead of sleeve length.
+  if (p.cover_shoulders && isArmRelevantCategory && !coversShoulders(item)) return false;
 
   if (p.avoid_tight && item.fit === "Slim") return false;
 
