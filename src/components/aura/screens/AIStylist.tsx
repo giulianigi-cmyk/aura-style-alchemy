@@ -192,6 +192,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             sleeveLength: it.sleeve_length ?? "",
             length: it.length ?? "",
             fit: it.fit ?? "",
+            heelHeight: it.heel_height ?? "",
             styleTags: it.style_tags ?? [],
           })),
         },
