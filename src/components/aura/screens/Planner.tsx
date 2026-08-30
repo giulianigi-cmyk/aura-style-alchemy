@@ -660,7 +660,7 @@ function DayDetail({
         </div>
 
         {!activeSlot ? (
-          <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] space-y-3">
             {forecastCard}
             {dayProposals.map((p) => (
               <WeatherProposalCard
@@ -695,7 +695,7 @@ function DayDetail({
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] space-y-5">
               {forecastCard}
 
               {activeProposal && (
@@ -895,4 +895,3 @@ function DayDetail({
     </div>
   );
 }
-        
