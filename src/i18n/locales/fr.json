@@ -11,7 +11,7 @@
     "loading": "chargement…",
     "change": "Modifier",
     "useLocation": "Utiliser la position",
-      "cityPlaceholder": "Entrez votre ville",
+    "cityPlaceholder": "Entrez votre ville",
     "save": "Enregistrer",
     "todaysEdit": "La sélection du jour",
     "styleALook": "Créer un look",
@@ -237,24 +237,7 @@
     "toastRestored": "Restaurée dans votre garde-robe active",
     "toastMoved": "Déplacée",
     "toastMoveItemFailed": "Impossible de déplacer la pièce",
-       "loanedCount": "Prêtées ({{count}})",
-    "loanedBadge": "Prêté",
-    "loanedLabel": "Actuellement prêté à",
-    "loanedSinceLabel": "Depuis le {{date}}",
-    "loanedToLabel": "Prêté à {{name}}",
-    "lendItemButton": "Marquer comme prêté",
-    "lendItemTitle": "À qui prêtez-vous cette pièce ?",
-    "borrowerNamePlaceholder": "Nom de la personne",
-    "confirmLoanButton": "Confirmer le prêt",
-    "revokeLoanButton": "Révoquer le prêt",
-    "revokeLoanTitle": "La pièce est de retour",
-    "chooseReturnLocation": "Vers quel domicile revient-elle ?",
-    "confirmReturnButton": "Confirmer le retour",
-    "toastLoaned": "Pièce marquée comme prêtée",
-    "toastLoanFailed": "Impossible d'enregistrer le prêt",
-    "toastReturned": "Prêt révoqué",
-    "toastReturnFailed": "Impossible de révoquer le prêt",
-     "toastMovedCount_one": "{{count}} pièce déplacée",
+    "toastMovedCount_one": "{{count}} pièce déplacée",
     "toastMovedCount_other": "{{count}} pièces déplacées",
     "toastMoveSelectionFailed": "Impossible de déplacer ces pièces",
     "toastUpdatingWardrobe": "Mise à jour de votre garde-robe…",
@@ -1272,9 +1255,9 @@
     "occasion": "Occasion",
     "size": "Taille",
     "sizePlaceholder": "ex. M, 40",
-    "price": "Prix"
-     "purchaseDate": "Date d'achat"
-     }, 
+    "price": "Prix",
+    "purchaseDate": "Date d'achat"
+  },
   "profileSetup": {
     "step0Eyebrow": "01 · Langue",
     "step0Title": "Choisissez votre\nlangue.",
@@ -1313,4 +1296,4 @@
     "enterAura": "Entrer dans AURA",
     "continue": "Continuer"
   }
-} 
+}
