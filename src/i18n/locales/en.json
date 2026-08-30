@@ -113,6 +113,12 @@
     "sharedLibrary": "Shared library",
     "sharedLibraryLabel": "Share my wardrobe in the common library",
     "sharedLibraryDesc": "Your pieces (brand, price, tags, photo) become searchable by other members, anonymously — nobody can see they are yours. Turning it off removes them from future searches, but pieces others already imported stay in their own closet.",
+    "sharingWhatIsSharedTerm": "What is shared",
+    "sharingWhatIsSharedDesc": "Only the product side of each piece: brand, category, colours, materials, tags, size, price and an anonymous copy of the photo.",
+    "sharingWhatIsNeverSharedTerm": "What is never shared",
+    "sharingWhatIsNeverSharedDesc": "Your name, account, city, how often you wear something, when you bought it and where you keep it. The link between a piece and you is replaced by an irreversible code held on the server.",
+    "sharingTurningOffTerm": "Turning it off",
+    "sharingTurningOffDesc": "Your pieces disappear from future searches and the anonymous photo copies are deleted. Pieces other members already imported remain in their closet as independent copies — they are not removed.",
     "fromYourWardrobe": "From your wardrobe"
   },
   "community": {
