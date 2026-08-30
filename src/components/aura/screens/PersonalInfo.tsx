@@ -12,6 +12,25 @@ const INDUSTRIES = [
   "Fashion / Creative", "Healthcare", "Education", "Hospitality / Retail",
   "Media / Marketing", "Public sector", "Other",
 ];
+// Display-label translation, same pattern as ProfileSetup.tsx — the
+// underlying value written to the DB stays the fixed English string.
+const GENDER_KEYS: Record<string, string> = {
+  Woman: "settings.genderWoman",
+  Man: "settings.genderMan",
+  "Prefer not to say": "settings.genderPreferNotToSay",
+};
+const INDUSTRY_KEYS: Record<string, string> = {
+  "Finance / Legal": "settings.industryFinanceLegal",
+  "Consulting / Corporate": "settings.industryConsultingCorporate",
+  "Tech / Startup": "settings.industryTechStartup",
+  "Fashion / Creative": "settings.industryFashionCreative",
+  "Healthcare": "settings.industryHealthcare",
+  "Education": "settings.industryEducation",
+  "Hospitality / Retail": "settings.industryHospitalityRetail",
+  "Media / Marketing": "settings.industryMediaMarketing",
+  "Public sector": "settings.industryPublicSector",
+  "Other": "settings.industryOther",
+};
 
 export function PersonalInfo({ go }: { go: (s: Screen) => void }) {
   const { t } = useTranslation();
@@ -77,7 +96,7 @@ export function PersonalInfo({ go }: { go: (s: Screen) => void }) {
             {GENDERS.map(g => (
               <button key={g} onClick={() => setGender(g)}
                 className={`rounded-full px-3 py-1.5 text-xs border transition ${gender === g ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                {g}
+                {t(GENDER_KEYS[g])}
               </button>
             ))}
           </div>
@@ -89,7 +108,7 @@ export function PersonalInfo({ go }: { go: (s: Screen) => void }) {
             {INDUSTRIES.map(i => (
               <button key={i} onClick={() => setIndustry(i)}
                 className={`rounded-full px-3 py-1.5 text-xs border transition ${industry === i ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                {i}
+                {t(INDUSTRY_KEYS[i])}
               </button>
             ))}
           </div>
