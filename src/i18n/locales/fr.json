@@ -1273,7 +1273,8 @@
     "size": "Taille",
     "sizePlaceholder": "ex. M, 40",
     "price": "Prix",
-     },
+     "purchaseDate": "Date d'achat"
+    {
   "profileSetup": {
     "step0Eyebrow": "01 · Langue",
     "step0Title": "Choisissez votre\nlangue.",
