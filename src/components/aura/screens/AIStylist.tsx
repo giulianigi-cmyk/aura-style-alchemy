@@ -765,7 +765,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   >{c}</button>
                 ))}
               </div>
-                           <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-5 pb-4">
+                           <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                 {matches.length === 0 ? (
                   <p className="col-span-2 text-sm text-muted-foreground py-6 text-center">{t("aiStylist.noPiecesMatch")}</p>
                 ) : matches.map((it) => {
@@ -799,7 +799,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
 
       {weeklySheetOpen && (
                <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => !weeklyGenerating && setWeeklySheetOpen(false)}>
-                    <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-10 space-y-4 max-h-[85vh] overflow-y-auto">
+                    <div onClick={(e) => e.stopPropagation()} className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] space-y-4 max-h-[85vh] overflow-y-auto">
 
             <p className="font-serif italic text-lg">{t("aiStylist.createWorkOutfits")}</p>
 
