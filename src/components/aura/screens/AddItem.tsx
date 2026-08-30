@@ -14,7 +14,7 @@ import { removeBackgroundClient } from "@/lib/bg-removal-client";
 import { importProductFromUrl, type CompositionEntry } from "@/lib/import-url.functions";
 import { listLocations } from "@/lib/wardrobe-locations.functions";
 import { downloadImportImage } from "@/lib/import-image.functions";
-import { searchProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
+import { searchProductLibrary, browseProductLibrary, type ProductLibraryItem } from "@/lib/product-library";
 import { searchSharedLibrary, syncMySharedLibrary, type SharedLibraryItem } from "@/lib/shared-library.functions";
 import { buildProductSearchQuery, buildGoogleSearchUrl, buildGoogleLensUrl } from "@/lib/search-online";
 
@@ -498,6 +498,24 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       setLibraryLoadingId(null);
     }
   };
+
+  // Load a default browsable set the moment this screen opens, before
+  // the person has typed anything — previously the screen stayed
+  // completely empty (no results, no usable filters) until a search was
+  // run, which made "show me everything" impossible without knowing
+  // what to type first.
+  useEffect(() => {
+    if (step !== "library") return;
+    if (libraryQuery.trim()) return;
+    if (libraryResults.length > 0) return;
+    let cancelled = false;
+    setLibrarySearching(true);
+    browseProductLibrary()
+      .then((products) => { if (!cancelled) setLibraryResults(products); })
+      .finally(() => { if (!cancelled) setLibrarySearching(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const runLibrarySearch = async () => {
     const q = libraryQuery.trim();
@@ -1216,7 +1234,6 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                       {t(label)}
                     </button>
                   );
-                })}
                 })}
               </div>
             </div>
