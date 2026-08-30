@@ -11,7 +11,7 @@
     "loading": "chargement…",
     "change": "Modifier",
     "useLocation": "Utiliser la position",
-    "cityPlaceholder": "Entrez votre ville",
+      "cityPlaceholder": "Entrez votre ville",
     "save": "Enregistrer",
     "todaysEdit": "La sélection du jour",
     "styleALook": "Créer un look",
@@ -1272,7 +1272,8 @@
     "occasion": "Occasion",
     "size": "Taille",
     "sizePlaceholder": "ex. M, 40",
-    "price": "Prix",
+    "price": "Prix"
+     "purchaseDate": "Date d'achat"
      },
   "profileSetup": {
     "step0Eyebrow": "01 · Langue",
