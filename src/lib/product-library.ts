@@ -13,6 +13,24 @@ export type ProductLibraryItem = {
   canonical_image_url: string | null;
 };
 
+/** Elenco di default da sfogliare quando la schermata di ricerca si apre,
+ *  prima ancora che la persona digiti qualcosa — evita lo schermo vuoto
+ *  che obbligava a scrivere una query per vedere qualunque cosa. Nessun
+ *  ORDER BY esplicito: la colonna di creazione della tabella "products"
+ *  non è verificata qui, quindi si prende un set semplice piuttosto che
+ *  rischiare una query rotta su una colonna che potrebbe non esistere. */
+export async function browseProductLibrary(limit = 40): Promise<ProductLibraryItem[]> {
+  const { data, error } = await (supabase as any)
+    .from("products")
+    .select("id, brand, category, subcategory, material, color, color_family, season, description, canonical_image_url")
+    .limit(limit);
+  if (error) {
+    console.error("[AURA product-library] browse failed", error);
+    return [];
+  }
+  return (data ?? []) as ProductLibraryItem[];
+}
+
 /** Cerca nella AURA Product Library per brand, categoria, materiale o
  *  descrizione. Query lato client — la RLS limita già la SELECT agli
  *  utenti autenticati, stesso confine di fiducia di wardrobe_items.
