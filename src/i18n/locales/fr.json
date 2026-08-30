@@ -1266,15 +1266,15 @@
     "formalityHint": "À quel point cette pièce paraît habillée. Utilisé pour décider pour quelles occasions elle convient.",
     "dayEvening": "Jour / Soir",
     "dayEveningHint": "Quand elle est réellement portée. Une pièce sans cette info n'apparaît jamais dans les suggestions de tenues ou de voyage.",
-    "brand": "Marque",
+      "brand": "Marque",
     "brandPlaceholder": "laissez vide si inconnu",
     "style": "Style",
     "occasion": "Occasion",
     "size": "Taille",
     "sizePlaceholder": "ex. M, 40",
-    "price": "Prix"
-     "purchaseDate": "Date d'achat"
-     },
+    "price": "Prix",
+    "purchaseDate": "Date d'achat"
+  },
   "profileSetup": {
     "step0Eyebrow": "01 · Langue",
     "step0Title": "Choisissez votre\nlangue.",
@@ -1313,5 +1313,6 @@
     "enterAura": "Entrer dans AURA",
     "continue": "Continuer"
   }
-} 
+}
+
 
