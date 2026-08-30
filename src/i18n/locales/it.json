@@ -113,6 +113,12 @@
     "sharedLibrary": "Libreria condivisa",
     "sharedLibraryLabel": "Condividi il mio guardaroba nella libreria comune",
     "sharedLibraryDesc": "I tuoi capi (brand, prezzo, tag, foto) diventano cercabili dagli altri membri, in forma anonima: nessuno può vedere che sono tuoi. Disattivandolo, spariscono dalle ricerche future, ma i capi già importati da altri restano nel loro guardaroba.",
+    "sharingWhatIsSharedTerm": "Cosa viene condiviso",
+    "sharingWhatIsSharedDesc": "Solo il lato prodotto di ogni capo: brand, categoria, colori, materiali, tag, taglia, prezzo e una copia anonima della foto.",
+    "sharingWhatIsNeverSharedTerm": "Cosa non viene mai condiviso",
+    "sharingWhatIsNeverSharedDesc": "Il tuo nome, account, città, quanto spesso indossi qualcosa, quando l'hai comprato e dove lo tieni. Il legame tra un capo e te viene sostituito da un codice irreversibile conservato sul server.",
+    "sharingTurningOffTerm": "Disattivarlo",
+    "sharingTurningOffDesc": "I tuoi capi spariscono dalle ricerche future e le copie anonime delle foto vengono eliminate. I capi che altri membri hanno già importato restano nel loro guardaroba come copie indipendenti — non vengono rimossi.",
     "fromYourWardrobe": "Dal tuo guardaroba"
   },
   "community": {
