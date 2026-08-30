@@ -301,6 +301,17 @@ export const stylistChat = createServerFn({ method: "POST" })
       let finalItemIds = parsed.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
       let finalReply = parsed.reply;
 
+      // Running shoes are for actual Sport/gym/running occasions, never
+      // a default "sneakers" pick for an everyday or going-out outfit —
+      // this used to be prompt-only guidance (easy for the model to
+      // quietly ignore, e.g. proposing running shoes for a concert).
+      // Only flagged when a non-running alternative actually exists —
+      // if running shoes are the only shoes owned, there's nothing
+      // better to swap in.
+      const hasNonRunningShoeAlternative = catalog.some((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes");
+      const hasFootwearViolation = (ids: string[]): boolean =>
+        hasNonRunningShoeAlternative && ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
+
       if (finalItemIds.length > 0) {
         const cats = new Set(
           finalItemIds.map((id) => catalog.find((c) => c.id === id)?.category).filter(Boolean)
@@ -310,6 +321,10 @@ export const stylistChat = createServerFn({ method: "POST" })
         if (!hasCore) missing.push("a top+bottom pairing OR a dress/jumpsuit");
         if (!cats.has("Shoes")) missing.push("shoes");
         if (!cats.has("Bags")) missing.push("a bag");
+        const footwearViolation = hasFootwearViolation(finalItemIds);
+        if (footwearViolation) {
+          missing.push("a different pair of shoes — running shoes were picked, but this isn't a Sport/gym/running occasion, so swap them for a non-running pair from the wardrobe");
+        }
 
         if (missing.length > 0) {
           try {
@@ -321,19 +336,35 @@ export const stylistChat = createServerFn({ method: "POST" })
                 { role: "assistant", content: text || "(no response)" },
                 {
                   role: "user",
-                  content: `Your last outfit was incomplete — it's missing ${missing.join(" and ")}. Complete it now using the wardrobe catalog, keeping the pieces you already picked. Reply again with ONLY the JSON object in the required shape.`,
+                  content: `Your last outfit needs a fix — it needs to ${missing.join("; and needs to ")}. Redo it now using the wardrobe catalog, keeping whatever pieces already work. Reply again with ONLY the JSON object in the required shape.`,
                 },
               ],
             });
             const repaired = parseAiJson(r3.text, OutputSchema);
             const repairedIds = repaired.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
-            if (repairedIds.length >= finalItemIds.length) {
+            const repairFixedFootwear = !footwearViolation || !hasFootwearViolation(repairedIds);
+            if (repairedIds.length >= finalItemIds.length && repairFixedFootwear) {
               finalItemIds = repairedIds;
               finalReply = repaired.reply;
             }
           } catch (err) {
             console.error("[AURA stylist-chat] completeness repair failed, shipping original", err);
           }
+        }
+      }
+
+      // Last resort, after the repair attempt above: if a running-shoe
+      // violation is STILL present (repair failed or didn't fix it),
+      // swap it out directly in code rather than shipping the wrong
+      // pick — same principle as the hard fallback in
+      // ai-suggest-outfit.functions.ts. Only fires when the wardrobe
+      // genuinely has a non-running shoe to substitute.
+      if (hasFootwearViolation(finalItemIds)) {
+        const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && !finalItemIds.includes(c.id));
+        if (replacement) {
+          finalItemIds = finalItemIds
+            .filter((id) => catalog.find((c) => c.id === id)?.subcategory !== "Running Shoes")
+            .concat(replacement.id);
         }
       }
 
