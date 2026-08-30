@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Camera, Check, Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useProfile } from "@/hooks/use-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { USERNAME_RE } from "@/lib/community";
@@ -15,8 +16,18 @@ const BRANDS = [
   "Saint Laurent", "Massimo Dutti", "COS", "Aritzia",
 ];
 const GENDERS = ["Woman", "Man", "Prefer not to say"];
+// Same duplication noted in PersonalInfo.tsx/Profile.tsx — this file has
+// its own copy of the gender list rather than sharing one, pre-existing
+// and out of scope to unify here. Just translating the display label,
+// not the underlying value written to the DB.
+const GENDER_KEYS: Record<string, string> = {
+  Woman: "profileSetup.genderWoman",
+  Man: "profileSetup.genderMan",
+  "Prefer not to say": "profileSetup.genderPreferNotToSay",
+};
 
 export function ProfileSetup({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
   const { update, uploadAvatar } = useProfile();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -52,12 +63,12 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
     setList(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
 
   const steps = [
-    { eyebrow: "01 · Language", title: "Choose your\nlanguage." },
-    { eyebrow: "02 · Identity", title: "What should we\ncall you?" },
-    { eyebrow: "03 · You", title: "Tell us\nabout you." },
-    { eyebrow: "04 · Aesthetic", title: "Your style\nlanguage." },
-    { eyebrow: "05 · Houses", title: "Brands you\nlove." },
-    { eyebrow: "06 · Portrait", title: "A face to\nthe wardrobe." },
+    { eyebrow: t("profileSetup.step0Eyebrow"), title: t("profileSetup.step0Title") },
+    { eyebrow: t("profileSetup.step1Eyebrow"), title: t("profileSetup.step1Title") },
+    { eyebrow: t("profileSetup.step2Eyebrow"), title: t("profileSetup.step2Title") },
+    { eyebrow: t("profileSetup.step3Eyebrow"), title: t("profileSetup.step3Title") },
+    { eyebrow: t("profileSetup.step4Eyebrow"), title: t("profileSetup.step4Title") },
+    { eyebrow: t("profileSetup.step5Eyebrow"), title: t("profileSetup.step5Title") },
   ];
   const last = step === steps.length - 1;
 
@@ -102,9 +113,9 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           <span className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">AURA</span>
         </div>
         <button
-          onClick={() => (identityComplete ? finish() : setErr("Please pick a username before continuing."))}
+          onClick={() => (identityComplete ? finish() : setErr(t("profileSetup.pickUsernameFirst")))}
           className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground"
-        >Skip</button>
+        >{t("profileSetup.skip")}</button>
       </header>
 
       <div className="px-8 mt-4 flex gap-1.5">
@@ -120,7 +131,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
         <div className="mt-8">
           {step === 0 && (
             <div>
-              <p className="text-xs text-muted-foreground mb-4">You can change this anytime in your profile.</p>
+              <p className="text-xs text-muted-foreground mb-4">{t("profileSetup.languageHint")}</p>
               <div className="flex flex-col gap-2">
                 {SUPPORTED_LANGUAGES.map(code => (
                   <button
@@ -139,7 +150,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           {step === 1 && (
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Full name</label>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.fullNameLabel")}</label>
                 <input
                   autoFocus value={fullName} onChange={e => setFullName(e.target.value)}
                   placeholder="Elise Moreau"
@@ -147,7 +158,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Username</label>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.usernameLabel")}</label>
                 <div className="flex items-center border-b border-border focus-within:border-foreground transition">
                   <span className="text-2xl font-serif text-muted-foreground">@</span>
                   <input
@@ -162,11 +173,11 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                   {usernameChecking && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
                 </div>
                 <p className="text-[11px] text-muted-foreground h-4">
-                  {username.length === 0 ? "3-20 characters: lowercase letters, numbers, underscores." :
-                    !usernameValid ? "3-20 characters: lowercase letters, numbers, underscores." :
-                    usernameChecking ? "Checking…" :
-                    usernameAvailable === true ? "Available" :
-                    usernameAvailable === false ? "Already taken" : ""}
+                  {username.length === 0 ? t("profileSetup.usernameRules") :
+                    !usernameValid ? t("profileSetup.usernameRules") :
+                    usernameChecking ? t("profileSetup.checking") :
+                    usernameAvailable === true ? t("profileSetup.available") :
+                    usernameAvailable === false ? t("profileSetup.alreadyTaken") : ""}
                 </p>
               </div>
             </div>
@@ -175,7 +186,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           {step === 2 && (
             <div className="space-y-6">
               <div>
-                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Birth date</label>
+                <label className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.birthDateLabel")}</label>
                 <input
                   type="date" max={new Date().toISOString().slice(0, 10)}
                   value={birthDate} onChange={e => setBirthDate(e.target.value)}
@@ -183,12 +194,12 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                 />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Gender</p>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.genderLabel")}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {GENDERS.map(g => (
                     <button key={g} onClick={() => setGender(g)}
                       className={`rounded-full px-4 py-2 text-xs border transition ${gender === g ? "bg-foreground text-background border-foreground" : "border-border bg-card"}`}>
-                      {g}
+                      {t(GENDER_KEYS[g])}
                     </button>
                   ))}
                 </div>
@@ -198,7 +209,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
           {step === 3 && (
             <div>
-              <p className="text-xs text-muted-foreground mb-4">Pick a few that resonate. We'll tune your styling from here.</p>
+              <p className="text-xs text-muted-foreground mb-4">{t("profileSetup.stylesHint")}</p>
               <div className="flex flex-wrap gap-2">
                 {STYLES.map(s => {
                   const on = styles.includes(s);
@@ -215,7 +226,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
 
           {step === 4 && (
             <div>
-              <p className="text-xs text-muted-foreground mb-4">Houses you already wear, admire, or aspire to.</p>
+              <p className="text-xs text-muted-foreground mb-4">{t("profileSetup.brandsHint")}</p>
               <div className="flex flex-wrap gap-2">
                 {BRANDS.map(b => {
                   const on = brands.includes(b);
@@ -245,9 +256,15 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                       : <Camera size={28} />}
                   </div>
                 </div>
-                <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Tap to upload</p>
+                <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.tapToUpload")}</p>
               </label>
-              <p className="mt-6 text-xs text-muted-foreground max-w-[260px]">Optional — but a portrait helps personalize your color analysis later.</p>
+              {/* Explicit "profile photo, not a wardrobe photo" framing —
+                  this was previously only implied by the (English-only)
+                  hint text below, easy to miss for anyone who can't read
+                  it, or who's used to the wardrobe photo-capture flow
+                  looking visually similar. */}
+              <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileSetup.profilePhotoLabel")}</p>
+              <p className="mt-2 text-xs text-muted-foreground max-w-[260px]">{t("profileSetup.profilePhotoHint")}</p>
 
               {/* Consenso libreria condivisa: checkbox VUOTA, opt-in esplicito. */}
               <button
@@ -261,11 +278,9 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
                   {shareLibrary && <Check size={12} />}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm">Share my wardrobe in the common library</span>
+                  <span className="block text-sm">{t("profileSetup.shareLibraryLabel")}</span>
                   <span className="block text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                    Your pieces — brand, price, tags and photo — become visible and reusable by other members, anonymously: nobody will know they came from you.
-                    Personal data (your name, how often you wear things, where you keep them) is never shared. You can turn this off at any time in your profile;
-                    pieces others already imported stay in their own closet.
+                    {t("profileSetup.shareLibraryDetail")}
                   </span>
                 </span>
               </button>
@@ -282,14 +297,14 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
           onClick={() => setStep(s => Math.max(0, s - 1))}
           disabled={step === 0}
           className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground disabled:opacity-30"
-        >Back</button>
+        >{t("profileSetup.back")}</button>
         <button
           onClick={next}
           disabled={!canAdvance() || saving}
           className="group flex h-14 px-6 items-center justify-center gap-3 rounded-full bg-foreground text-background uppercase tracking-[0.3em] text-[10px] transition active:scale-95 shadow-luxe disabled:opacity-40"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : last ? <Check size={14} /> : <ArrowRight size={14} />}
-          {last ? "Enter AURA" : "Continue"}
+          {last ? t("profileSetup.enterAura") : t("profileSetup.continue")}
         </button>
       </div>
     </div>
