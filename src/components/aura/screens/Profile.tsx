@@ -274,7 +274,7 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
                 return (
                   <button key={s} onClick={() => toggle(styles, setStyles, s)}
                     className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
-                    {s}
+                    {t(`profileScreen.styleTerm.${s}`)}
                   </button>
                 );
               })}
@@ -346,7 +346,7 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("profileScreen.style")}</p>
               <div className="flex flex-wrap gap-2">
                 {profile!.style_preferences!.map(s => (
-                  <span key={s} className="rounded-full px-3 py-1.5 text-xs bg-secondary/60">{s}</span>
+                  <span key={s} className="rounded-full px-3 py-1.5 text-xs bg-secondary/60">{t(`profileScreen.styleTerm.${s}`)}</span>
                 ))}
               </div>
             </section>
