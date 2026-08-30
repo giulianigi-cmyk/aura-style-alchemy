@@ -332,12 +332,26 @@ export async function suggestOutfitCore(params: {
     return !ids.some((id) => catalog.find((c) => c.id === id)?.category === "Bags");
   };
 
+  // Running shoes are for actual Sport/gym/running occasions, never a
+  // default "sneakers" pick elsewhere — universal, not just Work, since
+  // the same wrong pick (e.g. running shoes for a concert/Everyday
+  // outfit) can happen for any occasion type. Only enforced when a
+  // non-running alternative genuinely exists in the wardrobe.
+  const isSportOccasion = /sport|gym|yoga|running|hiking|training|pilates|tennis|cycling/i.test(params.occasion ?? "");
+  const catalogHasNonRunningShoe = catalog.some((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes");
+  const violatesFootwearRule = (ids: string[]): boolean => {
+    if (isSportOccasion) return false;
+    if (!catalogHasNonRunningShoe) return false;
+    return ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
+  };
+
   const isValidResult = (ids: string[]): boolean => {
     if (!ids.length) return false;
     if (hasSlotViolation(ids)) return false;
     if (isWorkOccasion && violatesWorkRules(ids)) return false;
     if (violatesWeather(ids)) return false;
     if (missingMandatoryBag(ids)) return false;
+    if (violatesFootwearRule(ids)) return false;
     return true;
   };
 
@@ -414,6 +428,7 @@ export async function suggestOutfitCore(params: {
           item_ids = item_ids.filter((id) => {
             if (violatesWeather([id])) return false;
             if (isWorkOccasion && violatesWorkRules([id])) return false;
+            if (violatesFootwearRule([id])) return false;
             return true;
           });
         }
@@ -433,6 +448,14 @@ export async function suggestOutfitCore(params: {
     if (missingMandatoryBag(item_ids)) {
       const bag = catalog.find((c) => c.category === "Bags" && !item_ids.includes(c.id));
       if (bag) item_ids = [...item_ids, bag.id];
+    }
+
+    // If a running-shoe violation survived the sanitize step above (it
+    // only strips, it doesn't replace), swap in a proper alternative
+    // rather than leaving the outfit without shoes at all.
+    if (violatesFootwearRule(item_ids)) {
+      const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && !item_ids.includes(c.id));
+      if (replacement) item_ids = [...item_ids, replacement.id];
     }
 
     return {
