@@ -7,9 +7,9 @@ import { useProfile } from "@/hooks/use-profile";
 import { syncMySharedLibrary } from "@/lib/shared-library.functions";
 
 const SHARING_DEFINITIONS = [
-  { term: "What is shared", description: "Only the product side of each piece: brand, category, colours, materials, tags, size, price and an anonymous copy of the photo." },
-  { term: "What is never shared", description: "Your name, account, city, how often you wear something, when you bought it and where you keep it. The link between a piece and you is replaced by an irreversible code held on the server." },
-  { term: "Turning it off", description: "Your pieces disappear from future searches and the anonymous photo copies are deleted. Pieces other members already imported remain in their closet as independent copies — they are not removed." },
+  { termKey: "settings.sharingWhatIsSharedTerm", descKey: "settings.sharingWhatIsSharedDesc" },
+  { termKey: "settings.sharingWhatIsNeverSharedTerm", descKey: "settings.sharingWhatIsNeverSharedDesc" },
+  { termKey: "settings.sharingTurningOffTerm", descKey: "settings.sharingTurningOffDesc" },
 ];
 
 export function PrivacySettings({ go }: { go: (s: Screen) => void }) {
@@ -74,9 +74,9 @@ export function PrivacySettings({ go }: { go: (s: Screen) => void }) {
             </div>
             <div className="mt-4 space-y-3">
               {SHARING_DEFINITIONS.map((d) => (
-                <div key={d.term}>
-                  <p className="text-sm font-medium">{d.term}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
+                <div key={d.termKey}>
+                  <p className="text-sm font-medium">{t(d.termKey)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t(d.descKey)}</p>
                 </div>
               ))}
             </div>
