@@ -1272,9 +1272,9 @@
     "occasion": "Occasion",
     "size": "Taille",
     "sizePlaceholder": "ex. M, 40",
-    "price": "Prix"
-     "purchaseDate": "Date d'achat"
-     },
+    "price": "Prix",
+    "purchaseDate": "Date d'achat"
+  },
   "profileSetup": {
     "step0Eyebrow": "01 · Langue",
     "step0Title": "Choisissez votre\nlangue.",
@@ -1313,5 +1313,6 @@
     "enterAura": "Entrer dans AURA",
     "continue": "Continuer"
   }
-} 
+}
+
 
