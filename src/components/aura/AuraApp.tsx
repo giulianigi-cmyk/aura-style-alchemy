@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Splash } from "./screens/Splash";
+import { LanguagePicker } from "./LanguagePicker";
 import { Onboarding } from "./screens/Onboarding";
 import { Auth } from "./screens/Auth";
 import { ResetPassword } from "./screens/ResetPassword";
@@ -49,7 +50,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useChatNotifications } from "@/hooks/use-chat-notifications";
 
 export type Screen =
-    | "splash" | "onboarding" | "auth" | "reset" | "profile-setup"
+    | "splash" | "language" | "onboarding" | "auth" | "reset" | "profile-setup"
     | "home" | "wardrobe" | "add" | "ai" | "planner" | "shop" | "community" | "profile"
       | "insights" | "saved-outfits" | "notifications" | "invite" | "builder" | "color-lab" | "color-analysis" | "stylist-chat" | "outfit-scan" | "batch-scan" | "batch-review" | "storage-debug"
       | "trips" | "trip-create" | "trip-detail" | "essential-presets"
@@ -94,6 +95,9 @@ function Inner() {
   const [tripFocusActivityId, setTripFocusActivityId] = useState<string | null>(null);
   const [onboarded, setOnboarded] = useState<boolean>(() =>
     typeof window !== "undefined" && localStorage.getItem("aura.onboarded") === "1"
+  );
+  const [languageChosen, setLanguageChosen] = useState<boolean>(() =>
+    typeof window !== "undefined" && localStorage.getItem("aura.language_chosen") === "1"
   );
 
   const go = (s: Screen) => {
@@ -169,17 +173,18 @@ function Inner() {
     if (screen !== "splash") return;
     if (recovery) { setScreen("reset"); return; }
     const t = setTimeout(() => {
-      if (!onboarded) setScreen("onboarding");
+      if (!languageChosen) setScreen("language");
+      else if (!onboarded) setScreen("onboarding");
       else if (!user) setScreen("auth");
       else if (!profileLoading && profile && !profile.setup_complete) setScreen("profile-setup");
       else setScreen("home");
     }, 1600);
     return () => clearTimeout(t);
-  }, [loading, profileLoading, screen, onboarded, user, profile, recovery]);
+  }, [loading, profileLoading, screen, languageChosen, onboarded, user, profile, recovery]);
 
   useEffect(() => {
     if (loading || screen === "splash" || screen === "reset") return;
-    if (!user && !["onboarding", "auth"].includes(screen)) {
+    if (!user && !["language", "onboarding", "auth"].includes(screen)) {
       setScreen("auth");
       return;
     }
@@ -210,6 +215,12 @@ function Inner() {
     }
   }, [user, loading, screen, profile, profileLoading]);
 
+  const finishLanguage = () => {
+    localStorage.setItem("aura.language_chosen", "1");
+    setLanguageChosen(true);
+    setScreen("onboarding");
+  };
+
   const finishOnboarding = () => {
     localStorage.setItem("aura.onboarded", "1");
     setOnboarded(true);
@@ -218,7 +229,7 @@ function Inner() {
     else setScreen("home");
   };
 
-  const showTabs = user && !["splash", "onboarding", "auth", "reset", "profile-setup", "add", "builder", "stylist-chat", "chat-thread"].includes(screen);
+  const showTabs = user && !["splash", "language", "onboarding", "auth", "reset", "profile-setup", "add", "builder", "stylist-chat", "chat-thread"].includes(screen);
 
   return (
     <PhoneFrame>
@@ -226,6 +237,7 @@ function Inner() {
                 <div key={screen} className="absolute inset-0 animate-fade-in">
           <ErrorBoundary onReset={() => go("home")}>
           {screen === "splash" && <Splash go={go} />}
+          {screen === "language" && <LanguagePicker onDone={finishLanguage} />}
           {screen === "onboarding" && <Onboarding onDone={finishOnboarding} />}
           {screen === "auth" && <Auth />}
           {screen === "reset" && <ResetPassword onDone={() => setScreen(user ? "home" : "auth")} />}
