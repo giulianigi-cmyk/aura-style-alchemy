@@ -113,6 +113,12 @@
     "sharedLibrary": "Biblioteca compartida",
     "sharedLibraryLabel": "Compartir mi armario en la biblioteca común",
     "sharedLibraryDesc": "Tus prendas (marca, precio, etiquetas, foto) se vuelven buscables por otros miembros, de forma anónima: nadie puede ver que son tuyas. Al desactivarlo, desaparecen de futuras búsquedas, pero las prendas que otros ya importaron permanecen en su propio armario.",
+    "sharingWhatIsSharedTerm": "Qué se comparte",
+    "sharingWhatIsSharedDesc": "Solo el lado producto de cada prenda: marca, categoría, colores, materiales, etiquetas, talla, precio y una copia anónima de la foto.",
+    "sharingWhatIsNeverSharedTerm": "Qué nunca se comparte",
+    "sharingWhatIsNeverSharedDesc": "Tu nombre, cuenta, ciudad, con qué frecuencia usas algo, cuándo lo compraste y dónde lo guardas. El vínculo entre una prenda y tú se sustituye por un código irreversible guardado en el servidor.",
+    "sharingTurningOffTerm": "Desactivarlo",
+    "sharingTurningOffDesc": "Tus prendas desaparecen de futuras búsquedas y las copias anónimas de las fotos se eliminan. Las prendas que otros miembros ya importaron permanecen en su armario como copias independientes — no se eliminan.",
     "fromYourWardrobe": "De tu armario"
   },
   "community": {
