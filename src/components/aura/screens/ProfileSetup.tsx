@@ -213,7 +213,7 @@ export function ProfileSetup({ onDone }: { onDone: () => void }) {
               <div className="flex flex-wrap gap-2">
                 {STYLES.map(s => {
                   const on = styles.includes(s);
-                  return (
+                                    return (
                     <button key={s} onClick={() => toggle(styles, setStyles, s)}
                       className={`rounded-full px-4 py-2 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-card"}`}>
                       {t(`profileScreen.styleTerm.${s}`)}
