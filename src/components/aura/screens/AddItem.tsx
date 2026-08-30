@@ -1,4 +1,4 @@
-import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search } from "lucide-react";
+import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search, Clipboard } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -378,6 +378,41 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       toast.error(t("addItem.toastImportUrlFailed"));
     } finally {
       setImporting(false);
+    }
+  };
+
+  // Auto-detect a link already on the clipboard the moment this step
+  // opens — best-effort only. Most browsers require a user gesture to
+  // read the clipboard, so this silently does nothing on platforms that
+  // block it (notably iOS Safari); the explicit "Paste" button below is
+  // what makes this actually work everywhere, since a direct tap is a
+  // real user gesture. Never overwrites something already typed.
+  useEffect(() => {
+    if (step !== "url") return;
+    if (urlInput.trim()) return;
+    let cancelled = false;
+    navigator.clipboard?.readText?.()
+      .then((text) => {
+        if (cancelled) return;
+        const trimmed = text.trim();
+        if (trimmed && /^https?:\/\//i.test(trimmed)) setUrlInput(trimmed);
+      })
+      .catch(() => { /* no permission / unsupported — the manual button still works */ });
+    return () => { cancelled = true; };
+  }, [step]);
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const trimmed = text.trim();
+      if (trimmed && /^https?:\/\//i.test(trimmed)) {
+        setUrlInput(trimmed);
+      } else {
+        toast.error(t("addItem.toastClipboardNoLink"));
+      }
+    } catch (e) {
+      console.error("[AURA add-item] clipboard read failed", e);
+      toast.error(t("addItem.toastClipboardReadFailed"));
     }
   };
 
@@ -1021,6 +1056,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 autoFocus
               />
             </div>
+            <button
+              onClick={() => void pasteFromClipboard()}
+              className="mt-2 w-full h-10 rounded-full border border-dashed border-border flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98] transition"
+            >
+              <Clipboard size={12} />
+              {t("addItem.pasteFromClipboard")}
+            </button>
             <button
               onClick={handleImportUrl}
               disabled={importing || !urlInput.trim()}
