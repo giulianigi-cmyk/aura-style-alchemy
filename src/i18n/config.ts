@@ -21,10 +21,29 @@ export const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
 };
 
 // Initialized once at module load, isomorphically (runs on both the SSR
-// pass and the client). Default language is English on first paint — this
-// matches the app's existing hardcoded copy and avoids a server/client
-// hydration mismatch. Once the user's profile loads client-side, callers
-// (see Home.tsx) switch i18n to profile.language if the user has set one.
+// pass and the client). Default language is English on first paint if
+// nothing else is known yet — this matches the app's existing hardcoded
+// copy and avoids a server/client hydration mismatch. Once the user's
+// profile loads client-side, callers (see Home.tsx) switch i18n to
+// profile.language if the user has set one.
+//
+// Before that profile exists at all — someone who picked a language on
+// the pre-auth LanguagePicker screen (see LanguagePicker.tsx) but hasn't
+// finished signing up yet — there's nothing to read a preference FROM
+// except localStorage, which is why that screen writes the same key
+// this reads. Without this, closing the app mid-signup and reopening it
+// would silently revert to English regardless of what was chosen.
+function initialLanguage(): SupportedLanguage {
+  if (typeof window === "undefined") return "en";
+  try {
+    const stored = window.localStorage.getItem("aura.language");
+    if (stored && (SUPPORTED_LANGUAGES as readonly string[]).includes(stored)) {
+      return stored as SupportedLanguage;
+    }
+  } catch { /* private browsing or similar — fall through to default */ }
+  return "en";
+}
+
 if (!i18n.isInitialized) {
   void i18n.use(initReactI18next).init({
     resources: {
@@ -33,7 +52,7 @@ if (!i18n.isInitialized) {
       es: { translation: es },
       fr: { translation: fr },
     },
-    lng: "en",
+    lng: initialLanguage(),
     fallbackLng: "en",
     interpolation: { escapeValue: false },
   });
