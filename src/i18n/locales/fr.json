@@ -113,6 +113,12 @@
     "sharedLibrary": "Bibliothèque partagée",
     "sharedLibraryLabel": "Partager ma garde-robe dans la bibliothèque commune",
     "sharedLibraryDesc": "Vos pièces (marque, prix, tags, photo) deviennent consultables par les autres membres, de façon anonyme : personne ne peut voir qu'elles vous appartiennent. En désactivant, elles disparaissent des recherches futures, mais les pièces déjà importées par d'autres restent dans leur propre garde-robe.",
+    "sharingWhatIsSharedTerm": "Ce qui est partagé",
+    "sharingWhatIsSharedDesc": "Seulement le côté produit de chaque pièce : marque, catégorie, couleurs, matières, tags, taille, prix et une copie anonyme de la photo.",
+    "sharingWhatIsNeverSharedTerm": "Ce qui n'est jamais partagé",
+    "sharingWhatIsNeverSharedDesc": "Votre nom, compte, ville, la fréquence à laquelle vous portez quelque chose, quand vous l'avez acheté et où vous le rangez. Le lien entre une pièce et vous est remplacé par un code irréversible conservé sur le serveur.",
+    "sharingTurningOffTerm": "Désactiver",
+    "sharingTurningOffDesc": "Vos pièces disparaissent des recherches futures et les copies anonymes des photos sont supprimées. Les pièces déjà importées par d'autres membres restent dans leur garde-robe comme copies indépendantes — elles ne sont pas retirées.",
     "fromYourWardrobe": "De votre garde-robe"
   },
   "community": {
