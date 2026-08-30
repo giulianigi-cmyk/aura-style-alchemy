@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, RotateCcw, Check, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
 import { classifyColorSeason, type SeasonResult } from "@/lib/personal-color";
@@ -9,31 +10,17 @@ import { useProfile } from "@/hooks/use-profile";
 type Step = "instructions" | "sampling" | "result";
 type TapIndex = 0 | 1 | 2;
 
-
-
-const TAP_PROMPTS = [
-  "Tap a spot on your skin (cheek or forehead)",
-  "Tap a strand of your hair",
-  "Tap the iris of one eye",
+const TAP_PROMPT_KEYS = ["colorAnalysis.tapSkin", "colorAnalysis.tapHair", "colorAnalysis.tapEyes"] as const;
+const TAP_LABEL_KEYS = ["colorAnalysis.labelSkin", "colorAnalysis.labelHair", "colorAnalysis.labelEyes"] as const;
+const GUIDELINE_KEYS = [
+  "colorAnalysis.guideline0", "colorAnalysis.guideline1", "colorAnalysis.guideline2",
+  "colorAnalysis.guideline3", "colorAnalysis.guideline4", "colorAnalysis.guideline5",
+  "colorAnalysis.guideline6", "colorAnalysis.guideline7", "colorAnalysis.guideline8",
+  "colorAnalysis.guideline9", "colorAnalysis.guideline10",
 ] as const;
 
-const TAP_LABELS = ["Skin", "Hair", "Eyes"] as const;
-
-const GUIDELINES = [
-  "Wear a plain white T-shirt or a neutral white top",
-  "Remove makeup if possible",
-  "Tie your hair back so your face is fully visible",
-  "Remove glasses if possible",
-  "Use natural daylight",
-  "Avoid direct sunlight or strong shadows",
-  "Stand in front of a neutral white or light-colored background",
-  "Look directly at the camera",
-  "Keep a neutral facial expression",
-  "Do not use filters or beauty effects",
-  "Use the highest photo quality available",
-];
-
 export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const { update } = useProfile();
   const [step, setStep] = useState<Step>("instructions");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -84,16 +71,16 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           setSamples([auto.skin, auto.hair, auto.eye]);
           setActiveTap(0);
         } else {
-          toast("Couldn't detect your face automatically. Tap the three points manually.");
+          toast(t("colorAnalysis.couldntDetectFace"));
         }
       } catch (err) {
         console.error("[AURA] auto face analysis failed", err);
-        toast("Couldn't detect your face automatically. Tap the three points manually.");
+        toast(t("colorAnalysis.couldntDetectFace"));
       } finally {
         setAnalyzing(false);
       }
     };
-    img.onerror = () => toast.error("Couldn't load photo");
+    img.onerror = () => toast.error(t("colorAnalysis.couldntLoadPhoto"));
     img.src = imageUrl;
   }, [step, imageUrl]);
 
@@ -104,7 +91,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
 
   const onPickFile = (f: File | null) => {
     if (!f) return;
-    if (!f.type.startsWith("image/")) { toast.error("Please select an image"); return; }
+    if (!f.type.startsWith("image/")) { toast.error(t("colorAnalysis.pleaseSelectImage")); return; }
     const url = URL.createObjectURL(f);
     setImageUrl(url);
     setSamples([null, null, null]);
@@ -130,7 +117,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
     const sh = Math.min(canvas.height - sy, RADIUS * 2 + 1);
     let box: ImageData;
     try { box = ctx.getImageData(sx, sy, sw, sh); }
-    catch (err) { console.error("[AURA color-analysis] getImageData blocked", err); toast.error("Couldn't sample this photo"); return; }
+    catch (err) { console.error("[AURA color-analysis] getImageData blocked", err); toast.error(t("colorAnalysis.couldntSamplePhoto")); return; }
     const reds: number[] = [], greens: number[] = [], blues: number[] = [];
     const d = box.data;
     for (let i = 0; i < d.length; i += 4) {
@@ -180,8 +167,8 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       clarity: result.contrast, // repurposed column: now stores contrast (Alto/Medio/Basso)
     });
     setSaving(false);
-    if (error) { toast.error("Couldn't save"); return; }
-    toast.success("Saved to profile");
+    if (error) { toast.error(t("colorAnalysis.couldntSave")); return; }
+    toast.success(t("colorAnalysis.savedToProfile"));
     go("profile");
   };
 
@@ -193,28 +180,28 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
         <button
           onClick={() => step === "instructions" ? go("profile") : restart()}
-          aria-label="Back"
+          aria-label={t("colorAnalysis.backAria")}
           className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
         >
           <ArrowLeft size={15} />
         </button>
-        <p className="font-serif text-lg italic">Color analysis</p>
+        <p className="font-serif text-lg italic">{t("colorAnalysis.title")}</p>
         <span className="w-10" />
       </header>
 
       {step === "instructions" && (
         <section className="mx-6 mt-6 animate-fade-up">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Before you begin</p>
-          <h2 className="font-serif text-3xl italic mt-2">A clear photo, a truer result.</h2>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("colorAnalysis.beforeYouBegin")}</p>
+          <h2 className="font-serif text-3xl italic mt-2">{t("colorAnalysis.clearPhotoTruerResult")}</h2>
           <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-            This estimate is only as accurate as the photo. Take a moment to set the scene.
+            {t("colorAnalysis.estimateAccuracyHint")}
           </p>
 
           <ul className="mt-6 space-y-3">
-            {GUIDELINES.map((g) => (
-              <li key={g} className="flex gap-3 text-sm leading-relaxed">
+            {GUIDELINE_KEYS.map((k) => (
+              <li key={k} className="flex gap-3 text-sm leading-relaxed">
                 <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-foreground/60 shrink-0" />
-                <span className="text-foreground/80">{g}</span>
+                <span className="text-foreground/80">{t(k)}</span>
               </li>
             ))}
           </ul>
@@ -224,7 +211,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
             className="mt-8 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe"
           >
             <Camera size={14} />
-            <span className="text-[10px] uppercase tracking-[0.3em]">Continue</span>
+            <span className="text-[10px] uppercase tracking-[0.3em]">{t("colorAnalysis.continueButton")}</span>
           </button>
         </section>
       )}
@@ -232,10 +219,10 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
       {step === "sampling" && (
         <section className="mx-6 mt-6 animate-fade-up">
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-            {analyzing ? "Please wait" : `Step ${activeTap + 1} of 3`}
+            {analyzing ? t("colorAnalysis.pleaseWait") : t("colorAnalysis.stepOfThree", { n: activeTap + 1 })}
           </p>
           <p className="mt-2 font-serif italic text-xl text-center">
-            {analyzing ? "Analyzing your photo…" : TAP_PROMPTS[activeTap]}
+            {analyzing ? t("colorAnalysis.analyzingPhoto") : t(TAP_PROMPT_KEYS[activeTap])}
           </p>
 
           <div className="mt-5 rounded-3xl overflow-hidden border border-border/60 bg-secondary/40 shadow-soft relative">
@@ -269,7 +256,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
                       backgroundImage: hex ? undefined : "repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%)",
                       backgroundSize: hex ? undefined : "10px 10px" }}
                   />
-                  <span className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{TAP_LABELS[i]}</span>
+                  <span className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{t(TAP_LABEL_KEYS[i])}</span>
                   {hex && <span className="text-[9px] font-mono text-muted-foreground">{hex}</span>}
                 </button>
               );
@@ -277,7 +264,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <p className="mt-4 text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-            Tap a swatch to retake it
+            {t("colorAnalysis.tapSwatchToRetake")}
           </p>
 
           <button
@@ -286,7 +273,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
             className="mt-6 w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-40"
           >
             <Check size={14} />
-            <span className="text-[10px] uppercase tracking-[0.3em]">See result</span>
+            <span className="text-[10px] uppercase tracking-[0.3em]">{t("colorAnalysis.seeResult")}</span>
           </button>
         </section>
       )}
@@ -295,13 +282,13 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
         <section className="mx-6 mt-6 animate-fade-up">
           <div className="rounded-3xl gradient-warm border border-border/60 p-6 shadow-soft text-center">
             <span className="inline-block text-[9px] uppercase tracking-[0.35em] px-3 py-1 rounded-full bg-background/60 border border-border/60 text-muted-foreground">
-              Estimated
+              {t("colorAnalysis.estimated")}
             </span>
             <h2 className="font-serif text-4xl italic mt-3">
               {result.subgroup}
             </h2>
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-2">
-              {result.undertone} · {result.value} · Contrast {result.contrast}
+              {result.undertone} · {result.value} · {t("colorAnalysis.contrastLabel")} {result.contrast}
             </p>
 
             <p className="mt-4 text-sm leading-relaxed text-foreground/80">
@@ -311,7 +298,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
 
           <div className="mt-6 rounded-3xl bg-card border border-border/60 p-5">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center mb-3">
-              Season compatibility
+              {t("colorAnalysis.seasonCompatibility")}
             </p>
             {(Object.entries(result.compatibilityScores) as [string, number][])
               .sort((a, b) => b[1] - a[1])
@@ -328,23 +315,23 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
               ))}
             <p className="mt-3 text-[11px] text-muted-foreground italic text-center">
               {result.classificationConfidence === "Low"
-                ? "Your top seasons are close — this reading is more uncertain than usual."
+                ? t("colorAnalysis.lowConfidenceHint")
                 : result.classificationConfidence === "Moderate"
-                ? "A reasonably clear match, with some overlap with neighboring seasons."
-                : "A clear, decisive match."}
-              {result.sampleQuality !== "Good" && " The extracted samples also looked less clean than ideal — retaking in even, natural light may help."}
+                ? t("colorAnalysis.moderateConfidenceHint")
+                : t("colorAnalysis.clearConfidenceHint")}
+              {result.sampleQuality !== "Good" && " " + t("colorAnalysis.sampleQualityHint")}
             </p>
           </div>
 
           <div className="mt-6 rounded-3xl bg-card border border-border/60 p-5">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">
-              Sampled from your photo
+              {t("colorAnalysis.sampledFromPhoto")}
             </p>
             <div className="mt-3 grid grid-cols-3 gap-3">
               {samples.map((hex, i) => (
                 <div key={i} className="flex flex-col items-center gap-2">
                   <div className="h-14 w-14 rounded-full border border-white/60 shadow-soft" style={{ background: hex ?? "#eee" }} />
-                  <span className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{TAP_LABELS[i]}</span>
+                  <span className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">{t(TAP_LABEL_KEYS[i])}</span>
                   <span className="text-[9px] font-mono text-muted-foreground">{hex}</span>
                 </div>
               ))}
@@ -352,7 +339,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <div className="mt-6">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Your best colors</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("colorAnalysis.yourBestColors")}</p>
             {(Object.entries(result.palette) as [string, string[]][])
               .filter(([, hexes]) => hexes.length > 0)
               .map(([family, hexes]) => (
@@ -368,7 +355,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <div className="mt-5">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Neutrals for you</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("colorAnalysis.neutralsForYou")}</p>
             <div className="grid grid-cols-6 gap-1.5">
               {result.neutrals.map((hex) => (
                 <div key={hex} className="aspect-square rounded-full border border-white/40 shadow-soft" style={{ background: hex }} />
@@ -377,7 +364,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <div className="mt-5">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Accent colors</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("colorAnalysis.accentColors")}</p>
             <div className="grid grid-cols-6 gap-1.5">
               {result.accents.map((hex) => (
                 <div key={hex} className="aspect-square rounded-full border border-white/40 shadow-soft" style={{ background: hex }} />
@@ -386,10 +373,9 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <div className="mt-5">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Less harmonious for you</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("colorAnalysis.lessHarmoniousForYou")}</p>
             <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
-              Not off-limits — armocromia is a guide, not a rule. These just need a bit more care: worn away from
-              the face, mixed with a color that suits you, or as a shoe, bag, or pattern accent.
+              {t("colorAnalysis.lessHarmoniousHint")}
             </p>
             <div className="grid grid-cols-6 gap-1.5">
               {result.lessHarmonious.map((hex) => (
@@ -399,7 +385,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
           </div>
 
           <div className="mt-5 rounded-2xl bg-secondary/40 p-4 flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Best metal</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("colorAnalysis.bestMetal")}</p>
             <p className="font-serif text-lg italic">{result.metal}</p>
           </div>
 
@@ -409,7 +395,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
               className="h-12 rounded-full border border-border flex items-center justify-center gap-2 active:scale-[0.98] transition"
             >
               <RotateCcw size={14} />
-              <span className="text-[10px] uppercase tracking-[0.3em]">Retake</span>
+              <span className="text-[10px] uppercase tracking-[0.3em]">{t("colorAnalysis.retake")}</span>
             </button>
             <button
               onClick={saveToProfile}
@@ -417,7 +403,7 @@ export function PersonalColorAnalysis({ go }: { go: (s: Screen) => void }) {
               className="h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              <span className="text-[10px] uppercase tracking-[0.3em]">Save to profile</span>
+              <span className="text-[10px] uppercase tracking-[0.3em]">{t("colorAnalysis.saveToProfileButton")}</span>
             </button>
           </div>
         </section>
