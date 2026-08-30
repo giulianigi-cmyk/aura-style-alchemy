@@ -555,7 +555,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
                     onClick={() => setCopyTargets(new Set(others.map((d) => d.id)))}
                     className="mt-2 self-start text-[10px] uppercase tracking-[0.2em] text-muted-foreground underline shrink-0"
                   >{t("batchReview.selectAll", { count: others.length })}</button>
-                  <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-2 pb-4">
+                  <div className="mt-3 overflow-y-auto grid grid-cols-2 gap-2 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                     {others.map((d) => {
                       const on = copyTargets.has(d.id);
                       const label = [d.colors[0], d.subcategory || d.category].filter(Boolean).join(" ") || t("batchReview.untitledPiece");
