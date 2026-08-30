@@ -106,4 +106,432 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
         setStyles(profile.style_preferences ?? []);
   }, [profile]);
 
-  const toggle = (list: string[], setList: (v: string[]) => void,
+  const toggle = (list: string[], setList: (v: string[]) => void, v: string) =>
+    setList(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
+
+    const save = async () => {
+    setSaving(true); setErr(null);
+    const { error } = await update({
+      full_name: fullName.trim() || null,
+      profession: profession.trim() || null,
+      bio: bio.trim() || null,
+            style_preferences: styles,
+      setup_complete: true,
+    } as never);
+    setSaving(false);
+    if (error) { setErr(error); toast.error(t("profileScreen.couldntSaveProfile")); return; }
+    toast.success(t("profileScreen.profileUpdated"));
+    setEditing(false);
+  };
+
+  const onPickAvatar = (f: File | null) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error(t("profileScreen.pleaseSelectImage")); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => toast.error(t("profileScreen.couldntReadImage"));
+    reader.readAsDataURL(f);
+  };
+
+  const onCropSave = async (blob: Blob) => {
+    setUploading(true); setErr(null);
+    const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const { error } = await uploadAvatar(file);
+    setUploading(false);
+    setCropSrc(null);
+    if (error) { setErr(error); toast.error(t("profileScreen.uploadFailed")); }
+    else toast.success(t("profileScreen.profilePhotoUpdated"));
+  };
+
+  const openEditPhoto = () => {
+    if (!avatarUrl && !profile?.avatar_url) { fileRef.current?.click(); return; }
+    setCropSrc(avatarUrl || profile?.avatar_url || null);
+  };
+
+  const avatarSrc = avatarUrl || profile?.avatar_url || null;
+  const displayName = profile?.full_name || t("profileScreen.yourName");
+  const meta = [profile?.city, profile?.season].filter(Boolean).join(" · ");
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 size={18} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto no-scrollbar pb-28">
+      {qrOpen && <QrFullscreen userId={user?.id} onClose={() => setQrOpen(false)} />}
+      {cropSrc && (
+        <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={onCropSave} />
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { onPickAvatar(e.target.files?.[0] ?? null); if (fileRef.current) fileRef.current.value = ""; }} />
+
+      <header className="px-6 pt-14 pb-2 flex items-center justify-between">
+       <button
+          onClick={async () => {
+            const who = profile?.full_name || "me";
+            const result = await nativeShareText({
+              title: "AURA",
+              text: `Follow ${who} on AURA — download the app:`,
+              url: AURA_APP_URL,
+            });
+            if (result === "copied") toast.success(t("profileScreen.linkCopied"));
+            if (result === "failed") toast.error(t("profileScreen.couldntShareRightNow"));
+          }}
+          aria-label={t("profileScreen.shareProfileAria")}
+          className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+        ><Share2 size={15} /></button>
+        <h1 className="font-serif text-lg italic">{t("profileScreen.profile")}</h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => editing ? setEditing(false) : setEditing(true)}
+            aria-label={editing ? t("profileScreen.cancelEditingProfileAria") : t("profileScreen.editProfileAria")}
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          >
+            {editing ? <X size={15} /> : <Pencil size={14} />}
+          </button>
+          <button
+            onClick={() => setQrOpen(true)}
+            aria-label={t("profileScreen.myQrCodeAria")}
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          ><QrCode size={15} /></button>
+          <button
+            onClick={() => _go("settings")}
+            aria-label={t("profileScreen.settingsAria")}
+            className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
+          ><SettingsIcon size={15} /></button>
+        </div>
+      </header>
+
+      {/* Identity */}
+      <section className="mt-4 flex flex-col items-center text-center px-6">
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="relative h-24 w-24 rounded-full p-[3px] bg-gradient-to-br from-[var(--champagne)] to-[var(--taupe)] animate-scale-in active:scale-95 transition"
+        >
+          {avatarSrc ? (
+            <img src={avatarSrc} alt="" className="h-full w-full rounded-full object-cover border-2 border-background" />
+          ) : (
+            <div className="h-full w-full rounded-full bg-secondary/80 border-2 border-background flex items-center justify-center">
+              <User size={32} className="text-muted-foreground" strokeWidth={1.5} />
+            </div>
+          )}
+          <span className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center shadow-luxe">
+            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+          </span>
+        </button>
+        <button
+          onClick={openEditPhoto}
+          className="mt-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:text-foreground transition"
+        >
+          {t("profileScreen.editPhoto")}
+        </button>
+
+        {editing ? (
+          <input
+            value={fullName} onChange={e => setFullName(e.target.value)}
+            placeholder={t("profileScreen.fullNamePlaceholder")}
+            className="mt-4 bg-transparent border-b border-border text-center font-serif text-3xl outline-none focus:border-foreground transition w-[80%]"
+          />
+        ) : (
+          <h1 className="font-serif text-3xl mt-3">{displayName}</h1>
+        )}
+        <MyUsername userId={user?.id} />
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-1">
+          {meta || t("profileScreen.tapEditToComplete")}
+        </p>
+
+        <ProfileSocial
+          openThread={openConversation}
+        />
+
+      </section>
+
+      {/* Editable details */}
+      {editing && (
+        <section className="mx-6 mt-6 rounded-3xl gradient-warm border border-border/60 p-5 space-y-5 animate-fade-up">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileScreen.professionRole")}</p>
+            <input
+              value={profession} onChange={e => setProfession(e.target.value)}
+              placeholder={t("profileScreen.professionPlaceholder")}
+              className="mt-1 w-full bg-transparent border-b border-border py-1.5 text-sm outline-none focus:border-foreground transition"
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileScreen.stylePreferences")}</p>
+              <button onClick={() => setInfoPopup("style")} aria-label={t("profileScreen.whatDoTermsMeanAria")} className="text-muted-foreground active:scale-90">
+                <Info size={12} />
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {STYLES.map(s => {
+                const on = styles.includes(s);
+                return (
+                  <button key={s} onClick={() => toggle(styles, setStyles, s)}
+                    className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
+                    {t(`profileScreen.styleTerm.${s}`)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileScreen.bio")}</p>
+            <textarea
+              value={bio} onChange={e => setBio(e.target.value)} rows={3} maxLength={240}
+              placeholder={t("profileScreen.bioPlaceholder")}
+              className="mt-1 w-full bg-transparent border-b border-border py-2 text-sm outline-none focus:border-foreground transition resize-none"
+            />
+            <p className="text-right text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{bio.length}/240</p>
+          </div>
+
+          {err && <p className="text-xs text-red-700">{err}</p>}
+
+          <button
+            onClick={save} disabled={saving}
+            className="w-full h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 active:scale-[0.98] transition shadow-luxe disabled:opacity-60"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            <span className="text-[10px] uppercase tracking-[0.3em]">{t("profileScreen.saveChanges")}</span>
+          </button>
+
+          {infoPopup && (
+            <div
+              className="fixed inset-0 z-[90] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+              onClick={() => setInfoPopup(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-luxe max-h-[70vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-serif text-lg italic">{t("profileScreen.styleTerms")}</p>
+                  <button
+                    onClick={() => setInfoPopup(null)}
+                    aria-label={t("profileScreen.closeAria")}
+                    className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+                  ><X size={14} /></button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {STYLE_DEFINITIONS.map((d) => (
+                    <div key={d.term}>
+                      <p className="text-sm font-medium">{t(`profileScreen.styleTerm.${d.term}`)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t(`profileScreen.styleDesc.${d.term}`)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Read-only summary chips */}
+      {!editing && (
+        <>
+          
+          {profile?.bio && (
+            <section className="mx-6 mt-6 animate-fade-up">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("profileScreen.bio")}</p>
+                            <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">{profile.bio}</p>
+            </section>
+          )}
+          {(profile?.style_preferences?.length ?? 0) > 0 && (
+            <section className="mx-6 mt-6 animate-fade-up">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("profileScreen.style")}</p>
+              <div className="flex flex-wrap gap-2">
+                {profile!.style_preferences!.map(s => (
+                  <span key={s} className="rounded-full px-3 py-1.5 text-xs bg-secondary/60">{t(`profileScreen.styleTerm.${s}`)}</span>
+                ))}
+              </div>
+            </section>
+          )}
+          <MyBrands />
+
+          {/* Color analysis */}
+          <button
+            onClick={() => _go("color-analysis")}
+            className="mx-6 mt-6 w-[calc(100%-3rem)] text-left rounded-3xl gradient-warm border border-border/60 p-6 shadow-soft animate-fade-up active:scale-[0.99] transition"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("profileScreen.colorAnalysis")}</p>
+                <h2 className="font-serif text-3xl italic mt-1">
+                  {profile?.season || t("profileScreen.discoverYourSeason")}
+                </h2>
+                {profile?.season ? (
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                    {t("profileScreen.estimated")}{[profile?.value, profile?.clarity].filter(Boolean).length ? ` · ${[profile?.value, profile?.clarity].filter(Boolean).join(" · ")}` : ""}
+                  </p>
+                ) : null}
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1 shrink-0">
+                {profile?.season ? t("profileScreen.retake") : t("profileScreen.start")} <ChevronRight size={12} />
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-foreground/70 mt-3">
+              {t("profileScreen.colorAnalysisHint")}
+            </p>
+          </button>
+
+                    <WeatherPanel />
+
+
+          {/* Menu */}
+          <section className="mx-6 mt-6 divide-y divide-border/60 rounded-2xl bg-background border border-border/60 overflow-hidden">
+            {([
+              { l: t("profileScreen.wardrobeInsights"), s: "insights" as Screen },
+              { l: t("profileScreen.savedOutfits"), s: "saved-outfits" as Screen },
+              { l: t("profileScreen.community"), s: "community" as Screen },
+              { l: t("profileScreen.notifications"), s: "notifications" as Screen },
+              { l: t("profileScreen.inviteFriends"), s: "invite" as Screen },
+
+                       ]).map(({ l, s }) => (
+              <button key={l} onClick={() => _go(s)} className="w-full flex items-center justify-between px-5 py-4 active:bg-secondary/40 transition">
+                <span className="text-sm flex items-center gap-2">
+                  {l}
+                  {s === "notifications" && unreadCount > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-[var(--champagne)]" />
+                  )}
+                </span>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </button>
+            ))}
+
+          </section>
+        </>
+      )}
+
+      <div className="px-6 mt-6">
+        <p className="text-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">{user?.email}</p>
+        <button
+          onClick={signOut}
+          className="w-full h-12 rounded-full border border-border flex items-center justify-center gap-2 text-xs uppercase tracking-[0.3em] active:scale-[0.98]"
+        >
+          <LogOut size={14} /> {t("profileScreen.signOut")}
+        </button>
+        <button
+          onClick={() => _go("storage-debug")}
+          className="w-full h-10 mt-3 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground active:scale-[0.98]"
+        >
+          {t("profileScreen.storageDebugTemp")}
+        </button>
+      </div>
+
+
+      <p className="text-center mt-8 text-[9px] uppercase tracking-[0.4em] text-muted-foreground">aura · v 1.0</p>
+    </div>
+  );
+}
+
+function MyUsername({ userId }: { userId: string | undefined }) {
+  const { t } = useTranslation();
+  const [username, setUsername] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const valid = USERNAME_RE.test(value);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+      if (!cancelled) {
+        setUsername((data as { username?: string | null } | null)?.username ?? null);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!editing || !valid || value === username) { setAvailable(null); return; }
+    setChecking(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("username_available", { _username: value });
+      setChecking(false);
+      setAvailable(error ? null : Boolean(data));
+    }, 400);
+    return () => { clearTimeout(t); setChecking(false); };
+  }, [value, valid, editing, username]);
+
+  const startEdit = () => { setValue(username ?? ""); setEditing(true); };
+
+  const save = async () => {
+    if (!userId) return;
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({ username: value } as never).eq("id", userId);
+    setSaving(false);
+    if (error) {
+      if (error.code === "23505") { setAvailable(false); toast.error(t("profileScreen.usernameNoLongerAvailable")); }
+      else toast.error(error.message);
+      return;
+    }
+    setUsername(value);
+    setEditing(false);
+    toast.success(t("profileScreen.usernameSaved"));
+  };
+
+  const unchanged = value === username;
+
+  return (
+    <div className="mt-1">
+      {!editing ? (
+        <button
+          onClick={startEdit}
+          className="flex items-center justify-center gap-1.5 mx-auto active:opacity-70 transition"
+        >
+          <span className="font-serif italic text-sm text-muted-foreground">
+            {loading ? "" : username ? `@${username}` : t("profileScreen.setAUsername")}
+          </span>
+          <Pencil size={11} className="text-muted-foreground" />
+        </button>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5 mt-1">
+          <div className="flex items-center gap-1.5">
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder={t("profileScreen.usernamePlaceholder")}
+              autoFocus
+              className="bg-secondary/60 rounded-full px-3 py-1 text-xs outline-none placeholder:text-muted-foreground w-32 text-center"
+            />
+            <button
+              onClick={() => void save()}
+              disabled={!valid || saving || (!unchanged && available !== true)}
+              aria-label={t("profileScreen.saveUsernameAria")}
+              className="h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center active:scale-90 disabled:opacity-40"
+            >
+              {saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              aria-label={t("profileScreen.cancelAria")}
+              className="h-6 w-6 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
+            ><X size={10} /></button>
+          </div>
+          <p className="text-[10px] text-muted-foreground h-3">
+            {value.length === 0 ? "" :
+              !valid ? t("profileScreen.usernameHint") :
+              unchanged ? "" :
+              checking ? t("profileScreen.checking") :
+              available === true ? t("profileScreen.available") :
+              available === false ? t("profileScreen.alreadyTaken") : ""}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
