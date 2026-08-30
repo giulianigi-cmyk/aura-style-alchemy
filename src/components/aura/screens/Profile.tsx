@@ -272,7 +272,7 @@ export function Profile({ go: _go, openConversation, openUserProfile }: { go: (s
               {STYLES.map(s => {
                 const on = styles.includes(s);
                 return (
-                  <button key={s} onClick={() => toggle(styles, setStyles, s)}
+                                      {t(`profileScreen.styleTerm.${s}`)}
                     className={`rounded-full px-3 py-1.5 text-xs border transition ${on ? "bg-foreground text-background border-foreground" : "border-border bg-background"}`}>
                     {s}
                   </button>
