@@ -123,15 +123,41 @@ export async function suggestOutfitCore(params: {
   // solo come testo nel prompt, che il modello può ignorare in silenzio.
   const isWorkOccasionForPrefs = (params.occasion ?? "").toLowerCase().startsWith("work");
   const { data: prefsRow } = await (params.supabase.from("profiles" as never) as any)
-    .select(isWorkOccasionForPrefs ? "dress_preferences, work_dress_preferences" : "dress_preferences")
+    .select(isWorkOccasionForPrefs ? "dress_preferences, work_dress_preferences, work_dress_code" : "dress_preferences")
     .eq("id", params.userId).maybeSingle();
-  const prefsRowTyped = prefsRow as { dress_preferences?: DressPreferences; work_dress_preferences?: DressPreferences } | null;
+  const prefsRowTyped = prefsRow as { dress_preferences?: DressPreferences; work_dress_preferences?: DressPreferences; work_dress_code?: string | null } | null;
   const activeDressPrefs: DressPreferences | null =
     isWorkOccasionForPrefs && hasAnyPreference(prefsRowTyped?.work_dress_preferences)
       ? prefsRowTyped!.work_dress_preferences!
       : (prefsRowTyped?.dress_preferences ?? null);
   if (activeDressPrefs) {
     eligibleItems = eligibleItems.filter((it) => isItemAllowedByDressPreferences(it, activeDressPrefs));
+  }
+
+  // Work dress code (from Style Preferences) sets an acceptable formality
+  // RANGE for a Work outfit, same mapping as the Outfit Engine spec
+  // (Business Casual ~3, Business Formal ~4, etc). Only ever narrows the
+  // catalog for a Work occasion, and only ever excludes items that HAVE
+  // an explicit formality tag outside the range — an item with no
+  // formality set yet (not all wardrobes are fully reanalyzed) is never
+  // excluded on this basis, since that would be penalizing missing data
+  // rather than an actual mismatch. "None" and "Uniform" apply no
+  // constraint at all — a specified uniform makes formality irrelevant,
+  // and "None" means the person hasn't set a floor/ceiling.
+  const WORK_DRESS_CODE_FORMALITY_RANGE: Record<string, [number, number] | null> = {
+    "None": null,
+    "Casual": [1, 2],
+    "Smart Casual": [2, 3],
+    "Business Casual": [3, 4],
+    "Business Formal": [4, 5],
+    "Uniform": null,
+  };
+  if (isWorkOccasionForPrefs && prefsRowTyped?.work_dress_code) {
+    const range = WORK_DRESS_CODE_FORMALITY_RANGE[prefsRowTyped.work_dress_code] ?? null;
+    if (range) {
+      const [min, max] = range;
+      eligibleItems = eligibleItems.filter((it) => it.formality == null || (it.formality >= min && it.formality <= max));
+    }
   }
 
   // Excluding items already used earlier in a multi-day batch is how
