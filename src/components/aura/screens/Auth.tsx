@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/use-auth";
 import { Sparkles, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { LanguagePicker } from "./LanguagePicker";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -9,6 +10,15 @@ export function Auth() {
   const { t } = useTranslation();
   const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
+  // The language picker is shown exactly once, the moment someone taps
+  // "New to AURA? Create account" for the first time — not on every app
+  // open (that was the earlier, buggy placement: a standalone pre-splash
+  // screen re-triggered on every launch whenever the persisted flag
+  // didn't stick). Tied directly to account creation instead, and
+  // skipped entirely if the flag is already set (e.g. reinstalling the
+  // app after already picking a language once).
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const languageAlreadyChosen = typeof window !== "undefined" && localStorage.getItem("aura.language_chosen") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -115,13 +125,23 @@ export function Auth() {
 
         {mode !== "forgot" && (
           <button
-            onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); reset(); }}
+            onClick={() => {
+              const goingToSignup = mode === "signin";
+              setMode(goingToSignup ? "signup" : "signin");
+              reset();
+              if (goingToSignup && !languageAlreadyChosen) setShowLanguagePicker(true);
+            }}
             className="mt-6 text-xs text-muted-foreground tracking-wide"
           >
             {mode === "signin" ? t("auth.newToAura") : t("auth.alreadyMember")}
           </button>
         )}
       </div>
+      {showLanguagePicker && (
+        <div className="fixed inset-0 z-[100]">
+          <LanguagePicker onDone={() => setShowLanguagePicker(false)} />
+        </div>
+      )}
     </div>
   );
 }
