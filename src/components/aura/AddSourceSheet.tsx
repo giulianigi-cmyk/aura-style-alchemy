@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Camera, Images, Plus, Sparkles } from "lucide-react";
 
 export type AddSourceChoice = "add" | "outfit-scan" | "batch-scan";
@@ -17,6 +18,7 @@ export function AddSourceSheet({
   onClose: () => void;
   onChoose: (choice: AddSourceChoice) => void;
 }) {
+  const { t } = useTranslation();
   const [level, setLevel] = useState<1 | 2>(1);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function AddSourceSheet({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Add pieces"
+      aria-label={t("addSourceSheet.addPiecesAria")}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -41,14 +43,14 @@ export function AddSourceSheet({
           {level === 2 && (
             <button
               onClick={() => setLevel(1)}
-              aria-label="Back"
+              aria-label={t("addSourceSheet.backAria")}
               className="h-8 w-8 rounded-full border border-border flex items-center justify-center active:scale-90"
             >
               <ArrowLeft size={14} />
             </button>
           )}
           <p className="font-serif italic text-lg">
-            {level === 1 ? "Add to your closet" : "Scan several pieces"}
+            {level === 1 ? t("addSourceSheet.addToYourCloset") : t("addSourceSheet.scanSeveralPieces")}
           </p>
         </div>
 
@@ -60,8 +62,8 @@ export function AddSourceSheet({
             >
               <Plus size={18} />
               <div>
-                <p className="text-sm font-medium">Add one piece</p>
-                <p className="text-xs text-muted-foreground">One item at a time, with full details</p>
+                <p className="text-sm font-medium">{t("addSourceSheet.addOnePiece")}</p>
+                <p className="text-xs text-muted-foreground">{t("addSourceSheet.addOnePieceHint")}</p>
               </div>
             </button>
             <button
@@ -70,8 +72,8 @@ export function AddSourceSheet({
             >
               <Sparkles size={18} />
               <div>
-                <p className="text-sm font-medium">Scan several pieces</p>
-                <p className="text-xs text-muted-foreground">Up to 150 photos together, fast</p>
+                <p className="text-sm font-medium">{t("addSourceSheet.scanSeveralPieces")}</p>
+                <p className="text-xs text-muted-foreground">{t("addSourceSheet.scanSeveralPiecesHint")}</p>
               </div>
             </button>
           </>
@@ -83,8 +85,8 @@ export function AddSourceSheet({
             >
               <Camera size={18} />
               <div>
-                <p className="text-sm font-medium">Scan one outfit</p>
-                <p className="text-xs text-muted-foreground">One photo, multiple items detected at once</p>
+                <p className="text-sm font-medium">{t("addSourceSheet.scanOneOutfit")}</p>
+                <p className="text-xs text-muted-foreground">{t("addSourceSheet.scanOneOutfitHint")}</p>
               </div>
             </button>
             <button
@@ -93,8 +95,8 @@ export function AddSourceSheet({
             >
               <Images size={18} />
               <div>
-                <p className="text-sm font-medium">Batch scan photos</p>
-                <p className="text-xs text-muted-foreground">Up to 150 photos at once, processed in the background</p>
+                <p className="text-sm font-medium">{t("addSourceSheet.batchScanPhotos")}</p>
+                <p className="text-xs text-muted-foreground">{t("addSourceSheet.batchScanPhotosHint")}</p>
               </div>
             </button>
           </>
