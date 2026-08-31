@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,6 +51,7 @@ type Handle = "move" | "nw" | "ne" | "sw" | "se";
  *  (works the same for mouse and finger — same approach as the Color Lab's
  *  tap-to-sample canvas). No aspect-ratio lock: garments aren't square. */
 export function ItemCropAdjuster({ src, initialBox, onCancel, onSave }: Props) {
+  const { t } = useTranslation();
   const [box, setBox] = useState<FractionalBox>(
     initialBox ?? { x: 0.2, y: 0.15, width: 0.6, height: 0.6 },
   );
@@ -106,7 +108,7 @@ export function ItemCropAdjuster({ src, initialBox, onCancel, onSave }: Props) {
       await onSave({ dataUrl, box });
     } catch (e) {
       console.error("[AURA crop-adjust] failed", e);
-      toast.error("Couldn't apply that crop — please try again.");
+      toast.error(t("itemCropAdjuster.couldntApplyCrop"));
     } finally {
       setSaving(false);
     }
@@ -115,7 +117,7 @@ export function ItemCropAdjuster({ src, initialBox, onCancel, onSave }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[80] bg-black flex flex-col">
       <div className="px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-3 text-center shrink-0">
-        <p className="text-white text-[10px] uppercase tracking-[0.3em]">Drag the corners to fix the crop</p>
+        <p className="text-white text-[10px] uppercase tracking-[0.3em]">{t("itemCropAdjuster.dragCorners")}</p>
       </div>
       <div className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden">
         <div
@@ -150,13 +152,13 @@ export function ItemCropAdjuster({ src, initialBox, onCancel, onSave }: Props) {
           <button
             onClick={onCancel} disabled={saving}
             className="flex-1 h-12 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-60"
-          >Cancel</button>
+          >{t("itemCropAdjuster.cancel")}</button>
           <button
             onClick={handleSave} disabled={saving}
             className="flex-1 h-12 rounded-full bg-foreground text-background flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-60"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-            Use this crop
+            {t("itemCropAdjuster.useThisCrop")}
           </button>
         </div>
       </div>
