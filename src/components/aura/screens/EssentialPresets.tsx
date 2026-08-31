@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Plus, X, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -11,6 +12,7 @@ import {
 type PresetWithItems = EssentialPreset & { items: EssentialPresetItem[] };
 
 export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const [presets, setPresets] = useState<PresetWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
       setAddingPreset(false);
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't create preset");
+      toast.error(e instanceof Error ? e.message : t("essentialPresets.couldntCreatePreset"));
     }
   };
 
@@ -44,9 +46,9 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
     try {
       await deleteEssentialPreset({ data: { presetId: id } });
       setPresets((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Preset removed");
+      toast.success(t("essentialPresets.presetRemoved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't remove preset");
+      toast.error(e instanceof Error ? e.message : t("essentialPresets.couldntRemovePreset"));
     }
   };
 
@@ -64,7 +66,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
       const res = await addPresetItem({ data: { presetId, name, category, quantity: 1 } });
       setPresets((prev) => prev.map((p) => (p.id === presetId ? { ...p, items: [...p.items, res.item] } : p)));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't add item");
+      toast.error(e instanceof Error ? e.message : t("essentialPresets.couldntAddItem"));
       setNewItemName(name); // give it back so nothing is lost
       setNewItemCategory(category ?? "");
     } finally {
@@ -80,7 +82,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
     } catch (e) {
       console.error("[AURA essentials] remove item failed", e);
       setPresets(prevPresets); // roll back
-      toast.error("Couldn't remove that item");
+      toast.error(t("essentialPresets.couldntRemoveItem"));
     }
   };
 
@@ -91,12 +93,12 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Trip planner</p>
-          <h1 className="font-serif text-3xl mt-1">My essentials</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("essentialPresets.tripPlanner")}</p>
+          <h1 className="font-serif text-3xl mt-1">{t("essentialPresets.myEssentials")}</h1>
         </div>
       </header>
       <p className="px-6 mt-2 text-xs text-muted-foreground">
-        Reusable lists — "Always", "Business", "Beach" — you can apply to any trip in one tap. Every change here saves right away.
+        {t("essentialPresets.hint")}
       </p>
 
       {loading ? (
@@ -110,24 +112,24 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
                 <button onClick={() => setOpenId(isOpen ? null : p.id)} className="w-full p-4 flex items-center justify-between text-left">
                   <div>
                     <p className="font-serif text-lg">{p.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{p.items.length} item{p.items.length === 1 ? "" : "s"}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("essentialPresets.itemsCount", { count: p.items.length })}</p>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePreset(p.id); }}
-                    aria-label={`Delete ${p.name}`}
+                    aria-label={t("essentialPresets.deleteAria", { name: p.name })}
                     className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"
                   ><Trash2 size={13} /></button>
                 </button>
                 {isOpen && (
                   <div className="px-4 pb-4 space-y-2 border-t border-border/40 pt-3">
                     {p.items.length === 0 && (
-                      <p className="text-xs text-muted-foreground pb-1">Nothing here yet.</p>
+                      <p className="text-xs text-muted-foreground pb-1">{t("essentialPresets.nothingHereYet")}</p>
                     )}
                     {p.items.map((it) => (
                       <div key={it.id} className="flex items-center gap-2 rounded-full bg-secondary/40 px-3 py-2">
                         {it.category && <span className="text-[10px] uppercase tracking-widest text-muted-foreground shrink-0">{it.category}</span>}
                         <span className="flex-1 text-sm truncate">{it.name}{it.quantity > 1 ? ` ×${it.quantity}` : ""}</span>
-                        <button onClick={() => void removeItem(p.id, it.id)} aria-label={`Remove ${it.name}`} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
+                        <button onClick={() => void removeItem(p.id, it.id)} aria-label={t("essentialPresets.removeAria", { name: it.name })} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
                           <X size={13} />
                         </button>
                       </div>
@@ -136,20 +138,20 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
                       <input
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
-                        placeholder="Category (optional)"
+                        placeholder={t("essentialPresets.categoryOptional")}
                         className="w-28 bg-secondary/40 rounded-full px-3 py-2 text-xs outline-none placeholder:text-muted-foreground"
                       />
                       <input
                         value={newItemName}
                         onChange={(e) => setNewItemName(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && void addItem(p.id)}
-                        placeholder="Add item…"
+                        placeholder={t("essentialPresets.addItemPlaceholder")}
                         className="flex-1 bg-secondary/40 rounded-full px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
                       />
                       <button
                         onClick={() => void addItem(p.id)}
                         disabled={addingItem}
-                        aria-label="Add item"
+                        aria-label={t("essentialPresets.addItemAria")}
                         className="h-8 w-8 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 disabled:opacity-60"
                       >
                         {addingItem ? <Loader2 size={12} className="animate-spin" /> : <Plus size={14} />}
@@ -168,7 +170,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
                 value={newPresetName}
                 onChange={(e) => setNewPresetName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void addPreset()}
-                placeholder="e.g. Business, Beach, Ski"
+                placeholder={t("essentialPresets.newPresetPlaceholder")}
                 className="flex-1 bg-secondary/40 rounded-full px-4 py-2 text-sm outline-none placeholder:text-muted-foreground"
               />
               <button onClick={() => void addPreset()} className="h-9 w-9 rounded-full bg-foreground text-background flex items-center justify-center shrink-0"><Plus size={14} /></button>
@@ -178,7 +180,7 @@ export function EssentialPresets({ go }: { go: (s: Screen) => void }) {
             <button
               onClick={() => setAddingPreset(true)}
               className="w-full h-12 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-            ><Plus size={14} /> New preset</button>
+            ><Plus size={14} /> {t("essentialPresets.newPreset")}</button>
           )}
         </div>
       )}
