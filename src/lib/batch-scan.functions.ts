@@ -279,10 +279,36 @@ export const listBatchScans = createServerFn({ method: "GET" })
       }
     }
 
-    return (scans ?? []).map((s) => ({
-      ...s,
-      jobCounts: countsByScan[s.id] ?? { queued: 0, processing: 0, done: 0, failed: 0 },
-    }));
+    // A batch whose photos are all finished processing AND has nothing
+    // left with status="pending" in scan_detected_items has already been
+    // fully confirmed or rejected, item by item — there is nothing left
+    // to review, so it should disappear from "I tuoi batch" instead of
+    // sitting there forever with a "Rivedi" button that opens an empty
+    // screen. Only a live count (not a stored flag) reflects this
+    // correctly, since items get confirmed/rejected one at a time.
+    const pendingByScan: Record<string, number> = {};
+    if (ids.length) {
+      const { data: pendingRows, error: pendingErr } = await context.supabase
+        .from("scan_detected_items")
+        .select("scan_id")
+        .in("scan_id", ids)
+        .eq("status", "pending");
+      if (pendingErr) throw new Error(pendingErr.message);
+      for (const row of pendingRows ?? []) {
+        pendingByScan[row.scan_id] = (pendingByScan[row.scan_id] ?? 0) + 1;
+      }
+    }
+
+    return (scans ?? [])
+      .map((s) => ({
+        ...s,
+        jobCounts: countsByScan[s.id] ?? { queued: 0, processing: 0, done: 0, failed: 0 },
+        pendingReviewCount: pendingByScan[s.id] ?? 0,
+      }))
+      .filter((s) => {
+        const stillProcessing = s.jobCounts.queued > 0 || s.jobCounts.processing > 0;
+        return stillProcessing || s.pendingReviewCount > 0;
+      });
   });
 
 export const getBatchScan = createServerFn({ method: "POST" })
