@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Download, Loader2, Share2, QrCode as QrIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AURA_APP_URL, dataUrlToBlob, downloadBlob, nativeShareFile, nativeShareText } from "@/lib/aura-share";
+import i18n from "@/i18n/config";
 
 export function addFriendUrl(username: string) {
   const origin = typeof window !== "undefined" && window.location.origin.includes("lovable.app")
@@ -54,12 +56,13 @@ async function shareQr(dataUrl: string, username: string) {
   const text = `Add me on AURA — @${username}`;
   if (await nativeShareFile(file, `${text}\n${addFriendUrl(username)}`)) return;
   const res = await nativeShareText({ title: "AURA", text, url: addFriendUrl(username) });
-  if (res === "copied") toast.success("Link copied");
-  if (res === "failed") toast.error("Couldn't share right now");
+  if (res === "copied") toast.success(i18n.t("myQrCode.linkCopied"));
+  if (res === "failed") toast.error(i18n.t("myQrCode.couldntShareRightNow"));
 }
 
 /** Fullscreen dedicated QR view. */
 export function QrFullscreen({ userId, onClose }: { userId: string | undefined; onClose: () => void }) {
+  const { t } = useTranslation();
   const { username, loading } = useMyUsername(userId);
   const dataUrl = useQrDataUrl(username);
 
@@ -68,10 +71,10 @@ export function QrFullscreen({ userId, onClose }: { userId: string | undefined; 
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
         <button
           onClick={onClose}
-          aria-label="Back"
+          aria-label={t("myQrCode.backAria")}
           className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90"
         ><ArrowLeft size={16} /></button>
-        <h1 className="font-serif text-lg italic">My QR</h1>
+        <h1 className="font-serif text-lg italic">{t("myQrCode.myQr")}</h1>
         <span className="h-10 w-10" />
       </header>
 
@@ -79,12 +82,12 @@ export function QrFullscreen({ userId, onClose }: { userId: string | undefined; 
         {loading ? (
           <Loader2 size={18} className="animate-spin text-muted-foreground" />
         ) : !username ? (
-          <p className="text-sm text-muted-foreground">Set a username in your profile to get your QR code.</p>
+          <p className="text-sm text-muted-foreground">{t("myQrCode.setUsernameHint")}</p>
         ) : (
           <>
             <div className="rounded-[2rem] bg-white p-5 shadow-luxe animate-scale-in">
               {dataUrl ? (
-                <img src={dataUrl} alt={`QR code linking to @${username} on AURA`} className="h-60 w-60" />
+                <img src={dataUrl} alt={t("myQrCode.qrAltText", { username })} className="h-60 w-60" />
               ) : (
                 <div className="h-60 w-60 flex items-center justify-center">
                   <Loader2 size={18} className="animate-spin text-muted-foreground" />
@@ -93,7 +96,7 @@ export function QrFullscreen({ userId, onClose }: { userId: string | undefined; 
             </div>
             <p className="mt-6 font-serif italic text-lg">@{username}</p>
             <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-              Scan to add me on Aura
+              {t("myQrCode.scanToAddMe")}
             </p>
 
             <div className="mt-10 flex items-center gap-3">
@@ -101,12 +104,12 @@ export function QrFullscreen({ userId, onClose }: { userId: string | undefined; 
                 disabled={!dataUrl}
                 onClick={() => dataUrl && downloadBlob(dataUrlToBlob(dataUrl), `aura-${username}.png`)}
                 className="h-11 px-6 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 active:scale-95 disabled:opacity-40"
-              ><Download size={13} /> Save</button>
+              ><Download size={13} /> {t("myQrCode.save")}</button>
               <button
                 disabled={!dataUrl}
                 onClick={() => dataUrl && void shareQr(dataUrl, username)}
                 className="h-11 px-6 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 active:scale-95 disabled:opacity-40"
-              ><Share2 size={13} /> Share</button>
+              ><Share2 size={13} /> {t("myQrCode.share")}</button>
             </div>
           </>
         )}
@@ -117,20 +120,21 @@ export function QrFullscreen({ userId, onClose }: { userId: string | undefined; 
 
 /** Inline "My QR" section for the profile page. */
 export function MyQrSection({ userId, onOpen }: { userId: string | undefined; onOpen: () => void }) {
+  const { t } = useTranslation();
   const { username } = useMyUsername(userId);
   const dataUrl = useQrDataUrl(username);
 
   return (
     <div className="px-6 mt-8">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">My QR</p>
+      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("myQrCode.myQr")}</p>
       <div className="mt-3 rounded-3xl border border-border p-4 flex items-center gap-4">
         <button
           onClick={onOpen}
-          aria-label="Open my QR code full screen"
+          aria-label={t("myQrCode.openFullScreenAria")}
           className="rounded-2xl bg-white p-2 active:scale-95 transition shrink-0"
         >
           {dataUrl ? (
-            <img src={dataUrl} alt="My AURA QR code" className="h-20 w-20" />
+            <img src={dataUrl} alt={t("myQrCode.myQrAlt")} className="h-20 w-20" />
           ) : (
             <div className="h-20 w-20 flex items-center justify-center text-muted-foreground">
               <QrIcon size={22} />
@@ -139,10 +143,10 @@ export function MyQrSection({ userId, onOpen }: { userId: string | undefined; on
         </button>
         <div className="min-w-0">
           <p className="font-serif italic text-sm">
-            {username ? `@${username}` : "Set a username first"}
+            {username ? `@${username}` : t("myQrCode.setUsernameFirst")}
           </p>
           <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-            Tap the code to open it full screen, then save or share it.
+            {t("myQrCode.tapToOpenHint")}
           </p>
         </div>
       </div>
