@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +18,7 @@ export function ProfileSocial({
 }: {
   openThread?: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [counts, setCounts] = useState<Counts>({ items: 0, outfits: 0, friends: 0 });
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -44,9 +46,9 @@ export function ProfileSocial({
     <>
       <div className="mt-5 grid grid-cols-3 gap-2 px-6 w-full">
         {[
-          { n: counts.items, l: "Items" },
-          { n: counts.outfits, l: "Outfits" },
-          { n: counts.friends, l: "Friends", onClick: () => setFriendsOpen(true) },
+          { n: counts.items, l: t("profileSocial.items") },
+          { n: counts.outfits, l: t("profileSocial.outfits") },
+          { n: counts.friends, l: t("profileSocial.friends"), onClick: () => setFriendsOpen(true) },
         ].map((s) => (
           <button
             key={s.l}
@@ -78,6 +80,7 @@ function FriendsSheet({
   onClose: () => void;
   openThread?: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<Friendship[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -108,15 +111,15 @@ function FriendsSheet({
   return (
     <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm animate-fade-in overflow-y-auto no-scrollbar">
       <header className="px-6 pt-14 pb-3 flex items-center justify-between">
-        <h2 className="font-serif text-2xl italic">Friends</h2>
-        <button onClick={onClose} aria-label="Close" className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90">
+        <h2 className="font-serif text-2xl italic">{t("profileSocial.friends")}</h2>
+        <button onClick={onClose} aria-label={t("profileSocial.closeAria")} className="h-9 w-9 rounded-full border border-border flex items-center justify-center active:scale-90">
           <X size={15} />
         </button>
       </header>
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="animate-spin" /></div>
       ) : rows.length === 0 ? (
-        <p className="px-6 text-sm text-muted-foreground">No friends yet.</p>
+        <p className="px-6 text-sm text-muted-foreground">{t("profileSocial.noFriendsYet")}</p>
       ) : (
         <div className="px-6 pb-28 divide-y divide-border/60">
           {rows.map((f) => (
