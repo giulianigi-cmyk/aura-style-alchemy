@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Camera, Check, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -46,6 +47,7 @@ type ScanItem = {
 
 
 export function OutfitScan({ go }: { go: (s: Screen) => void }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const analyze = useServerFn(analyzeWardrobeImage);
   
@@ -75,7 +77,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
     });
     setPhotoDataUrl(dataUrl);
     setStage("analyzing");
-    setProgressLabel("Looking at your outfit…");
+    setProgressLabel(t("outfitScan.lookingAtOutfit"));
 
     try {
       const { data: existing } = await supabase
@@ -83,10 +85,10 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       const existingList = (existing ?? []) as WardrobeItem[];
       setWardrobe(existingList);
 
-      setProgressLabel("Analyzing your outfit…");
+      setProgressLabel(t("outfitScan.analyzingOutfit"));
       const segments = await segmentOutfitPhoto(dataUrl);
       if (!segments.length) {
-        toast.error("No clothing items recognized in this photo. Try a clearer full-body shot.");
+        toast.error(t("outfitScan.noClothingRecognized"));
         reset();
         return;
       }
@@ -94,7 +96,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       const built: ScanItem[] = [];
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
-        setProgressLabel(`Identifying item ${i + 1} of ${segments.length}…`);
+        setProgressLabel(t("outfitScan.identifyingItem", { current: i + 1, total: segments.length }));
 
         let meta: {
           category: string; subcategory: string; colors: string[];
@@ -155,7 +157,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       setStage("review");
     } catch (e) {
       console.error("[AURA outfit-scan] failed", e);
-      toast.error("Something went wrong analyzing this photo.");
+      toast.error(t("outfitScan.somethingWentWrong"));
       reset();
     }
   };
@@ -174,7 +176,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
     let ok = 0, failed = 0;
     for (let i = 0; i < toSave.length; i++) {
       const it = toSave[i];
-      setProgressLabel(`Saving item ${i + 1} of ${toSave.length}…`);
+      setProgressLabel(t("outfitScan.savingItem", { current: i + 1, total: toSave.length }));
       try {
         const ext = it.transparent ? "png" : "jpg";
         const path = `${user.id}/scan-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -222,8 +224,8 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       }
     }
     setStage("idle");
-    if (ok) toast.success(`Added ${ok} piece${ok === 1 ? "" : "s"} to your closet`);
-    if (failed) toast.error(`${failed} item${failed === 1 ? "" : "s"} could not be saved`);
+    if (ok) toast.success(t("outfitScan.addedPiecesToCloset", { count: ok }));
+    if (failed) toast.error(t("outfitScan.itemsCouldNotBeSaved", { count: failed }));
     reset();
     go("wardrobe");
   };
@@ -235,8 +237,8 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Wardrobe</p>
-          <h1 className="font-serif text-2xl italic leading-tight">Scan an outfit</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("outfitScan.wardrobe")}</p>
+          <h1 className="font-serif text-2xl italic leading-tight">{t("outfitScan.scanAnOutfit")}</h1>
         </div>
       </header>
 
@@ -244,20 +246,19 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
         <div className="mx-6 mt-8">
           <div className="rounded-3xl border-2 border-dashed border-border p-8 text-center">
             <Camera size={22} className="mx-auto text-muted-foreground" />
-            <p className="mt-4 font-serif text-lg italic">Photograph your outfit</p>
+            <p className="mt-4 font-serif text-lg italic">{t("outfitScan.photographYourOutfit")}</p>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-              A clear, full-body photo works best. AURA will find each piece — top, bottoms,
-              shoes, accessories — and turn it into its own wardrobe card.
+              {t("outfitScan.photoHint")}
             </p>
             <div className="mt-6 flex flex-col gap-2">
               <button
                 onClick={() => document.getElementById("outfit-scan-camera")?.click()}
                 className="h-12 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em]"
-              >Take a photo</button>
+              >{t("outfitScan.takeAPhoto")}</button>
               <button
                 onClick={() => fileRef.current?.click()}
                 className="h-12 rounded-full border border-foreground text-xs uppercase tracking-[0.3em]"
-              >Choose from library</button>
+              >{t("outfitScan.chooseFromLibrary")}</button>
             </div>
           </div>
           <input
@@ -286,7 +287,7 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
       {stage === "review" && (
         <div className="mx-6 mt-4 space-y-4">
           <p className="text-sm text-muted-foreground">
-            Found {scanItems.length} piece{scanItems.length === 1 ? "" : "s"}. Review each one before saving.
+            {t("outfitScan.foundPiecesReview", { count: scanItems.length })}
           </p>
 
           {scanItems.map((it) => {
@@ -300,13 +301,13 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm">Already in your closet</p>
+                    <p className="text-sm">{t("outfitScan.alreadyInCloset")}</p>
                     <p className="text-[11px] text-muted-foreground truncate">{it.description}</p>
                   </div>
                   <button
                     onClick={() => updateItem(it.key, { status: "confirmed-new" })}
                     className="shrink-0 text-[10px] uppercase tracking-widest text-muted-foreground underline"
-                  >Add anyway</button>
+                  >{t("outfitScan.addAnyway")}</button>
                 </div>
               );
             }
@@ -315,30 +316,30 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
               const thumb = it.dedupe.match ? matchThumbs[it.dedupe.match.id] : null;
               return (
                 <div key={it.key} className="rounded-2xl border border-border bg-card p-4">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">Is this the same item?</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center">{t("outfitScan.isThisSameItem")}</p>
                   <div className="mt-3 flex items-center justify-center gap-4">
                     <div className="text-center">
                       <div className="h-20 w-20 rounded-xl overflow-hidden mx-auto" style={{ background: "#FFFFFF" }}>
                         <img src={it.imageDataUrl} alt="" className="h-full w-full object-contain p-1.5" />
                       </div>
-                      <p className="mt-1 text-[9px] uppercase tracking-wide text-muted-foreground">New scan</p>
+                      <p className="mt-1 text-[9px] uppercase tracking-wide text-muted-foreground">{t("outfitScan.newScan")}</p>
                     </div>
                     <div className="text-center">
                       <div className="h-20 w-20 rounded-xl overflow-hidden mx-auto" style={{ background: "#FFFFFF" }}>
                         {thumb && <img src={thumb} alt="" className="h-full w-full object-contain p-1.5" />}
                       </div>
-                      <p className="mt-1 text-[9px] uppercase tracking-wide text-muted-foreground">Already owned</p>
+                      <p className="mt-1 text-[9px] uppercase tracking-wide text-muted-foreground">{t("outfitScan.alreadyOwned")}</p>
                     </div>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       onClick={() => updateItem(it.key, { status: "confirmed-new" })}
                       className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
-                    >No, different</button>
+                    >{t("outfitScan.noDifferent")}</button>
                     <button
                       onClick={() => updateItem(it.key, { status: "confirmed-duplicate" })}
                       className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]"
-                    >Yes, same</button>
+                    >{t("outfitScan.yesSame")}</button>
                   </div>
                 </div>
               );
@@ -359,13 +360,13 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
             <button
               onClick={reset}
               className="h-12 px-5 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
-            >Start over</button>
+            >{t("outfitScan.startOver")}</button>
             <button
               onClick={save}
               disabled={toSave.length === 0}
               className="flex-1 h-12 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <Check size={14} /> Save {toSave.length} item{toSave.length === 1 ? "" : "s"}
+              <Check size={14} /> {t("outfitScan.saveItemsCount", { count: toSave.length })}
             </button>
           </div>
         </div>
