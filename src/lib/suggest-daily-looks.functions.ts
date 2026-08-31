@@ -53,10 +53,14 @@ export type DailyLooksResult = z.infer<typeof OutputSchema>;
 export const suggestDailyLooks = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     if (data.items.length < 3) {
       return { ok: false as const, error: "Not enough wardrobe pieces to compose a look yet." };
     }
+
+    const { data: profileRow } = await (context.supabase.from("profiles" as never) as any)
+      .select("gender").eq("id", context.userId).maybeSingle();
+    const gender = (profileRow as { gender?: string | null } | null)?.gender ?? null;
 
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
@@ -278,6 +282,25 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       return true;
     };
 
+    // Bags are mandatory for Woman — the same hard rule already enforced
+    // in the on-demand/weekly outfit engine (ai-suggest-outfit.functions.ts).
+    // This curated-looks engine (Home's "Selezionati per te") runs
+    // completely independently and never inherited it, which is why an
+    // Evening look could come back with a dress, shoes, and jewelry but
+    // no bag. Appended after the fact rather than rejecting a look that's
+    // missing one — that would just trigger an unnecessary retry for an
+    // otherwise-good look instead of simply completing it.
+    const NO_BAG_OCCASION_SIGNAL = /sport|gym|yoga|running|hiking|training|pilates|tennis|cycling|pool|piscina|swim|beach|spiaggia|mare|snorkeling/i;
+    const catalogHasBag = catalog.some((c) => c.category === "Bags");
+    const ensureBag = (occasion: string, ids: string[]): string[] => {
+      if (gender !== "Woman") return ids;
+      if (!catalogHasBag) return ids;
+      if (NO_BAG_OCCASION_SIGNAL.test(occasion)) return ids;
+      if (ids.some((id) => catalog.find((c) => c.id === id)?.category === "Bags")) return ids;
+      const bag = catalog.find((c) => c.category === "Bags" && !ids.includes(c.id));
+      return bag ? [...ids, bag.id] : ids;
+    };
+
     const sanitize = (r: DailyLooksResult): DailyLooksResult => {
       // "today" is singular — a violation strips just the offending
       // item(s) rather than discarding the whole look (there's no second
@@ -376,6 +399,9 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
           // Best-effort: fall through with whatever survived the first pass.
         }
       }
+
+      clean.today = { ...clean.today, item_ids: ensureBag(clean.today.occasion, clean.today.item_ids) };
+      clean.curated = clean.curated.map((l) => ({ ...l, item_ids: ensureBag(l.occasion, l.item_ids) }));
 
       return { ok: true as const, result: clean };
 
