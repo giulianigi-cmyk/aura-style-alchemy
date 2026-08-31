@@ -1,4 +1,4 @@
-import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search, Clipboard } from "lucide-react";
+import { X, Image as ImageIcon, Sparkles, Check, Loader2, Upload, Link as LinkIcon, Search, Clipboard, RotateCw } from "lucide-react";
 import type { DragEvent } from "react";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -569,6 +569,32 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // Reload the current view — re-runs the active search if one is typed,
+  // otherwise re-fetches the default browsable set. Same "refresh" idea
+  // as the wand in the Wardrobe screen, but there's nothing to
+  // re-classify with AI here (this is the shared product catalog, not
+  // personal wardrobe items) — it just pulls a fresh copy of the list,
+  // useful if new products were added since the screen opened.
+  const refreshLibrary = async () => {
+    setLibrarySearching(true);
+    try {
+      const q = libraryQuery.trim();
+      if (q) {
+        const [products, shared] = await Promise.all([
+          searchProductLibrary(q),
+          searchSharedLibrary({ data: { q } }).catch(() => [] as SharedLibraryItem[]),
+        ]);
+        setLibraryResults(products);
+        setSharedResults(shared);
+      } else {
+        const products = await browseProductLibrary();
+        setLibraryResults(products);
+      }
+    } finally {
+      setLibrarySearching(false);
+    }
+  };
+
   const filterOptions = useMemo(() => {
     const cats = new Set<string>();
     const cols = new Set<string>();
@@ -857,8 +883,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         </div>
             ) : step === "library" ? (
         <div className="flex-1 flex flex-col px-6 pb-10 animate-fade-in overflow-y-auto">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.auraLibrary")}</p>
-          <p className="font-serif text-2xl italic mt-2">{t("addItem.searchKnownProducts")}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.auraLibrary")}</p>
+              <p className="font-serif text-2xl italic mt-2">{t("addItem.searchKnownProducts")}</p>
+            </div>
+            <button
+              onClick={() => void refreshLibrary()}
+              disabled={librarySearching}
+              aria-label={t("addItem.refreshLibraryAria")}
+              className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90 disabled:opacity-50 shrink-0"
+            >
+              {librarySearching ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />}
+            </button>
+          </div>
           <p className="text-xs text-muted-foreground mt-2">
             {t("addItem.libraryHint")}
           </p>
