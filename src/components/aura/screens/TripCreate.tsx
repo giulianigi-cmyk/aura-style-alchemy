@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2, Briefcase, Palmtree, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -9,15 +10,16 @@ import { listLocations } from "@/lib/wardrobe-locations.functions";
 import type { WardrobeLocation } from "@/lib/wardrobe-location";
 import { searchDestinations, type DestinationSearchResult } from "@/lib/destination-search";
 
-const TYPES: { value: TripType; label: string; icon: typeof Briefcase }[] = [
-  { value: "work", label: "Work", icon: Briefcase },
-  { value: "leisure", label: "Leisure", icon: Palmtree },
-  { value: "mixed", label: "Mixed", icon: Shuffle },
+const TYPE_KEYS: { value: TripType; labelKey: string; icon: typeof Briefcase }[] = [
+  { value: "work", labelKey: "tripCreate.typeWork", icon: Briefcase },
+  { value: "leisure", labelKey: "tripCreate.typeLeisure", icon: Palmtree },
+  { value: "mixed", labelKey: "tripCreate.typeMixed", icon: Shuffle },
 ];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreated: (tripId: string) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [tripType, setTripType] = useState<TripType>("leisure");
   const [destinationName, setDestinationName] = useState("");
@@ -103,11 +105,11 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
       if (selectedPresetIds.length) {
         await applyPresetsToTrip({ data: { tripId: res.trip.id, presetIds: selectedPresetIds } });
       }
-      toast.success("Trip created");
+      toast.success(t("tripCreate.tripCreated"));
       onCreated(res.trip.id);
     } catch (e) {
       console.error("[AURA trip-create] failed", e);
-      toast.error(e instanceof Error ? e.message : "Couldn't create trip");
+      toast.error(e instanceof Error ? e.message : t("tripCreate.couldntCreateTrip"));
     } finally {
       setCreating(false);
     }
@@ -120,8 +122,8 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
           <ArrowLeft size={16} />
         </button>
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Trip planner</p>
-          <h1 className="font-serif text-3xl mt-1">Plan a trip</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripCreate.tripPlanner")}</p>
+          <h1 className="font-serif text-3xl mt-1">{t("tripCreate.planATrip")}</h1>
         </div>
       </header>
 
@@ -130,14 +132,14 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
       ) : (
         <div className="px-6 mt-6 space-y-5">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Where are you going?</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.whereAreYouGoing")}</p>
             <input
               value={destinationQuery}
               onChange={(e) => { setDestinationQuery(e.target.value); setDestinationName(""); setDestinationLat(null); setDestinationLon(null); }}
-              placeholder="Search a city…"
+              placeholder={t("tripCreate.searchCityPlaceholder")}
               className="w-full bg-secondary/60 rounded-full px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
             />
-            {searchingDestination && <p className="mt-1.5 text-[11px] text-muted-foreground">Searching…</p>}
+            {searchingDestination && <p className="mt-1.5 text-[11px] text-muted-foreground">{t("tripCreate.searching")}</p>}
             {destinationResults.length > 0 && (
               <div className="mt-2 rounded-2xl border border-border/60 bg-card overflow-hidden">
                 {destinationResults.map((r, i) => (
@@ -153,13 +155,13 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
               </div>
             )}
             {destinationLat != null && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Weather forecast will use this location.</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">{t("tripCreate.weatherWillUseLocation")}</p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">From</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.from")}</p>
               <input
                 type="date"
                 value={startDate}
@@ -168,7 +170,7 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
               />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">To</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.to")}</p>
               <input
                 type="date"
                 value={endDate}
@@ -180,16 +182,16 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
           </div>
 
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Trip type</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.tripType")}</p>
             <div className="flex gap-2">
-              {TYPES.map(({ value, label, icon: Icon }) => (
+              {TYPE_KEYS.map(({ value, labelKey, icon: Icon }) => (
                 <button
                   key={value}
                   onClick={() => setTripType(value)}
                   className={`flex-1 h-16 rounded-2xl border flex flex-col items-center justify-center gap-1 ${tripType === value ? "bg-foreground text-background border-foreground" : "border-border"}`}
                 >
                   <Icon size={16} />
-                  <span className="text-[10px] uppercase tracking-widest">{label}</span>
+                  <span className="text-[10px] uppercase tracking-widest">{t(labelKey)}</span>
                 </button>
               ))}
             </div>
@@ -197,7 +199,7 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
 
           {locations.length > 0 && (
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Pack from which wardrobe?</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.packFromWhichWardrobe")}</p>
               <div className="flex flex-wrap gap-2">
                 {locations.map((loc) => {
                   const on = selectedLocationIds.includes(loc.id);
@@ -210,30 +212,30 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
                   );
                 })}
               </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">Select more than one if you'll pull pieces from both.</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">{t("tripCreate.selectMoreThanOneHint")}</p>
             </div>
           )}
 
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Laundry at your destination?</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.laundryAtDestination")}</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setLaundryAvailable(true)}
                 className={`flex-1 h-11 rounded-full border text-xs uppercase tracking-widest ${laundryAvailable ? "bg-foreground text-background border-foreground" : "border-border"}`}
-              >Yes</button>
+              >{t("tripCreate.yes")}</button>
               <button
                 onClick={() => setLaundryAvailable(false)}
                 className={`flex-1 h-11 rounded-full border text-xs uppercase tracking-widest ${!laundryAvailable ? "bg-foreground text-background border-foreground" : "border-border"}`}
-              >No</button>
+              >{t("tripCreate.no")}</button>
             </div>
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              {laundryAvailable ? "Fewer basics needed — you can wash midway." : "A fresh set for every day of the trip."}
+              {laundryAvailable ? t("tripCreate.laundryYesHint") : t("tripCreate.laundryNoHint")}
             </p>
           </div>
 
           {presets.length > 0 && (
             <div>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Apply an essentials list</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t("tripCreate.applyEssentialsList")}</p>
               <div className="flex flex-wrap gap-2">
                 {presets.map((p) => {
                   const on = selectedPresetIds.includes(p.id);
@@ -252,7 +254,7 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
             <button
               onClick={() => go("essential-presets")}
               className="text-[11px] text-muted-foreground underline"
-            >Set up an essentials list (documents, charger…) to reuse on every trip</button>
+            >{t("tripCreate.setUpEssentialsListHint")}</button>
           )}
 
           <button
@@ -261,7 +263,7 @@ export function TripCreate({ go, onCreated }: { go: (s: Screen) => void; onCreat
             className="w-full h-12 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.3em] active:scale-[0.98] shadow-luxe disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {creating && <Loader2 size={14} className="animate-spin" />}
-            Create trip
+            {t("tripCreate.createTrip")}
           </button>
         </div>
       )}
