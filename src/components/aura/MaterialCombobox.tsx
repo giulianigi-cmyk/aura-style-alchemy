@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown, X } from "lucide-react";
 
 interface MaterialComboboxProps {
@@ -9,6 +10,7 @@ interface MaterialComboboxProps {
 }
 
 export function MaterialCombobox({ options, values, onChange, label }: MaterialComboboxProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,7 +44,7 @@ export function MaterialCombobox({ options, values, onChange, label }: MaterialC
         className="mt-2 w-full flex items-center justify-between rounded-full bg-secondary/60 px-4 py-2.5 text-sm text-left active:scale-[0.99] transition"
       >
         <span className={values.length ? "text-foreground" : "text-muted-foreground"}>
-          {values.length ? `${values.length} selected` : "Select materials"}
+          {values.length ? t("materialCombobox.selectedCount", { count: values.length }) : t("materialCombobox.selectMaterials")}
         </span>
         <ChevronsUpDown size={14} className="text-muted-foreground" />
       </button>
@@ -59,7 +61,7 @@ export function MaterialCombobox({ options, values, onChange, label }: MaterialC
                 type="button"
                 onClick={() => toggle(v)}
                 className="hover:text-background/70"
-                aria-label={`Remove ${v}`}
+                aria-label={t("materialCombobox.removeAria", { value: v })}
               >
                 <X size={12} />
               </button>
@@ -73,12 +75,12 @@ export function MaterialCombobox({ options, values, onChange, label }: MaterialC
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search materials…"
+            placeholder={t("materialCombobox.searchPlaceholder")}
             className="w-full bg-secondary/60 rounded-full px-3 py-2 text-sm outline-none placeholder:text-muted-foreground mb-2"
             onClick={(e) => e.stopPropagation()}
           />
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">No materials found</p>
+            <p className="px-3 py-2 text-xs text-muted-foreground">{t("materialCombobox.noMaterialsFound")}</p>
           ) : (
             filtered.map((o) => (
               <button
