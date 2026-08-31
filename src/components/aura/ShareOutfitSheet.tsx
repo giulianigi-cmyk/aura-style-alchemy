@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +8,7 @@ import { acceptedFriends, initials, signPaths, type Friendship } from "@/lib/com
 
 /** Bottom sheet that shares one of the user's own outfits with accepted friends. */
 export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onClose: () => void }) {
+  const { t } = useTranslation();
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
@@ -23,7 +25,7 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
         const map = await signPaths("avatars", list.map((f) => f.profile_image));
         if (alive) setAvatars(map);
       } catch (e) {
-        if (alive) toast.error(e instanceof Error ? e.message : "Could not load friends");
+        if (alive) toast.error(e instanceof Error ? e.message : t("shareOutfitSheet.couldNotLoadFriends"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -39,7 +41,7 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const me = userData.user?.id;
-    if (!me) { setBusy(false); toast.error("You are signed out"); return; }
+    if (!me) { setBusy(false); toast.error(t("shareOutfitSheet.youAreSignedOut")); return; }
 
     let ok = 0;
     let dup = 0;
@@ -53,9 +55,9 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
       else failed++;
     }
     setBusy(false);
-    if (ok) toast.success(`Shared with ${ok} friend${ok > 1 ? "s" : ""}`);
-    if (dup) toast(`Already shared with ${dup} friend${dup > 1 ? "s" : ""}`);
-    if (failed) toast.error(`Could not share with ${failed} friend${failed > 1 ? "s" : ""}`);
+    if (ok) toast.success(t("shareOutfitSheet.sharedWithCount", { count: ok }));
+    if (dup) toast(t("shareOutfitSheet.alreadySharedWithCount", { count: dup }));
+    if (failed) toast.error(t("shareOutfitSheet.couldNotShareWithCount", { count: failed }));
     if (!failed) onClose();
   };
 
@@ -65,13 +67,13 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
         onClick={(e) => e.stopPropagation()}
         className="w-full bg-card rounded-t-3xl border-t border-border p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3 max-h-[82vh] overflow-y-auto overscroll-contain"
       >
-        <p className="font-serif italic text-lg">Share with friends</p>
+        <p className="font-serif italic text-lg">{t("shareOutfitSheet.shareWithFriends")}</p>
 
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={18} /></div>
         ) : friends.length === 0 ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            You have no friends yet. Head to Community → Friends to add people first.
+            {t("shareOutfitSheet.noFriendsYetHint")}
           </p>
         ) : (
           <>
@@ -104,7 +106,7 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
               onClick={() => void share()}
               disabled={!selected.length || busy}
               className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] active:scale-[0.98] disabled:opacity-50 inline-flex items-center justify-center gap-2"
-            >{busy && <Loader2 size={12} className="animate-spin" />} Share</button>
+            >{busy && <Loader2 size={12} className="animate-spin" />} {t("shareOutfitSheet.share")}</button>
           </>
         )}
       </div>
@@ -112,4 +114,3 @@ export function ShareOutfitSheet({ outfitId, onClose }: { outfitId: string; onCl
     document.body,
   );
 }
-
