@@ -296,8 +296,6 @@ export async function suggestOutfitCore(params: {
 
   // Hard, code-level guardrails — mirrors the pattern in
   // suggest-daily-looks.functions.ts. The prompt above ALSO asks for all
-  // of this, but a text instruction is a request the model can silently
-  // ignore; these checks are what actually rejects a bad result instead
   // of trusting the model got it right.
   const SLOT_LIMITS: Record<string, number> = {
     Tops: 1, Bottoms: 1, Dresses: 1, Jumpsuits: 1, Shoes: 1, Bags: 1, Outerwear: 1,
