@@ -24,7 +24,7 @@ const UNSCRAPABLE_MSG =
   "This site's protection is too strong for automatic import — add this piece's photo and details manually.";
 
 const TRACKING_PARAM_RE =
-  /^(utm_|gclid$|gbraid$|wbraid$|gad_|fbclid$|msclkid$|mc_|dplink$|chn$|cmp$|slink_id$|src$|tarea$|tar$|ag$|ptyp$|feed_num$)/i;
+  /^(utm_|gclid$|gbraid$|wbraid$|gad_|fbclid$|msclkid$|mc_|dplink$|chn$|cmp$|slink_id$|slink$|src$|tarea$|tar$|ag$|ptyp$|feed_num$)/i;
 
 function stripTrackingParams(u: URL): URL {
   const clean = new URL(u.toString());
