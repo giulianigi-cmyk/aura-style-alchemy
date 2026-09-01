@@ -608,6 +608,7 @@
     "wouldPairWithLink": "S'associerait à {{count}} pièces que vous possédez déjà",
     "fillsAGap": "Comble un vide dans votre garde-robe",
     "lowConfidenceNote": "Estimation peu fiable : données insuffisantes pour un jugement sûr",
+    "viewOnSite": "Voir sur le site",
     "linkDisclaimer": "Il s'agit d'une évaluation basée sur votre garde-robe, pas d'une expertise de marché — elle ne connaît ni les soldes, ni la qualité réelle, ni les tendances.",
     "orWardrobeIsMissing": "Ou, ce qui manque à votre garde-robe",
     "disclaimer": "Il s'agit d'une estimation des lacunes de la garde-robe basée sur ce que vous possédez déjà, pas d'un catalogue de produits en direct. De vraies recommandations d'achat avec produits et liens arrivent bientôt."
