@@ -278,7 +278,9 @@ export async function suggestOutfitCore(params: {
     "Use each item's subcategory when present to judge fit-for-purpose: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels over sneakers. When subcategory is empty, judge from category alone.",
     "A 'Running Shoes' subcategory item is built for running, not for everyday city walking — never pick it for a non-Sport occasion unless it is the only shoe available in the catalog. For a Sport/gym/running occasion specifically, it's the right choice.",
     "A gilet or waistcoat (vest) is never worn directly against skin with nothing underneath — always pair it with a shirt, t-shirt, or top layered beneath it. A tailored suit waistcoat additionally expects a blazer/jacket over it for a complete formal look, not worn as the outermost layer on its own.",
-    "A belt is a genuine styling option, not just a functional afterthought — actively consider one from Accessories when the outfit has a waist to define (high-rise trousers/jeans/skirt with a tucked or cropped top, a Relaxed/Oversized-fit dress or jumpsuit with no built-in waist definition) and the wardrobe has one whose color/formality fits (leather belt with tailoring, a slimmer or woven belt for casual). Skip it when the piece is already fitted at the waist (Slim/Tailored fit) or is a Wrap style — an extra belt there is redundant, not additive.",
+       "A belt is a genuine styling option, not just a functional afterthought — actively consider one from Accessories when the outfit has a waist to define (high-rise trousers/jeans/skirt with a tucked or cropped top, a Relaxed/Oversized-fit dress or jumpsuit with no built-in waist definition) and the wardrobe has one whose color/formality fits (leather belt with tailoring, a slimmer or woven belt for casual). Skip it when the piece is already fitted at the waist (Slim/Tailored fit) or is a Wrap style — an extra belt there is redundant, not additive.",
+    "LAYERING TECHNIQUES — two specific combinations to actively consider, not just default to a single top: (1) a denim shirt or jacket worn OPEN, unbuttoned, over a well-fitted tank top or t-shirt underneath (the layer underneath must be 'Slim'/'Tailored'/'Regular' fit — never Oversized or Cropped, which reads sloppy layered this way); (2) a lace bra or bralette worn deliberately visible under a semi-sheer/sheer shirt or sweater, or under an open blazer, or peeking from a low/plunging neckline top or dress — for occasions where that reads as styled rather than accidental (evening, going-out, creative/bold contexts — never for a Work occasion, and never if it would violate a stated dress preference). Only propose either technique when the wardrobe actually has pieces that fit it (right subcategory/fit/material) — never force a layering trick onto pieces it doesn't suit.",
+ "A belt is a genuine styling option, not just a functional afterthought — actively consider one from Accessories when the outfit has a waist to define (high-rise trousers/jeans/skirt with a tucked or cropped top, a Relaxed/Oversized-fit dress or jumpsuit with no built-in waist definition) and the wardrobe has one whose color/formality fits (leather belt with tailoring, a slimmer or woven belt for casual). Skip it when the piece is already fitted at the waist (Slim/Tailored fit) or is a Wrap style — an extra belt there is redundant, not additive.",
     "LAYERING TECHNIQUES — two specific combinations to actively consider, not just default to a single top: (1) a denim shirt or jacket worn OPEN, unbuttoned, over a well-fitted tank top or t-shirt underneath (the layer underneath must be 'Slim'/'Tailored'/'Regular' fit — never Oversized or Cropped, which reads sloppy layered this way); (2) a lace bra or bralette worn deliberately visible under a semi-sheer/sheer shirt or sweater, or under an open blazer, or peeking from a low/plunging neckline top or dress — for occasions where that reads as styled rather than accidental (evening, going-out, creative/bold contexts — never for a Work occasion, and never if it would violate a stated dress preference). Only propose either technique when the wardrobe actually has pieces that fit it (right subcategory/fit/material) — never force a layering trick onto pieces it doesn't suit.",
     "Return ONLY item ids that exist in the provided catalog. Never invent ids.",
     ...(params.baseItemIds?.length
@@ -532,10 +534,18 @@ export async function suggestOutfitCore(params: {
     // If a running-shoe violation survived the sanitize step above (it
     // only strips, it doesn't replace), swap in a proper alternative
     // rather than leaving the outfit without shoes at all.
-    if (violatesFootwearRule(item_ids)) {
+      if (violatesFootwearRule(item_ids)) {
       const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && !item_ids.includes(c.id));
       if (replacement) item_ids = [...item_ids, replacement.id];
     }
+
+    if (!item_ids.some((id) => catalog.find((c) => c.id === id)?.category === "Shoes")) {
+      const shoe = catalog.find((c) =>
+        c.category === "Shoes" && !violatesFootwearRule([c.id]) && !violatesOccasionTag([c.id]) && !item_ids.includes(c.id)
+      );
+      if (shoe) item_ids = [...item_ids, shoe.id];
+    }
+
 
     // Shoes are part of the STRUCTURE rule described in the prompt, but
     // — unlike the mandatory-bag case above — nothing ever actually
