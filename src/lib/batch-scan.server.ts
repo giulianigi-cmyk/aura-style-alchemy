@@ -90,6 +90,8 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
         season: string | null; style: string | null; occasion: string | null; description: string | null;
         confidence: number; bbox: unknown; brand: string | null; price: number | null; currency: string | null;
         formality: number | null; day_evening: string | null; sleeve_length: string | null;
+        length: string | null; fit: string | null; heel_height: string | null; toe_shape: string | null;
+        closure: string | null; gender: string | null; style_tags: string[];
       }[];
 
       if (prefill) {
@@ -116,6 +118,13 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           formality: analysis.formality ?? null,
           day_evening: analysis.dayEvening || null,
           sleeve_length: analysis.sleeveLength || null,
+          length: analysis.length || null,
+          fit: analysis.fit || null,
+          heel_height: analysis.heelHeight || null,
+          toe_shape: analysis.toeShape || null,
+          closure: analysis.closure || null,
+          gender: analysis.gender || null,
+          style_tags: analysis.styleTags ?? [],
         }];
       } else {
         const detection = await detectOutfitItems(dataUrl);
@@ -137,6 +146,13 @@ export async function runScanWorker(limit = 5): Promise<WorkerResult> {
           formality: it.formality ?? null,
           day_evening: it.dayEvening || null,
           sleeve_length: it.sleeveLength || null,
+          length: it.length || null,
+          fit: it.fit || null,
+          heel_height: it.heelHeight || null,
+          toe_shape: it.toeShape || null,
+          closure: it.closure || null,
+          gender: it.gender || null,
+          style_tags: it.styleTags ?? [],
         }));
       }
 
