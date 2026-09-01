@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Loader2, Plus, Link as LinkIcon, Check, HelpCircle, X as XIcon, Camera, Tag } from "lucide-react";
+import { Sparkles, Loader2, Plus, Link as LinkIcon, Check, HelpCircle, X as XIcon, Camera, Tag, ExternalLink } from "lucide-react";
 import type { Screen } from "../AuraApp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -246,6 +246,16 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
                   <p className="font-serif text-base leading-tight truncate">{result.product.title || [result.analysis.subcategory, result.analysis.category].filter(Boolean).join(" · ") || t("shop.unknownPiece")}</p>
                   {result.product.price && (
                     <p className="text-xs text-muted-foreground mt-0.5">{result.product.price}{result.product.currency ? ` ${result.product.currency}` : ""}</p>
+                  )}
+                  {result.product.sourceUrl && (
+                    <a
+                      href={result.product.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground underline"
+                    >
+                      <ExternalLink size={10} /> {t("shop.viewOnSite")}
+                    </a>
                   )}
                 </div>
               </div>
