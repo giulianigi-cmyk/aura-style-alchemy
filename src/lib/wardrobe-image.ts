@@ -1,38 +1,49 @@
-import { WardrobeItem } from "./aura-types";
 import { supabase } from "@/integrations/supabase/client";
+import type { WardrobeItem } from "@/lib/aura-types";
 
+/** Extract the storage-relative path from either a raw storage path
+ *  or a legacy full public URL for the private wardrobe bucket. */
 export function toStoragePath(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null;
-  if (imageUrl.startsWith("http")) return null;
-  return imageUrl;
+  if (!imageUrl.startsWith("http")) return imageUrl;
+  const marker = "/wardrobe/";
+  const idx = imageUrl.indexOf(marker);
+  return idx >= 0 ? imageUrl.slice(idx + marker.length) : null;
 }
 
-/** Prefer the small thumbnail for grid views; fall back to the full
- *  image for items saved before the thumbnail pipeline existed. */
-export function thumbSrc(item: WardrobeItem, signed: Record<string, string>): string | null {
-  const thumbPath = (item as unknown as { thumbnail_path?: string | null }).thumbnail_path;
-  if (thumbPath && signed[thumbPath]) return signed[thumbPath];
-  const path = toStoragePath(item.image_url);
-  return path ? signed[path] ?? null : null;
-}
-
+/** Sign a batch of wardrobe items' images and return a { path: signedUrl } map.
+ *  Includes thumbnails when items have one — grid views should prefer
+ *  those (see thumbPath below); the detail view still uses the full
+ *  image_url path, which is always signed regardless. */
 export async function resolveWardrobeUrls(items: WardrobeItem[]): Promise<Record<string, string>> {
-  const paths = new Set<string>();
-  for (const it of items) {
-    const p = toStoragePath(it.image_url);
-    if (p) paths.add(p);
-    const thumbPath = (it as unknown as { thumbnail_path?: string | null }).thumbnail_path;
-    if (thumbPath) paths.add(thumbPath);
+  const thumbPaths = items
+    .map((i) => (i as unknown as { thumbnail_path?: string | null }).thumbnail_path)
+    .filter(Boolean) as string[];
+  const paths = Array.from(new Set([
+    ...items.map((i) => toStoragePath(i.image_url)).filter(Boolean) as string[],
+    ...thumbPaths,
+  ]));
+  if (!paths.length) return {};
+  const { data, error } = await supabase.storage.from("wardrobe").createSignedUrls(paths, 60 * 60);
+  if (error || !data) {
+    console.error("[AURA] sign wardrobe urls", error);
+    return {};
   }
-  if (paths.size === 0) return {};
-  const pathArray = Array.from(paths);
-  const { data, error } = await supabase.storage.from("wardrobe").createSignedUrls(pathArray, 60 * 60);
-  if (error || !data) return {};
   const map: Record<string, string> = {};
   data.forEach((row, i) => {
-    if (row.signedUrl) map[pathArray[i]] = row.signedUrl;
+    if (row.signedUrl) map[paths[i]] = row.signedUrl;
   });
   return map;
+}
+
+/** Picks the thumbnail signed URL for a grid view when the item has one,
+ *  falling back to the full image otherwise (older items that predate
+ *  thumbnail generation, or anything not yet re-saved). */
+export function thumbSrc(item: WardrobeItem, signed: Record<string, string>): string {
+  const thumbPath = (item as unknown as { thumbnail_path?: string | null }).thumbnail_path;
+  if (thumbPath && signed[thumbPath]) return signed[thumbPath];
+  const fullPath = toStoragePath(item.image_url);
+  return fullPath ? (signed[fullPath] ?? "") : "";
 }
 
 // Astronomical seasons (equinox/solstice boundaries), not meteorological
