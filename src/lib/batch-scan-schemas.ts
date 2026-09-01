@@ -51,6 +51,13 @@ export const ConfirmItemSchema = z.object({
   sleeve_length: z.string().nullable().optional(),
   formality: z.number().nullable().optional(),
   day_evening: z.string().nullable().optional(),
+  length: z.string().nullable().optional(),
+  fit: z.string().nullable().optional(),
+  heel_height: z.string().nullable().optional(),
+  toe_shape: z.string().nullable().optional(),
+  closure: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  style_tags: z.array(z.string()).default([]),
 });
 
 export const ConfirmDetectedItemsSchema = z.object({
