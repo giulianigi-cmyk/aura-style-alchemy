@@ -14,6 +14,7 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { loadDressRules } from "@/lib/dress-preferences";
 import { suggestDailyLooks, type DailyLook } from "@/lib/suggest-daily-looks.functions";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { WardrobeLocationExpiryBanner } from "@/components/aura/WardrobeLocationExpiryBanner";
 import i18n, { type SupportedLanguage } from "@/i18n/config";
 
 function todayISO(): string {
@@ -273,6 +274,7 @@ export function Home({ go }: { go: (s: Screen) => void }) {
         </div>
       </header>
 
+      <WardrobeLocationExpiryBanner />
 
            {/* Weather / location strip */}
       <div className="mx-6 mt-2 rounded-2xl bg-secondary/60 px-4 py-3">
