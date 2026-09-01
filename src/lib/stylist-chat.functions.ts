@@ -26,6 +26,11 @@ const ItemSchema = z.object({
   formality: z.number().nullable().optional(),
   dayEvening: z.string().nullable().optional(),
   locationId: z.string().nullable().optional(),
+  // The piece's OWN occasion tags (Wardrobe → edit → Occasion) — was
+  // never sent to the chat at all, so a bag tagged only "Travel" could
+  // freely get recommended for a work outfit here even after the same
+  // gap was closed in the on-demand/weekly outfit engine.
+  occasion: z.string().nullable().optional(),
 });
 
 const MessageSchema = z.object({
@@ -146,6 +151,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       styleTags: it.styleTags ?? [],
       formality: it.formality ?? null,
       dayEvening: it.dayEvening ?? "",
+      occasion: it.occasion ?? "",
     }));
 
     // Deterministic, verified-in-code eligibility check — computed here
@@ -198,6 +204,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       "When describing a wardrobe piece in your reply, use ONLY the exact 'colors', 'category' and 'subcategory' values given for that item in the catalog below. If subcategory is present (e.g. 'Sandals', 'Boots', 'Pumps') use that exact word; never invent or guess a more specific color or subtype beyond what the catalog states. If subcategory is empty, stay generic (e.g. just 'shoes') rather than inventing detail.",
       "Use each item's subcategory to judge fit-for-purpose against weather and occasion: e.g. in hot weather prefer sandals/flats over boots; in rain or cold prefer boots over sandals; for formal occasions prefer pumps/heels or loafers over sneakers.",
       "A 'Running Shoes' subcategory item is built for running, not for everyday city walking — never pick it for a non-Sport occasion unless it is the only shoe available in the catalog. For a Sport/gym/running occasion specifically, it's the right choice.",
+      "OCCASION TAG: each item may carry its own 'occasion' field (the person's own explicit tag(s) on that piece, e.g. 'Travel', 'Work', 'Sport' — comma-separated if more than one). If an item is tagged ONLY 'Travel' or ONLY 'Sport' (and not also tagged for the occasion being discussed), treat it as situational and do not propose it outside that context — e.g. a bag tagged only 'Travel' is not a work-bag recommendation just because it's a bag the person owns. An item with no occasion tag, or a broader one like 'Everyday', is not restricted by this.",
       "Each item also carries separate attribute fields when known: length (garment length, e.g. Mini/Midi/Maxi for dresses and skirts, Short/Mid/Long for coats, Cropped/Regular/Longline for tops), sleeveLength, fit (e.g. Oversized, Slim, Tailored), heelHeight (Flat/Low/Mid/High), toeShape, closure, gender, and styleTags (free-form aesthetic labels like Minimal, Boho, Preppy, Office, Y2K — use these to match the vibe/aesthetic the user asks for). USE THESE DIRECTLY to honor explicit user requests — e.g. 'no long dresses' means excluding items where length is 'Maxi' (or 'Long'); 'only flat shoes' means heelHeight must be 'Flat'; 'oversized sweaters' means fit is 'Oversized'; 'something more minimal/elegant/streetwear' means matching styleTags. These fields are the source of truth for that request, not subcategory.",
       "If the relevant attribute field is empty for an item (older wardrobe pieces not yet re-classified), you cannot confirm that detail — either avoid proposing that item for a constraint you can't verify, or explicitly say so in your reply (e.g. \"I can't confirm this dress's length from what I have on file\").",
       "GOVERNING HIERARCHY — every outfit decision follows this order, and a lower level can NEVER compensate for a violation of a higher one: 1) YOU (the person's own hard dress rules above — non-negotiable), 2) EVENT CONTEXT (occasion, dress code, formality, time of day, location), 3) WEATHER (temperature/conditions), 4) OUTFIT COHERENCE (the pieces working together as a complete, structured outfit), 5) COLOR (harmony, pairing, styling polish). A perfect color match never excuses the wrong formality level for the occasion; a beautiful outfit never excuses breaking one of the person's own rules. When items conflict, resolve in this order — don't average them.",
@@ -207,6 +214,7 @@ export const stylistChat = createServerFn({ method: "POST" })
       "SHOE PREFERENCE — split by occasion type: for ELEGANT/FORMAL evening occasions (a dinner, gala, cocktail, date night, wedding), default to heels (heelHeight Mid or High) over flats — flats are a fallback only if no heeled option exists. In genuinely hot weather (roughly 30°C+) for these same elegant evening occasions, prioritize heeled SANDALS specifically over closed pumps/décolleté — sandals stay elegant while actually suiting the heat; pumps are the next choice after that; flat sandals are the last resort here, only if no heeled sandals or pumps exist. For CASUAL or DAYTIME occasions (errands, casual lunch, sightseeing, everyday wear) — even in the same hot weather — simple flat sandals/slides are the right call, not heels; do not apply the heeled-sandals preference outside the elegant-evening context it's meant for. USER SHOE-TYPE REQUESTS DO NOT OVERRIDE EVENT CONTEXT: if the user asks for a specific shoe type (e.g. 'ciabatte basse', 'flat sandals', 'sneakers') for an evening/formal occasion, only pick items of that type that are NOT day-only — never propose Birkenstocks, slides, or flip-flops (subcategory or styleTags signaling casual/outdoor sandals) for an evening or black-tie occasion just because the user named that shoe type; if the wardrobe has no evening-appropriate option within that type, say so honestly instead of defaulting to the closest casual match.",
       "FORMALITY: each item may carry a 'formality' score (1-5: 1 very casual/sport, 2 casual, 3 smart casual, 4 elegant, 5 formal/very elegant) and a 'dayEvening' tag (day/evening/both). Match the outfit's overall formality to what the occasion calls for — a dressy evening event (cocktail, gala, wedding, elegant dinner) needs shoes and bags around formality 4-5, not 1-2, even if a lower-formality piece happens to match color perfectly. COLOR CAN NEVER RESCUE THE WRONG FORMALITY: if a color-perfect pairing (e.g. a casual crossbody bag) is available alongside a higher-formality piece that's a weaker color match (e.g. an elegant clutch) for a dressy occasion, the higher-formality piece wins — pick the clutch, not the color-matched crossbody. Only fall back to a lower-formality piece if the wardrobe genuinely has nothing at the right formality level, and say so honestly. When formality is missing (empty) for an item, don't guess a number — reason from category/subcategory/styleTags as you already do, but treat this rule as advisory rather than a hard block in that case.",
       "SHOES + BAG COLOR PAIRING: when choosing between multiple valid shoe or bag options AT THE SAME FORMALITY LEVEL, prefer an exact color match between shoes and bag first (e.g. both black, both a matching neutral). If no matching pair exists in the wardrobe, prefer a complementary color pairing (opposite-ish tones that read as intentional together) over an arbitrary, unrelated color combination — never mention color theory terms to the user, just make the pairing. Only fall back to a non-matching, non-complementary pairing if the wardrobe genuinely offers nothing better for that outfit. This is always subordinate to the FORMALITY rule above — never let color pairing pull in a piece that's the wrong formality for the occasion.",
+      "LAYERING TECHNIQUES — two specific combinations to actively consider, not just fall back to a single top: (1) a denim shirt or jacket worn OPEN, unbuttoned, over a well-fitted tank top or t-shirt underneath (fit must be 'Slim'/'Tailored'/'Regular' — never Oversized or Cropped, which reads sloppy layered this way, not intentional); (2) a lace bra or bralette worn deliberately visible under an open blazer or a silk/satin shirt (buttons undone a couple down, or the shirt worn open like a light jacket), for occasions where that reads as styled rather than accidental (evening, going-out, creative/bold contexts — never for work or conservative occasions, and never if it would violate a stated dress preference like avoiding sheer/low necklines). Only propose these when the wardrobe actually has pieces that fit the technique (the right subcategory/fit/material) — never force a layering trick onto pieces it doesn't suit.",
       ...(data.industry || data.workDressCode || data.personalFormality || data.profession ? [
         [
           "USER CONTEXT (soft signals only — weigh them together, never as a fixed rule like 'this industry = this outfit'; the user's own words in this conversation always win over these defaults):",
@@ -328,8 +336,39 @@ export const stylistChat = createServerFn({ method: "POST" })
         hasNonRunningShoeAlternative && catalog.find((c) => c.id === id)?.subcategory === "Running Shoes";
       const violatesSlideRule = (id: string): boolean =>
         isDancingContext && hasNonSlideAlternative && IMPRACTICAL_FOR_DANCING.has(catalog.find((c) => c.id === id)?.subcategory ?? "");
+
+      // Same principle applied to the piece's own occasion tag, not just
+      // footwear: a piece tagged ONLY "Travel" or ONLY "Sport" (the
+      // person's own explicit tag on it, via Wardrobe → edit → Occasion)
+      // is situational and shouldn't surface for an unrelated occasion —
+      // e.g. a travel-only bag proposed as a work-outfit bag. Detecting
+      // "what occasion is this conversation about" from free-form chat
+      // is inherently fuzzy, so this only fires for a small set of
+      // clearly-named occasions mentioned in the conversation, and only
+      // when a genuinely different, non-specialized item exists to use
+      // instead — never a blanket ban on travel/sport pieces.
+      const OCCASION_SIGNAL: Record<string, RegExp> = {
+        Work: /\bwork\b|\blavoro\b|\bufficio\b|\boffice\b|\breunion\b|\briunione\b|\bclient\b|\bcliente\b/i,
+      };
+      const mentionedOccasions = Object.keys(OCCASION_SIGNAL).filter((occ) => OCCASION_SIGNAL[occ].test(conversationText));
+      const violatesOccasionTag = (id: string): boolean => {
+        if (!mentionedOccasions.length) return false;
+        const item = catalog.find((c) => c.id === id);
+        if (!item?.occasion) return false;
+        const tags = item.occasion.split(",").map((s) => s.trim()).filter(Boolean);
+        const hasSpecialized = tags.some((tg) => ["Travel", "Sport"].includes(tg));
+        if (!hasSpecialized) return false;
+        // Violates if none of the occasions mentioned in the conversation
+        // are among this item's own tags.
+        return !mentionedOccasions.some((occ) => tags.includes(occ));
+      };
+      const hasOccasionAlternative = (category: string, subcategory: string | undefined): boolean =>
+        catalog.some((c) => c.category === category && (subcategory ? c.subcategory === subcategory : true) && !violatesOccasionTag(c.id));
+
       const hasFootwearViolation = (ids: string[]): boolean =>
         ids.some((id) => violatesRunningRule(id) || violatesSlideRule(id));
+      const hasAnyItemViolation = (ids: string[]): boolean =>
+        ids.some((id) => violatesRunningRule(id) || violatesSlideRule(id) || (violatesOccasionTag(id) && hasOccasionAlternative(catalog.find((c) => c.id === id)?.category ?? "", undefined)));
 
       if (finalItemIds.length > 0) {
         const cats = new Set(
@@ -341,11 +380,15 @@ export const stylistChat = createServerFn({ method: "POST" })
         if (!cats.has("Shoes")) missing.push("shoes");
         if (!cats.has("Bags")) missing.push("a bag");
         const footwearViolation = hasFootwearViolation(finalItemIds);
+        const occasionTagViolation = finalItemIds.some((id) => violatesOccasionTag(id) && hasOccasionAlternative(catalog.find((c) => c.id === id)?.category ?? "", undefined));
         if (footwearViolation) {
           const runningPicked = finalItemIds.some(violatesRunningRule);
           const slidesPicked = finalItemIds.some(violatesSlideRule);
           if (runningPicked) missing.push("a different pair of shoes — running shoes were picked, but this isn't a Sport/gym/running occasion, so swap them for a non-running pair from the wardrobe");
           if (slidesPicked) missing.push("a different pair of shoes — flat slides/flip-flops were picked, but this occasion involves dancing or standing for hours, so swap them for something more practical for that from the wardrobe");
+        }
+        if (occasionTagViolation) {
+          missing.push("a different piece for whichever item is tagged only 'Travel' or 'Sport' — that piece doesn't fit this occasion, so swap it for something from the wardrobe that isn't restricted to that situational tag");
         }
 
         if (missing.length > 0) {
@@ -365,7 +408,8 @@ export const stylistChat = createServerFn({ method: "POST" })
             const repaired = parseAiJson(r3.text, OutputSchema);
             const repairedIds = repaired.item_ids.filter((id) => validIds.has(id)).slice(0, 6);
             const repairFixedFootwear = !footwearViolation || !hasFootwearViolation(repairedIds);
-            if (repairedIds.length >= finalItemIds.length && repairFixedFootwear) {
+            const repairFixedOccasion = !occasionTagViolation || !repairedIds.some((id) => violatesOccasionTag(id) && hasOccasionAlternative(catalog.find((c) => c.id === id)?.category ?? "", undefined));
+            if (repairedIds.length >= finalItemIds.length && repairFixedFootwear && repairFixedOccasion) {
               finalItemIds = repairedIds;
               finalReply = repaired.reply;
             }
@@ -389,6 +433,19 @@ export const stylistChat = createServerFn({ method: "POST" })
           finalItemIds = finalItemIds
             .filter((id) => !violatesRunningRule(id) && !violatesSlideRule(id))
             .concat(replacement.id);
+        }
+      }
+
+      // Same last-resort fallback for a surviving occasion-tag violation
+      // (e.g. a Travel-only bag proposed for a Work outfit) — swap it
+      // for any same-category piece that isn't restricted the same way,
+      // rather than shipping the mismatched pick.
+      for (const id of finalItemIds) {
+        if (!violatesOccasionTag(id)) continue;
+        const category = catalog.find((c) => c.id === id)?.category ?? "";
+        const replacement = catalog.find((c) => c.category === category && !violatesOccasionTag(c.id) && !finalItemIds.includes(c.id));
+        if (replacement) {
+          finalItemIds = finalItemIds.filter((x) => x !== id).concat(replacement.id);
         }
       }
 
