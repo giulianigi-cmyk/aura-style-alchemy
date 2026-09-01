@@ -21,7 +21,13 @@ import type { WardrobeItem } from "./aura-types";
 // ============================================================================
 
 const InputSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("url"), url: z.string().min(1) }),
+  // accessToken is needed for the same reason it's needed in the plain
+  // AddItem → paste-link flow: Firecrawl's per-user daily credit count
+  // (see consumeFirecrawlCredit) is tracked against the signed-in user,
+  // and the auth middleware here only exposes a Supabase client + userId
+  // to the handler, never the raw bearer token — the client has to pass
+  // it through explicitly, same as importProductFromUrl already does.
+  z.object({ source: z.literal("url"), url: z.string().min(1), accessToken: z.string().optional() }),
   z.object({ source: z.literal("photo"), imageDataUrl: z.string().min(1) }),
   z.object({ source: z.literal("label"), imageDataUrl: z.string().min(1) }),
   z.object({ source: z.literal("photos"), garmentImageDataUrl: z.string().min(1), labelImageDataUrl: z.string().min(1) }),
@@ -214,7 +220,7 @@ export const analyzePurchase = createServerFn({ method: "POST" })
       try { target = new URL(data.url.startsWith("http") ? data.url : `https://${data.url}`); }
       catch { return { ok: false, error: "Invalid link." }; }
 
-      const resolved = await resolveProductImageUrl(target.toString());
+      const resolved = await resolveProductImageUrl(target.toString(), data.accessToken);
       if (!resolved.ok) {
         return { ok: false, error: resolved.error || "Couldn't read this product page." };
       }
