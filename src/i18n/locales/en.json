@@ -625,6 +625,7 @@
     "wouldPairWithLink": "Would pair with {{count}} pieces you already own",
     "fillsAGap": "Fills a gap in your wardrobe",
     "lowConfidenceNote": "Low-confidence estimate: not enough data for a confident call",
+    "viewOnSite": "View on site",
     "linkDisclaimer": "This is an assessment based on your wardrobe, not market expertise — it doesn't know about discounts, real quality, or trends.",
     "orWardrobeIsMissing": "Or, what your wardrobe is missing",
     "disclaimer": "This is a wardrobe gap estimate based on what you already own — not a live product catalog. Real shopping recommendations with actual products and links are coming soon."
