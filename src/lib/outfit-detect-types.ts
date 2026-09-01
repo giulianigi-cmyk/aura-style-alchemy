@@ -29,6 +29,17 @@ export const DetectedItemSchema = z.object({
   formality: z.number().optional(),
   dayEvening: z.string().optional(),
   sleeveLength: z.string().optional(),
+  // Same extended attribute set the single-item analyzer already
+  // captures (see ai-analyze.functions.ts) — this multi-item detector
+  // never asked for them, so a batch/outfit scan always came back with
+  // fewer fields than adding one piece at a time.
+  length: z.string().optional(),
+  fit: z.string().optional(),
+  heelHeight: z.string().optional(),
+  toeShape: z.string().optional(),
+  closure: z.string().optional(),
+  gender: z.string().optional(),
+  styleTags: z.array(z.string()).optional(),
 });
 
 export const DetectOutputSchema = z.object({
