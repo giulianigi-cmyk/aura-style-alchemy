@@ -22,7 +22,16 @@ const ItemSchema = z.object({
   length: z.string().nullable().optional(),
   fit: z.string().nullable().optional(),
   heelHeight: z.string().nullable().optional(),
+  toeShape: z.string().nullable().optional(),
+  closure: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
   styleTags: z.array(z.string()).nullable().optional(),
+  // The piece's OWN occasion tags (from Wardrobe → edit → Occasion), as
+  // opposed to params.occasion which is the TARGET occasion being
+  // generated for. Previously never sent to this engine at all, so an
+  // item tagged only "Travel" could freely surface in a Work outfit —
+  // the AI had no way to know the tag existed.
+  occasion: z.string().nullable().optional(),
   // Set while the item is out on loan (see wardrobe-loans.functions.ts).
   // A loaned item is physically not in the wardrobe right now, so it's
   // excluded before anything else runs — same hard-filter treatment as
@@ -188,6 +197,14 @@ export async function suggestOutfitCore(params: {
     : "Weather: unknown.";
   const occ = params.occasion ? `Occasion: ${params.occasion}.` : "Occasion: everyday.";
 
+  // Every field ItemSchema accepts must survive into this catalog — this
+  // is the object every hard filter below actually reads via
+  // catalog.find(...), NOT eligibleItems. A field silently dropped here
+  // makes any check against it a permanent no-op even if the field is
+  // received and even if a filter function already checks it (this is
+  // exactly what happened to length and fit: the Work mini-skirt/dress
+  // exclusion and the dress-preference length/fit checks were reading
+  // catalog items that never actually carried those two fields).
   const catalog = eligibleItems.slice(0, 200).map((it) => ({
     id: it.id,
     category: it.category ?? "",
@@ -200,8 +217,14 @@ export async function suggestOutfitCore(params: {
     formality: it.formality ?? null,
     dayEvening: it.dayEvening ?? "",
     sleeveLength: it.sleeveLength ?? "",
+    length: it.length ?? "",
+    fit: it.fit ?? "",
     heelHeight: it.heelHeight ?? "",
+    toeShape: it.toeShape ?? "",
+    closure: it.closure ?? "",
+    gender: it.gender ?? "",
     styleTags: it.styleTags ?? [],
+    occasion: it.occasion ?? "",
   }));
 
   const genderLine = params.gender === "Man"
@@ -336,6 +359,11 @@ export async function suggestOutfitCore(params: {
       }
       if (cold) {
         if (season.includes("summer") && LIGHT_SIGNAL.test(text)) return true;
+        // Structured signal, not just text pattern-matching: an item
+        // explicitly tagged Open Toe (see the shoe's own toeShape field)
+        // is a bare-foot shoe in cold weather regardless of what its
+        // subcategory text happens to say.
+        if (item.toeShape === "Open Toe") return true;
       }
       return false;
     });
@@ -371,6 +399,27 @@ export async function suggestOutfitCore(params: {
     return ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
   };
 
+  // A piece the person has explicitly tagged as "Travel" or "Sport" only
+  // (via Wardrobe → edit → Occasion) is situational — it shouldn't leak
+  // into a Work, Evening, or Formal look just because it also happens to
+  // fit color/formality. Only fires when the item's occasion tags are
+  // SET and specifically one of these two situational tags without also
+  // including the target occasion — an item with no occasion tags at
+  // all, or one tagged broadly (e.g. "Everyday"), is never excluded by
+  // this: most of a wardrobe isn't tagged per-occasion and shouldn't be
+  // penalized for it.
+  const SPECIALIZED_OCCASION_TAGS = ["Travel", "Sport"];
+  const targetOccasionBase = (params.occasion ?? "").split(/[·-]/)[0].trim();
+  const violatesOccasionTag = (ids: string[]): boolean =>
+    ids.some((id) => {
+      const item = catalog.find((c) => c.id === id);
+      if (!item?.occasion) return false;
+      const tags = item.occasion.split(",").map((s) => s.trim()).filter(Boolean);
+      const hasSpecialized = tags.some((tg) => SPECIALIZED_OCCASION_TAGS.includes(tg));
+      if (!hasSpecialized) return false;
+      return !tags.includes(targetOccasionBase);
+    });
+
   const isValidResult = (ids: string[]): boolean => {
     if (!ids.length) return false;
     if (hasSlotViolation(ids)) return false;
@@ -378,6 +427,7 @@ export async function suggestOutfitCore(params: {
     if (violatesWeather(ids)) return false;
     if (missingMandatoryBag(ids)) return false;
     if (violatesFootwearRule(ids)) return false;
+    if (violatesOccasionTag(ids)) return false;
     return true;
   };
 
@@ -455,6 +505,7 @@ export async function suggestOutfitCore(params: {
             if (violatesWeather([id])) return false;
             if (isWorkOccasion && violatesWorkRules([id])) return false;
             if (violatesFootwearRule([id])) return false;
+            if (violatesOccasionTag([id])) return false;
             return true;
           });
         }
