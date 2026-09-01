@@ -10,7 +10,16 @@ import {
   OCCASION_OPTIONS,
   CURRENCY_OPTIONS,
   SLEEVE_LENGTH_OPTIONS,
+  FIT_OPTIONS,
+  HEEL_HEIGHT_OPTIONS,
+  TOE_SHAPE_OPTIONS,
+  CLOSURE_OPTIONS,
+  GENDER_OPTIONS,
+  STYLE_TAG_OPTIONS,
   subcategoriesFor,
+  attributeAppliesTo,
+  lengthOptionsFor,
+  lengthAppliesTo,
 } from "@/lib/wardrobe-options";
 
 const FORMALITY_KEYS = ["addItem.formality1", "addItem.formality2", "addItem.formality3", "addItem.formality4", "addItem.formality5"];
@@ -40,6 +49,13 @@ export type DetectedItemDraft = {
   sleeveLength: string;
   formality: number | null;
   dayEvening: string;
+  length: string;
+  fit: string;
+  heelHeight: string;
+  toeShape: string;
+  closure: string;
+  gender: string;
+  styleTags: string[];
 };
 
 export function DetectedItemCard({
@@ -152,6 +168,110 @@ export function DetectedItemCard({
           </div>
         </div>
       )}
+
+      {lengthAppliesTo(item.category, item.subcategory) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.length")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {lengthOptionsFor(item.category, item.subcategory).map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ length: item.length === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.length === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attributeAppliesTo("fit", item.category) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.fit")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {FIT_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ fit: item.fit === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.fit === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attributeAppliesTo("heelHeight", item.category) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.heel")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {HEEL_HEIGHT_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ heelHeight: item.heelHeight === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.heelHeight === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attributeAppliesTo("toeShape", item.category) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.toeShape")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {TOE_SHAPE_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ toeShape: item.toeShape === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.toeShape === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {attributeAppliesTo("closure", item.category) && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.closure")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CLOSURE_OPTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onChange({ closure: item.closure === s ? "" : s })}
+                className={`rounded-full px-3 py-1.5 text-xs ${item.closure === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.gender")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {GENDER_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => onChange({ gender: item.gender === s ? "" : s })}
+              className={`rounded-full px-3 py-1.5 text-xs ${item.gender === s ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+            >{s}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.styleTags")}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {STYLE_TAG_OPTIONS.map((s) => {
+            const on = item.styleTags.includes(s);
+            return (
+              <button
+                key={s}
+                onClick={() => onChange({ styleTags: on ? item.styleTags.filter((x) => x !== s) : [...item.styleTags, s] })}
+                className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"}`}
+              >{s}</button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="mt-3">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("detectedItem.formality")}</p>
