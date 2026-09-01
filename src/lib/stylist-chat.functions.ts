@@ -309,8 +309,27 @@ export const stylistChat = createServerFn({ method: "POST" })
       // if running shoes are the only shoes owned, there's nothing
       // better to swap in.
       const hasNonRunningShoeAlternative = catalog.some((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes");
+
+      // Same idea, for a second case that used to be soft-only guidance
+      // too: flat slides/flip-flops/slippers are impractical for
+      // standing and dancing for hours — a concert isn't the beach.
+      // Only checked when the conversation actually signals a
+      // dancing/standing-event context (concert, party, club...); these
+      // shoes are perfectly fine recommendations outside that context
+      // (errands, the beach, lounging at home), so this must not become
+      // a blanket ban the way the running-shoe rule is.
+      const DANCING_SIGNAL = /concert|concerto|dance|dancing|ballare|ballo|discoteca|disco|club|nightclub|festa|party|rave|fiesta|bailar|baile|danser|danse|soirée/i;
+      const conversationText = data.messages.map((m) => m.content ?? "").join(" ");
+      const isDancingContext = DANCING_SIGNAL.test(conversationText);
+      const IMPRACTICAL_FOR_DANCING = new Set(["Slides", "Flip Flops", "Slippers"]);
+      const hasNonSlideAlternative = catalog.some((c) => c.category === "Shoes" && !IMPRACTICAL_FOR_DANCING.has(c.subcategory ?? ""));
+
+      const violatesRunningRule = (id: string): boolean =>
+        hasNonRunningShoeAlternative && catalog.find((c) => c.id === id)?.subcategory === "Running Shoes";
+      const violatesSlideRule = (id: string): boolean =>
+        isDancingContext && hasNonSlideAlternative && IMPRACTICAL_FOR_DANCING.has(catalog.find((c) => c.id === id)?.subcategory ?? "");
       const hasFootwearViolation = (ids: string[]): boolean =>
-        hasNonRunningShoeAlternative && ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
+        ids.some((id) => violatesRunningRule(id) || violatesSlideRule(id));
 
       if (finalItemIds.length > 0) {
         const cats = new Set(
@@ -323,7 +342,10 @@ export const stylistChat = createServerFn({ method: "POST" })
         if (!cats.has("Bags")) missing.push("a bag");
         const footwearViolation = hasFootwearViolation(finalItemIds);
         if (footwearViolation) {
-          missing.push("a different pair of shoes — running shoes were picked, but this isn't a Sport/gym/running occasion, so swap them for a non-running pair from the wardrobe");
+          const runningPicked = finalItemIds.some(violatesRunningRule);
+          const slidesPicked = finalItemIds.some(violatesSlideRule);
+          if (runningPicked) missing.push("a different pair of shoes — running shoes were picked, but this isn't a Sport/gym/running occasion, so swap them for a non-running pair from the wardrobe");
+          if (slidesPicked) missing.push("a different pair of shoes — flat slides/flip-flops were picked, but this occasion involves dancing or standing for hours, so swap them for something more practical for that from the wardrobe");
         }
 
         if (missing.length > 0) {
@@ -360,10 +382,12 @@ export const stylistChat = createServerFn({ method: "POST" })
       // ai-suggest-outfit.functions.ts. Only fires when the wardrobe
       // genuinely has a non-running shoe to substitute.
       if (hasFootwearViolation(finalItemIds)) {
-        const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && !finalItemIds.includes(c.id));
+        const replacement = catalog.find((c) =>
+          c.category === "Shoes" && !IMPRACTICAL_FOR_DANCING.has(c.subcategory ?? "") && c.subcategory !== "Running Shoes" && !finalItemIds.includes(c.id)
+        );
         if (replacement) {
           finalItemIds = finalItemIds
-            .filter((id) => catalog.find((c) => c.id === id)?.subcategory !== "Running Shoes")
+            .filter((id) => !violatesRunningRule(id) && !violatesSlideRule(id))
             .concat(replacement.id);
         }
       }
