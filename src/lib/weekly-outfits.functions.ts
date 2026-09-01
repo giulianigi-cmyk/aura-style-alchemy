@@ -125,8 +125,12 @@ export const generateWeeklyOutfits = createServerFn({ method: "POST" })
       length: it.length ?? "",
       fit: it.fit ?? "",
       heelHeight: it.heel_height ?? "",
+      toeShape: it.toe_shape ?? "",
+      closure: it.closure ?? "",
+      gender: it.gender ?? "",
       styleTags: it.style_tags ?? [],
       activeLoanId: it.active_loan_id ?? null,
+      occasion: it.occasion ?? "",
     }));
 
     const eventById = new Map(
