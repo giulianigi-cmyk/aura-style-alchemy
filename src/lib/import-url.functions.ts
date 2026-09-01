@@ -546,6 +546,36 @@ async function recordDomainHint(domain: string, signal: string): Promise<void> {
   }
 }
 
+// The proxy's geolocation was always hardcoded to Italy, regardless of
+// what region the URL itself is actually for. A `.../us/en/...` or
+// `.../jp/ja/...` path segment is a strong, common signal (used by GU,
+// Uniqlo, and many other multi-region retailers) that the page expects
+// a visitor from that region — scraping a US-region page through an
+// Italian-geolocated proxy is exactly the kind of geo/IP mismatch that
+// trips region-aware bot protection. Falls back to Italy when the URL
+// gives no such hint, same as before.
+const REGION_PATH_SIGNAL: Record<string, { country: string; languages: string[] }> = {
+  us: { country: "US", languages: ["en-US"] },
+  uk: { country: "GB", languages: ["en-GB"] },
+  gb: { country: "GB", languages: ["en-GB"] },
+  jp: { country: "JP", languages: ["ja-JP"] },
+  fr: { country: "FR", languages: ["fr-FR"] },
+  de: { country: "DE", languages: ["de-DE"] },
+  es: { country: "ES", languages: ["es-ES"] },
+  it: { country: "IT", languages: ["it-IT"] },
+  cn: { country: "CN", languages: ["zh-CN"] },
+  kr: { country: "KR", languages: ["ko-KR"] },
+};
+function inferScrapeLocation(url: string): { country: string; languages: string[] } {
+  try {
+    const segments = new URL(url).pathname.toLowerCase().split("/").filter(Boolean);
+    for (const seg of segments.slice(0, 2)) {
+      if (REGION_PATH_SIGNAL[seg]) return REGION_PATH_SIGNAL[seg];
+    }
+  } catch { /* fall through to default */ }
+  return { country: "IT", languages: ["it-IT"] };
+}
+
 const firecrawlScrape: FallbackScraper = async (url) => {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return { html: null, errored: true, debug: "no-api-key" };
@@ -562,7 +592,7 @@ const firecrawlScrape: FallbackScraper = async (url) => {
         onlyMainContent: false,
         timeout: 45000,
         waitFor: 5000,
-        location: { country: "IT", languages: ["it-IT"] },
+        location: inferScrapeLocation(url),
         blockAds: true,
         proxy: "auto",
       }),
@@ -1290,4 +1320,3 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       usedFallback,
     };
   });
-
