@@ -4,7 +4,11 @@
 import { generateText } from "ai";
 import type { z } from "zod";
 import { COLOR_NAMES } from "./color-palette";
-import { MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS, SLEEVE_LENGTH_OPTIONS } from "./wardrobe-options";
+import {
+  MATERIAL_OPTIONS, SUBCATEGORY_OPTIONS, SLEEVE_LENGTH_OPTIONS,
+  LENGTH_OPTIONS_BY_CATEGORY, FIT_OPTIONS, HEEL_HEIGHT_OPTIONS, TOE_SHAPE_OPTIONS,
+  CLOSURE_OPTIONS, GENDER_OPTIONS, STYLE_TAG_OPTIONS,
+} from "./wardrobe-options";
 import { parseAiJson } from "./ai-json";
 import {
   DETECT_CATEGORIES,
@@ -28,13 +32,20 @@ function buildPrompt(): string {
     "- formality: an integer 1-5, purely about how dressed-up this specific piece reads: 1 = very casual/sport, 2 = casual, 3 = smart casual, 4 = elegant, 5 = formal/very elegant. Always give your best estimate.",
     "- dayEvening: EXACTLY one of \"day\", \"evening\", \"both\" — whether this piece reads as daytime wear, an evening/going-out piece, or works for either.",
     "- sleeveLength: for Tops, Dresses, Outerwear or Jumpsuits only, EXACTLY one of \"Sleeveless\", \"Short Sleeve\", \"Three-Quarter Sleeve\", \"Long Sleeve\". Leave as an empty string for any other category.",
+    `- length: CATEGORY-DEPENDENT, use the matching value set only — Dresses: ${LENGTH_OPTIONS_BY_CATEGORY.Dresses.join("/")}; Outerwear: ${LENGTH_OPTIONS_BY_CATEGORY.Outerwear.join("/")}; Tops: ${LENGTH_OPTIONS_BY_CATEGORY.Tops.join("/")}; Bottoms: ONLY when subcategory is "Skirt", use Mini/Midi/Maxi. For any other category, leave length as an empty string.`,
+    `- fit (Tops, Bottoms, Dresses, Outerwear, Jumpsuits, Activewear only): EXACTLY one of ${FIT_OPTIONS.join(", ")}. Empty string for any other category.`,
+    `- heelHeight (Shoes only): EXACTLY one of ${HEEL_HEIGHT_OPTIONS.join(", ")}. Empty string otherwise.`,
+    `- toeShape (Shoes only): EXACTLY one of ${TOE_SHAPE_OPTIONS.join(", ")}. Empty string otherwise.`,
+    `- closure (Shoes, Outerwear, Bags only): EXACTLY one of ${CLOSURE_OPTIONS.join(", ")}. Empty string otherwise.`,
+    `- gender: EXACTLY one of ${GENDER_OPTIONS.join(", ")}. Always give your best estimate from the garment's cut and styling.`,
+    `- styleTags: 0-3 items from: ${STYLE_TAG_OPTIONS.join(", ")}. Empty array if none clearly apply.`,
     "- confidence: 0 to 1, how sure you are this is a distinct, correctly identified item.",
     "- bbox: the item's bounding box as FRACTIONS of the full image (0 to 1): x and y are the top-left corner, width and height the box size. Be generous enough to include the whole item.",
     "Do not detect skin, hair, or background as items. Do not detect the same physical item twice. Return between 1 and 12 items, ordered roughly top-to-bottom on the body.",
     "If the photo does not clearly show a person wearing clothes, return an empty items array.",
     "",
     "Respond with ONLY a single valid JSON object, no markdown fences, no extra text, in exactly this shape:",
-    '{"items": [{"category": "", "subcategory": "", "colors": [], "description": "", "materials": [], "seasons": [], "confidence": 0.9, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}, "formality": 3, "dayEvening": "day", "sleeveLength": ""}]}',
+    '{"items": [{"category": "", "subcategory": "", "colors": [], "description": "", "materials": [], "seasons": [], "confidence": 0.9, "bbox": {"x": 0, "y": 0, "width": 0, "height": 0}, "formality": 3, "dayEvening": "day", "sleeveLength": "", "length": "", "fit": "", "heelHeight": "", "toeShape": "", "closure": "", "gender": "", "styleTags": []}]}',
   ].join("\n");
 }
 
@@ -66,6 +77,13 @@ function sanitize(output: z.infer<typeof DetectOutputSchema>): DetectedOutfitIte
         formality: it.formality != null ? Math.max(1, Math.min(5, Math.round(it.formality))) : undefined,
         dayEvening: ["day", "evening", "both"].includes(it.dayEvening ?? "") ? it.dayEvening : undefined,
         sleeveLength: SLEEVE_LENGTH_OPTIONS.includes(it.sleeveLength ?? "") ? it.sleeveLength : undefined,
+        length: it.length || undefined,
+        fit: FIT_OPTIONS.includes(it.fit ?? "") ? it.fit : undefined,
+        heelHeight: HEEL_HEIGHT_OPTIONS.includes(it.heelHeight ?? "") ? it.heelHeight : undefined,
+        toeShape: TOE_SHAPE_OPTIONS.includes(it.toeShape ?? "") ? it.toeShape : undefined,
+        closure: CLOSURE_OPTIONS.includes(it.closure ?? "") ? it.closure : undefined,
+        gender: GENDER_OPTIONS.includes(it.gender ?? "") ? it.gender : undefined,
+        styleTags: (it.styleTags ?? []).filter((s) => STYLE_TAG_OPTIONS.includes(s)).slice(0, 3),
       };
     });
 }
