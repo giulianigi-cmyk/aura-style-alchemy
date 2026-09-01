@@ -196,7 +196,11 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             length: it.length ?? "",
             fit: it.fit ?? "",
             heelHeight: it.heel_height ?? "",
+            toeShape: it.toe_shape ?? "",
+            closure: it.closure ?? "",
+            gender: it.gender ?? "",
             styleTags: it.style_tags ?? [],
+            occasion: it.occasion ?? "",
           })),
         },
       });
