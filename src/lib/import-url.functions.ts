@@ -440,7 +440,7 @@ function collectDomImages(html: string, base: URL): Array<{ url: string; alt: st
 // not five near-duplicate crops. `forGallery` keeps the penalty for the
 // automatic primary pick but removes it when ranking what the person
 // gets to choose from.
-function scoreImage(url: string, alt: string, productTokens: string[], forGallery = false): number {
+function scoreImage(url: string, alt: string, productTokens: string[], forGallery = false, index = -1): number {
   const u = url.toLowerCase();
   const a = alt.toLowerCase();
   const combined = `${u} ${a}`;
@@ -459,13 +459,24 @@ function scoreImage(url: string, alt: string, productTokens: string[], forGaller
     if (w >= 1000) s += 3;
     else if (w >= 600) s += 1;
   }
+  // Mild gallery-position bonus, decaying to zero by the 6th image — most
+  // e-commerce galleries put the clean, isolated product shot first and
+  // save styled/lifestyle/worn-with-other-pieces photos for later in the
+  // gallery (a jeans product ending its gallery with a photo of a model
+  // wearing them styled with a top, say). Keyword scoring alone can't
+  // tell those apart when neither filename nor alt text says "model" or
+  // "lifestyle" — this nudges ties (and near-ties) toward the position
+  // that's actually more likely to be the real product shot, without
+  // being an absolute override: a later image with a clearly stronger
+  // keyword/token match still wins on real signal.
+  if (!forGallery && index >= 0) s += Math.max(0, 3 - index * 0.5);
   return s;
 }
 
 function pickBestImage(candidates: Array<{ url: string; alt: string }>, productTokens: string[]): string | null {
   if (!candidates.length) return null;
   const scored = candidates
-    .map((c, i) => ({ u: c.url, s: scoreImage(c.url, c.alt, productTokens), i }))
+    .map((c, i) => ({ u: c.url, s: scoreImage(c.url, c.alt, productTokens, false, i), i }))
     .filter((x) => x.s > -20)
     .sort((a, b) => (b.s - a.s) || (a.i === 0 ? 1 : b.i === 0 ? -1 : a.i - b.i));
   return scored[0]?.u ?? null;
