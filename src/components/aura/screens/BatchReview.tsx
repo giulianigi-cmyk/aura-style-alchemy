@@ -151,6 +151,13 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               sleeveLength: it.sleeve_length ?? "",
               formality: it.formality ?? null,
               dayEvening: it.day_evening ?? "",
+              length: it.length ?? "",
+              fit: it.fit ?? "",
+              heelHeight: it.heel_height ?? "",
+              toeShape: it.toe_shape ?? "",
+              closure: it.closure ?? "",
+              gender: it.gender ?? "",
+              styleTags: it.style_tags ?? [],
               dedupe,
               included: dedupe.verdict !== "certain",
               bgRemoved: false,
@@ -341,6 +348,9 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         brand: string; colors: string[]; material: string[]; season: string | null;
         price: number | null; currency: string | null; size: string | null;
         style: string | null; occasion: string | null; purchase_date: string | null;
+        sleeve_length: string | null; formality: number | null; day_evening: string | null;
+        length: string | null; fit: string | null; heel_height: string | null; toe_shape: string | null;
+        closure: string | null; gender: string | null; style_tags: string[];
       }> = [];
 
       for (let i = 0; i < finalToSave.length; i++) {
@@ -393,6 +403,13 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
           sleeve_length: d.sleeveLength || null,
           formality: d.formality,
           day_evening: d.dayEvening || null,
+          length: d.length || null,
+          fit: d.fit || null,
+          heel_height: d.heelHeight || null,
+          toe_shape: d.toeShape || null,
+          closure: d.closure || null,
+          gender: d.gender || null,
+          style_tags: d.styleTags,
         });
       }
 
