@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
+import { supabase } from "@/integrations/supabase/client";
 import { analyzeWardrobeGap, type GapSuggestion } from "@/lib/wardrobe-gap.functions";
 import { analyzePurchase, type PurchaseAdvisorResult } from "@/lib/purchase-advisor.functions";
 
@@ -73,7 +74,8 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
       if (mode === "url") {
         const raw = linkUrl.trim();
         if (!raw) { setChecking(false); return; }
-        res = await analyzePurchaseFn({ data: { source: "url", url: raw } });
+        const { data: sess } = await supabase.auth.getSession();
+        res = await analyzePurchaseFn({ data: { source: "url", url: raw, accessToken: sess.session?.access_token } });
       } else if (mode === "photo") {
         if (!photoDataUrl) { setChecking(false); return; }
         res = includeLabelWithPhoto && labelDataUrl
