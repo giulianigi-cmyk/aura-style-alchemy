@@ -170,6 +170,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   dayEvening: it.day_evening ?? "",
                   styleTags: it.style_tags ?? [],
                   sleeveLength: it.sleeve_length ?? "",
+                  length: it.length ?? "",
+                  occasion: it.occasion ?? "",
                 })),
                 language: i18n.language,
               },
