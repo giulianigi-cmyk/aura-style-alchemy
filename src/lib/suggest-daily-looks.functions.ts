@@ -20,6 +20,11 @@ const ItemSchema = z.object({
   // and a Maxi skirt are indistinguishable to both the model and the code.
   length: z.string().nullable().optional(),
   sleeveLength: z.string().nullable().optional(),
+  // The piece's OWN occasion tags (Wardrobe → edit → Occasion) — never
+  // sent to this engine before, so a bag tagged only "Travel" could
+  // freely surface in the Work curated look here, same gap already
+  // closed in the on-demand/weekly engine and the stylist chat.
+  occasion: z.string().nullable().optional(),
 });
 
 const InputSchema = z.object({
@@ -85,6 +90,7 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       styleTags: it.styleTags ?? [],
             length: it.length ?? "",
       sleeveLength: it.sleeveLength ?? "",
+      occasion: it.occasion ?? "",
     }));
 
 
@@ -264,6 +270,25 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
     const violatesStylingFootwear = (ids: string[]): boolean =>
       ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Running Shoes");
 
+    // A piece tagged ONLY "Travel" or ONLY "Sport" (the person's own
+    // explicit tag) is situational — it shouldn't surface in an
+    // unrelated curated look, e.g. a travel-only bag proposed for the
+    // Work look. "General" (today's everyday look) is intentionally
+    // exempt: it's not tied to one of the three named occasions, so
+    // there's no specific occasion to check the tag against.
+    const SPECIALIZED_OCCASION_TAGS = ["Travel", "Sport"];
+    const violatesOccasionTag = (occasion: string, ids: string[]): boolean => {
+      if (occasion === "General") return false;
+      return ids.some((id) => {
+        const item = catalog.find((c) => c.id === id);
+        if (!item?.occasion) return false;
+        const tags = item.occasion.split(",").map((s) => s.trim()).filter(Boolean);
+        const hasSpecialized = tags.some((tg) => SPECIALIZED_OCCASION_TAGS.includes(tg));
+        if (!hasSpecialized) return false;
+        return !tags.includes(occasion);
+      });
+    };
+
         const REQUIRED_OCCASIONS = ["Work", "Weekend", "Evening"] as const;
 
     /** Single-look validation, reused both by the first pass and by the
@@ -278,6 +303,7 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       if (violatesDressPlusBottoms(l.item_ids)) return false;
       if (violatesWeather(l.item_ids)) return false;
       if (violatesStylingFootwear(l.item_ids)) return false;
+      if (violatesOccasionTag(l.occasion, l.item_ids)) return false;
       if (seen.some((s) => jaccard(l.item_ids, s) >= TOO_SIMILAR)) return false;
       return true;
     };
