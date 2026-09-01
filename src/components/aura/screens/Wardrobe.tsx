@@ -557,10 +557,26 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     }
   };
 
+  // Only sign items whose path isn't already resolved — re-signing every
+  // single item (300+ for an established wardrobe) each time the array
+  // changes even by ONE item (the common case: saving a new piece
+  // prepends it here) was adding real, avoidable latency right when the
+  // person was mid-flow adding something.
   useEffect(() => {
     if (!items.length) { setSigned({}); return; }
     let cancelled = false;
-    void resolveWardrobeUrls(items).then(map => { if (!cancelled) setSigned(prev => ({ ...prev, ...map })); });
+    setSigned((prevSigned) => {
+      const known = new Set(Object.keys(prevSigned));
+      const unresolved = items.filter((it) => {
+        const path = toStoragePath(it.image_url);
+        const thumbPath = (it as unknown as { thumbnail_path?: string | null }).thumbnail_path;
+        return (path && !known.has(path)) || (thumbPath && !known.has(thumbPath));
+      });
+      if (unresolved.length) {
+        void resolveWardrobeUrls(unresolved).then((map) => { if (!cancelled) setSigned((prev) => ({ ...prev, ...map })); });
+      }
+      return prevSigned;
+    });
     return () => { cancelled = true; };
   }, [items]);
 
@@ -628,6 +644,20 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     [items],
   );
 
+  // Mirrors the exact gate in reanalyzeWardrobeBatch — this badge
+  // undercounted before (only checked formality), so it could show 0
+  // pending while season/occasion/day_evening were still genuinely
+  // missing on plenty of items. Was previously recomputed inline in the
+  // JSX on every render (unmemoized) — for a wardrobe with hundreds of
+  // pieces that's real, avoidable work on every re-render, not just
+  // when items actually change.
+  const unclassifiedCount = useMemo(
+    () => items.filter((it) =>
+      it.formality == null || !it.occasion || !it.season || !it.day_evening
+    ).length,
+    [items],
+  );
+
   const filtered = useMemo(() => {
     if (gapFilter) {
       return items.filter((i) => {
@@ -667,13 +697,6 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         </div>
                 <div className="flex gap-2">
           {(() => {
-                        // Mirrors the exact gate in reanalyzeWardrobeBatch — this
-            // badge undercounted before (only checked formality), so it
-            // could show 0 pending while season/occasion/day_evening
-            // were still genuinely missing on plenty of items.
-            const unclassifiedCount = items.filter((it) =>
-              it.formality == null || !it.occasion || !it.season || !it.day_evening
-            ).length;
             const hasPending = migrating || unclassifiedCount > 0;
             return (
               <button
