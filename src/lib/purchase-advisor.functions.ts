@@ -39,6 +39,8 @@ type PurchaseProduct = {
   price: string | null;
   currency: string | null;
   imageUrl: string | null;
+  sourceUrl: string | null;
+  description: string | null;
   category: string | null;
   subcategory: string | null;
   colors: string[];
@@ -61,6 +63,10 @@ export type PurchaseAdvisorResult =
         price: string | null;
         currency: string | null;
         imageUrl: string | null;
+        // The original product page, when the source was a link — lets
+        // the person tap through to verify or actually buy. Null for
+        // photo/label sources, since there's no page to link to.
+        sourceUrl: string | null;
       };
       analysis: {
         category: string | null;
@@ -209,7 +215,7 @@ export const analyzePurchase = createServerFn({ method: "POST" })
     const model = gateway("google/gemini-2.5-flash");
 
     const product: PurchaseProduct = {
-      title: null, brand: null, price: null, currency: null, imageUrl: null,
+      title: null, brand: null, price: null, currency: null, imageUrl: null, sourceUrl: null, description: null,
       category: null, subcategory: null, colors: [], material: null,
       length: null, sleeveLength: null, fit: null, styleTags: [],
     };
@@ -229,6 +235,8 @@ export const analyzePurchase = createServerFn({ method: "POST" })
       product.price = resolved.price ?? null;
       product.currency = resolved.priceCurrency ?? null;
       product.imageUrl = resolved.imageUrl;
+      product.sourceUrl = target.toString();
+      product.description = resolved.description ?? null;
 
       if (resolved.imageUrl) {
         try {
@@ -357,7 +365,9 @@ export const analyzePurchase = createServerFn({ method: "POST" })
     if (data.source === "label" && confidence === "high") confidence = "medium";
 
     const base = {
-      product: { title: product.title, brand: product.brand, price: product.price, currency: product.currency, imageUrl: product.imageUrl },
+      product: { title: product.title, brand: product.brand, price: product.price, currency: product.currency, imageUrl: product.imageUrl, sourceUrl: product.sourceUrl },
+      // description isn't part of the returned shape — reasoning-only
+      // input, not something the UI needs to render separately.
       analysis: { category: product.category, subcategory: product.subcategory, colors: product.colors, material: product.material },
       wardrobe: { duplicate, similarItemsCount, pairsWithCount, wardrobeGap },
       rules: { dressPreferenceViolation: dressViolation },
@@ -371,6 +381,7 @@ export const analyzePurchase = createServerFn({ method: "POST" })
       `Decision already made: ${verdict.toUpperCase()}.`,
       "Facts:",
       `- Product: ${product.category ?? "unknown category"}${product.subcategory ? " / " + product.subcategory : ""}, colors: ${product.colors.join(", ") || "unclear"}, brand: ${product.brand || "unknown"}, price: ${product.price ?? "unknown"}.`,
+      ...(product.description ? [`- Product's own description (from the retailer's page, use for fabric/fit/styling detail in your reason, but never to override the facts above): "${product.description}"`] : []),
       duplicate?.verdict === "certain"
         ? "- Near-duplicate of something already owned."
         : duplicate?.verdict === "maybe"
