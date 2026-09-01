@@ -43,6 +43,13 @@ type ScanItem = {
   sleeveLength: string;
   formality: number | null;
   dayEvening: string;
+  length: string;
+  fit: string;
+  heelHeight: string;
+  toeShape: string;
+  closure: string;
+  gender: string;
+  styleTags: string[];
 };
 
 
@@ -101,16 +108,30 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
         let meta: {
           category: string; subcategory: string; colors: string[];
           materials: string[]; seasons: string[]; brand: string;
+          formality: number | null; dayEvening: string; sleeveLength: string;
+          length: string; fit: string; heelHeight: string; toeShape: string;
+          closure: string; gender: string; styleTags: string[];
         };
         try {
           const r = await analyze({ data: { imageDataUrl: seg.imageDataUrl } });
+          // Every one of these fields was already coming back from this
+          // same analyze() call — the code just wasn't reading most of
+          // them, so a piece added via outfit scan came out with far
+          // fewer details than the same piece added one at a time.
           meta = {
             category: r.category, subcategory: r.subcategory, colors: r.colors,
             materials: r.materials, seasons: r.seasons, brand: r.brand,
+            formality: r.formality ?? null, dayEvening: r.dayEvening || "", sleeveLength: r.sleeveLength || "",
+            length: r.length || "", fit: r.fit || "", heelHeight: r.heelHeight || "", toeShape: r.toeShape || "",
+            closure: r.closure || "", gender: r.gender || "", styleTags: r.styleTags ?? [],
           };
         } catch (e) {
           console.warn("[AURA outfit-scan] analyze failed for segment", i, e);
-          meta = { category: "", subcategory: "", colors: [], materials: [], seasons: [], brand: "" };
+          meta = {
+            category: "", subcategory: "", colors: [], materials: [], seasons: [], brand: "",
+            formality: null, dayEvening: "", sleeveLength: "",
+            length: "", fit: "", heelHeight: "", toeShape: "", closure: "", gender: "", styleTags: [],
+          };
         }
 
         const dedupe = findBestMatch(
@@ -146,9 +167,16 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           styles: [],
           occasions: [],
           purchaseDate: new Date().toISOString().slice(0, 10),
-          sleeveLength: "",
-          formality: null,
-          dayEvening: "",
+          sleeveLength: meta.sleeveLength,
+          formality: meta.formality,
+          dayEvening: meta.dayEvening,
+          length: meta.length,
+          fit: meta.fit,
+          heelHeight: meta.heelHeight,
+          toeShape: meta.toeShape,
+          closure: meta.closure,
+          gender: meta.gender,
+          styleTags: meta.styleTags,
         });
       }
 
@@ -209,6 +237,13 @@ export function OutfitScan({ go }: { go: (s: Screen) => void }) {
           sleeve_length: it.sleeveLength || null,
           formality: it.formality,
           day_evening: it.dayEvening || null,
+          length: it.length || null,
+          fit: it.fit || null,
+          heel_height: it.heelHeight || null,
+          toe_shape: it.toeShape || null,
+          closure: it.closure || null,
+          gender: it.gender || null,
+          style_tags: it.styleTags,
           source: "outfit_scan",
         } as unknown as TablesInsert<"wardrobe_items">;
 
