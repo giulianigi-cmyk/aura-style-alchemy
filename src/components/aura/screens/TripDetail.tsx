@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil, Image as ImageIcon } from "lucide-react";
 import { PiecePicker } from "../PiecePicker";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { OCCASIONS } from "./Planner";
 import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
 import i18n from "@/i18n/config";
+import type { BuilderInit } from "../AuraApp";
 
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
@@ -31,12 +32,18 @@ function fmtDate(d: string) {
 
 type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
 
-export function TripDetail({ go, tripId, focusActivityId = null }: {
+export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: {
   go: (s: Screen) => void;
   tripId: string;
   /** Set when arriving from a weather_change notification: that activity's
    *  card is scrolled to and shows the proposal inline. */
   focusActivityId?: string | null;
+  /** Opens the outfit canvas editor, pre-loaded with a trip outfit's
+   *  pieces — from there it can be saved and, from the saved outfit,
+   *  shared with friends or exported for social, same as any other
+   *  saved outfit. Trip outfits never had this before: item thumbnails
+   *  only, no way to turn one into an actual shareable image. */
+  openBuilder: (init: BuilderInit) => void;
 }) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -300,6 +307,7 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("tripDetail.couldntRegenerateOutfit"));
     } finally {
+      setRegeneratingId(null);
       setRegeneratingId(null);
     }
   };
@@ -611,295 +619,314 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                 })}
               </div>
             )}
-          </div>
-          <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
-            <button onClick={() => setPickerOpen(false)} className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.done")}</button>
+      setRegeneratingId(null);
+    }
+  };
+
+  const startEditPlan = (plan: OutfitPlan) => {
+    setEditingPlan(plan);
+    setEditItemIds(plan.item_ids);
+  };
+
+  const saveEditPlan = async () => {
+    if (!editingPlan || savingPlan) return;
+    if (!editItemIds.length) { toast.error(t("tripDetail.pickAtLeastOnePiece")); return; }
+    setSavingPlan(true);
+    try {
+      await updateTripOutfitPlanItems({ data: { planId: editingPlan.id, itemIds: editItemIds } });
+      setOutfitPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? { ...p, item_ids: editItemIds } : p)));
+      // A hand-picked answer closes any open weather proposal for this plan.
+      const open = proposals.find((pr) => pr.data?.plan_id === editingPlan.id);
+      if (open) {
+        try { await resolveProposal({ data: { notificationId: open.id, status: "dismissed" } }); refreshProposals(); }
+        catch (e) { console.error("[AURA trip] proposal resolve failed", e); }
+      }
+      setEditingPlan(null);
+      toast.success(t("tripDetail.toastOutfitUpdated"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntUpdateOutfit"));
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const removePlan = async (planId: string) => {
+    setOutfitPlans((prev) => prev.filter((p) => p.id !== planId));
+    try {
+      await deleteTripOutfitPlan({ data: { planId } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntDeleteOutfit"));
+      load();
+    }
+  };
+
+
+  if (loading) {
+    return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
+  }
+  if (!trip) return null;
+
+  const Icon = TYPE_ICON[trip.trip_type];
+  const packedCount = essentials.filter((e) => e.status === "packed").length;
+
+  const essentialsByCategory = new Map<string, TripEssential[]>();
+  essentials.forEach((e) => {
+    const key = e.category || "Other";
+    const arr = essentialsByCategory.get(key) ?? [];
+    arr.push(e);
+    essentialsByCategory.set(key, arr);
+  });
+
+  // Bounds the date picker to the trip's actual span — no point letting
+  // someone log an activity for a day they won't be traveling.
+  const minDate = destinations.length ? destinations.map((d) => d.start_date).sort()[0] : undefined;
+  const maxDate = destinations.length ? destinations.map((d) => d.end_date).sort().slice(-1)[0] : undefined;
+
+  return (
+    <div className="h-full overflow-y-auto no-scrollbar pb-28">
+      <header className="px-6 pt-14 pb-2 flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => go("trips")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90 shrink-0">
+            <ArrowLeft size={16} />
+          </button>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-1.5"><Icon size={11} /> {trip.trip_type}</p>
+            <h1 className="font-serif text-2xl mt-1 truncate">{trip.name || t("tripDetail.untitledTrip")}</h1>
           </div>
         </div>
-      )}
+        <button
+          onClick={() => setConfirmDelete(true)}
+          aria-label={t("tripDetail.deleteTripAria")}
+          className="h-10 w-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center active:scale-90 shrink-0"
+        ><Trash2 size={15} /></button>
+      </header>
 
-      {editingPlan && (
-        <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-fade-in">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.editOutfit")}</p>
-              <p className="font-serif text-xl italic truncate">
-                {activities.find((a) => a.id === editingPlan.trip_activity_id)?.activity_type ?? editingPlan.occasion ?? fmtDate(editingPlan.date)}
-              </p>
-            </div>
-            <button onClick={() => setEditingPlan(null)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center shrink-0"><X size={16} /></button>
+      <div className="px-6 mt-4 rounded-2xl border border-border/60 bg-card p-4 space-y-2">
+        {destinations.map((d) => (
+          <div key={d.id} className="flex items-center justify-between text-sm">
+            <span className="font-serif text-lg">{d.destination_name}</span>
+            <span className="text-[11px] text-muted-foreground">{fmtDate(d.start_date)} – {fmtDate(d.end_date)}</span>
           </div>
-          <PiecePicker
-            className="flex-1 overflow-y-auto no-scrollbar px-5 py-4"
-            items={wardrobeItems}
-            signed={wardrobeSigned}
-            selectedIds={editItemIds}
-            onToggle={(id) => setEditItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
-            loading={wardrobeLoading}
-            emptyHint={t("tripDetail.noPiecesYet")}
-          />
-          <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
-            <button
-              onClick={() => void saveEditPlan()}
-              disabled={savingPlan}
-              className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
-            >
-              {savingPlan ? <Loader2 size={14} className="animate-spin" /> : null}
-              {t("tripDetail.savePieces", { count: editItemIds.length })}
-            </button>
-          </div>
+        ))}
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {sourceLocationIds.length > 0 ? sourceLocationIds.map((id) => (
+            <span key={id} className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{locationName(id)}</span>
+          )) : (
+            <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{t("tripDetail.wholeWardrobe")}</span>
+          )}
+          <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">
+            {trip.laundry_available ? t("tripDetail.laundryAvailable") : t("tripDetail.noLaundry")}
+          </span>
         </div>
-      )}
+      </div>
 
-      <section className="px-6 mt-8">
+      <section className="px-6 mt-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><CalendarDays size={16} /> {t("tripDetail.activities")}</h2>
-          {activities.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.loggedCount", { count: activities.length })}</p>}
+          <h2 className="font-serif text-xl italic">{t("tripDetail.essentials")}</h2>
+          {essentials.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.packedCount", { packed: packedCount, total: essentials.length })}</p>}
         </div>
 
-        {activities.length === 0 && !addingActivity && (
-          <p className="text-sm text-muted-foreground mb-3">
-            {t("tripDetail.logActivitiesHint")}
-          </p>
+        {essentials.length === 0 && !addingEssential && (
+          <p className="text-sm text-muted-foreground mb-3">{t("tripDetail.noEssentialsYet")}</p>
         )}
 
-        <div className="space-y-1.5">
-          {activities.map((a) => (
-            <div key={a.id} className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2.5">
-              {a.day_segment === "evening" ? <Moon size={13} className="text-muted-foreground shrink-0" /> : <Sun size={13} className="text-muted-foreground shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate">{a.activity_type}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {fmtDate(a.activity_date)}{a.dress_code ? ` · ${a.dress_code}` : ""}
-                </p>
+        <div className="space-y-4">
+          {Array.from(essentialsByCategory.entries()).map(([category, items]) => (
+            <div key={category}>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">{category}</p>
+              <div className="space-y-1.5">
+                {items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2.5">
+                    <button
+                      onClick={() => void toggleEssentialStatus(item)}
+                      className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${item.status === "packed" ? "bg-foreground border-foreground" : "border-border"}`}
+                    >{item.status === "packed" && <Check size={11} className="text-background" />}</button>
+                    <span className={`flex-1 text-sm ${item.status === "packed" ? "line-through text-muted-foreground" : ""}`}>
+                      {item.name} ×{item.quantity}
+                    </span>
+                    <button onClick={() => void removeEssential(item.id)} aria-label={t("tripDetail.removeItemAria", { name: item.name })} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={() => startDuplicateActivity(a)}
-                aria-label={t("tripDetail.duplicateActivityAria", { name: a.activity_type })}
-                className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
-              >
-                <Copy size={12} />
-              </button>
-              <button onClick={() => void removeActivity(a.id)} aria-label={t("tripDetail.removeActivityAria", { name: a.activity_type })} className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground">
-                <X size={13} />
-              </button>
             </div>
           ))}
         </div>
 
-        {addingActivity ? (
+        {addingEssential ? (
           <div className="mt-3 space-y-2">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-              {duplicatingActivity ? t("tripDetail.duplicateActivity") : t("tripDetail.newActivity")}
-            </p>
             <div className="flex items-center gap-2">
               <input
-                type="date"
-                value={actDate}
-                min={minDate}
-                max={maxDate}
-                onChange={(e) => setActDate(e.target.value)}
-                className="bg-secondary/60 rounded-full px-3 py-2.5 text-xs outline-none"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder={t("tripDetail.categoryOptional")}
+                className="w-28 bg-secondary/60 rounded-full px-3 py-2.5 text-xs outline-none placeholder:text-muted-foreground"
               />
               <input
                 autoFocus
-                value={actType}
-                onChange={(e) => setActType(e.target.value)}
-                placeholder={t("tripDetail.activityPlaceholder")}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void addEssential()}
+                placeholder={t("tripDetail.itemName")}
                 className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <div className="flex gap-1.5">
-              {(["day", "evening"] as const).map((seg) => (
-                <button
-                  key={seg}
-                  onClick={() => setActSegment(seg)}
-                  className={`px-3 py-1.5 rounded-full text-[11px] capitalize flex items-center gap-1 ${actSegment === seg ? "bg-foreground text-background" : "bg-secondary/60"}`}
-                >
-                  {seg === "evening" ? <Moon size={11} /> : <Sun size={11} />} {seg === "evening" ? t("tripDetail.evening") : t("tripDetail.day")}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {OCCASIONS.map((o) => (
-                <button
-                  key={o}
-                  onClick={() => setActDressCode(actDressCode === o ? "" : o)}
-                  className={`px-3 py-1 rounded-full text-[11px] ${actDressCode === o ? "bg-foreground text-background" : "bg-secondary/60"}`}
-                >{o}</button>
-              ))}
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => cancelActivityForm()} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
-              <button onClick={() => void addActivity()} disabled={!actType.trim() || !actDate} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] disabled:opacity-40">
-                {duplicatingActivity ? t("tripDetail.duplicateButton") : t("tripDetail.add")}
-              </button>
+            <div className="flex gap-2">
+              <button onClick={() => setAddingEssential(false)} className="flex-1 h-10 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
+              <button onClick={() => void addEssential()} className="flex-1 h-10 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.add")}</button>
             </div>
           </div>
         ) : (
           <button
-            onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
+            onClick={() => setAddingEssential(true)}
             className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-          ><Plus size={13} /> {t("tripDetail.addActivity")}</button>
+          ><Plus size={13} /> {t("tripDetail.addItem")}</button>
         )}
       </section>
 
       <section className="px-6 mt-8">
-        {visibleCulturalNotes.length > 0 && (
-          <div className="mb-4 rounded-2xl border border-border/60 bg-secondary/40 p-3.5 space-y-3">
-            {visibleCulturalNotes.map((note) => {
-              const country = note.countryKeywords[0].replace(/\b\w/g, (c) => c.toUpperCase());
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-serif text-xl italic flex items-center gap-1.5"><Luggage size={16} /> {t("tripDetail.itemsToPack")}</h2>
+          {packingItems.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              {t("tripDetail.packedCount", { packed: packingItems.filter((p) => p.status === "packed").length, total: packingItems.length })}
+            </p>
+          )}
+        </div>
+
+        {packingItems.length === 0 && (
+          <p className="text-sm text-muted-foreground mb-3">
+            {t("tripDetail.addRealPiecesHint")}
+          </p>
+        )}
+
+        {packingItems.length > 0 && (
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {packingItems.map((p) => {
+              const it = wardrobeItems.find((w) => w.id === p.item_id);
+              const src = it ? thumbSrc(it, wardrobeSigned) : "";
               return (
-                <div key={note.countryKeywords[0]} className="flex items-start gap-2.5">
-                  <Info size={16} className="shrink-0 mt-0.5 text-muted-foreground" />
-                  <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground">{t("tripDetail.tipLabel")}: {country}</span>{" "}
-                    {note.message}
-                  </p>
+                <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
+                  <button onClick={() => void togglePackedStatus(p)} className="h-full w-full">
+                    {src ? <img src={src} className={`h-full w-full object-contain p-1.5 ${p.status === "packed" ? "opacity-40" : ""}`} alt="" loading="lazy" /> : null}
+                  </button>
+                  {p.status === "packed" && (
+                    <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center"><Check size={13} /></span>
+                    </span>
+                  )}
                   <button
-                    onClick={() => setDismissedNotes((prev) => [...prev, note.countryKeywords[0]])}
-                    aria-label={t("tripDetail.hideNoteAria")}
-                    className="h-6 w-6 rounded-full border border-border/60 flex items-center justify-center shrink-0"
-                  ><X size={12} /></button>
+                    onClick={() => void togglePackingItem(p.item_id)}
+                    aria-label={t("tripDetail.removeFromPackingAria")}
+                    className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
+                  ><X size={11} /></button>
                 </div>
               );
             })}
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl italic">{t("tripDetail.dayByDayOutfits")}</h2>
-          {outfitPlans.length > 0 && <p className="text-[11px] text-muted-foreground">{t("tripDetail.generatedCount", { count: outfitPlans.length })}</p>}
-        </div>
-
-        {outfitPlans.length === 0 && (
-          <p className="text-sm text-muted-foreground mb-3">
-            {t("tripDetail.buildsPackingCapsuleHint")}
-          </p>
-        )}
-
-
-        {activities.length > 0 && (
-          <div className="space-y-3 mb-3">
-            {[...activities]
-              .sort((a, b) => a.activity_date.localeCompare(b.activity_date) || (a.day_segment ?? "day").localeCompare(b.day_segment ?? "day"))
-              .map((a) => {
-                const op = outfitPlans.find((p) => p.trip_activity_id === a.id);
-                const proposal = proposals.find((pr) => pr.data?.trip_activity_id === a.id);
-                return (
-                  <div
-                    key={a.id}
-                    id={`trip-activity-${a.id}`}
-                    className={`rounded-2xl bg-secondary/40 p-3 ${focusActivityId === a.id ? "ring-1 ring-foreground/30" : ""}`}
-                  >
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {(a.day_segment ?? "day") === "evening" ? <Moon size={12} className="text-muted-foreground" /> : <Sun size={12} className="text-muted-foreground" />}
-                      <p className="text-[11px] text-muted-foreground flex-1 min-w-0 truncate">
-                        {fmtDate(a.activity_date)} · {a.activity_type}{a.dress_code ? ` · ${a.dress_code}` : ""}
-                      </p>
-                      <button
-                        onClick={() => void regenerateActivity(a.id)}
-                        disabled={regeneratingId === a.id}
-                        aria-label={t("tripDetail.regenerateOutfitAria", { name: a.activity_type })}
-                        className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90 disabled:opacity-40"
-                      >
-                        {regeneratingId === a.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                      </button>
-                      {op && (
-                        <>
-                          <button
-                            onClick={() => startEditPlan(op)}
-                            aria-label={t("tripDetail.editOutfitAria", { name: a.activity_type })}
-                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
-                          ><Pencil size={12} /></button>
-                          <button
-                            onClick={() => void removePlan(op.id)}
-                            aria-label={t("tripDetail.deleteOutfitAria", { name: a.activity_type })}
-                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
-                          ><Trash2 size={12} /></button>
-                        </>
-                      )}
-                    </div>
-                    {op?.weather_temp != null && (
-                      <p className="text-[10px] text-muted-foreground mb-2 -mt-1">
-                        {Math.round(op.weather_temp)}°C{op.weather_condition ? ` · ${op.weather_condition}` : ""}{op.weather_estimated ? ` · ${t("tripDetail.estimated")}` : ""}
-                      </p>
-                    )}
-                    {proposal && (
-                      <div className="mb-2">
-                        <WeatherProposalCard
-                          proposal={proposal}
-                          items={wardrobeItems}
-                          signed={wardrobeSigned}
-                          onResolved={() => { refreshProposals(); load(); }}
-                          {...(op ? { onCustomize: () => startEditPlan(op) } : {})}
-                        />
-                      </div>
-                    )}
-                    {op ? (
-                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                        {op.item_ids.map((id) => {
-                          const it = wardrobeItems.find((w) => w.id === id);
-                          const src = it ? thumbSrc(it, wardrobeSigned) : "";
-                          return (
-                            <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
-                              {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground">{t("tripDetail.noOutfitYet")}</p>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        )}
-
-
-        {genResult && (genResult.failed.length > 0 || genResult.unclassifiedExcluded > 0) && (
-          <div className="mb-3 rounded-2xl bg-secondary/40 p-3 space-y-1.5">
-            {genResult.failed.map((f, i) => (
-              <p key={i} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-                <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                {fmtDate(f.date)} ({f.daySegment}): {f.reason}
-              </p>
-            ))}
-            {genResult.unclassifiedExcluded > 0 && (
-              <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-                <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                {t("tripDetail.unclassifiedSkipped", { count: genResult.unclassifiedExcluded })}
-              </p>
-            )}
-          </div>
-        )}
-
         <button
-          onClick={() => void generateCapsule()}
-          disabled={generating}
-          className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
-        >
-          {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-          {outfitPlans.length > 0 ? t("tripDetail.generateRemaining") : t("tripDetail.generateOutfits")}
-        </button>
-        {activities.length === 0 && (
-          <p className="mt-2 text-[11px] text-muted-foreground text-center">{t("tripDetail.noActivitiesHint")}</p>
-        )}
+          onClick={() => void openPicker()}
+          className="w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
+        ><Plus size={13} /> {t("tripDetail.addFromWardrobe")}</button>
       </section>
 
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setConfirmDelete(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-destructive/40 bg-card p-5 shadow-luxe">
-            <p className="font-serif text-lg text-center">{t("tripDetail.deleteThisTrip")}</p>
-            <p className="text-xs text-muted-foreground text-center mt-1">{t("tripDetail.cannotBeUndone")}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.cancel")}</button>
-              <button onClick={() => void doDeleteTrip()} className="h-11 rounded-full bg-destructive text-destructive-foreground text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.delete")}</button>
+      {(() => {
+        const UNDERWEAR_GROUPS: { label: string; subcats: string[] }[] = [
+          { label: t("tripDetail.bras"), subcats: ["Bra", "Sports Bra"] },
+          { label: t("tripDetail.underwear"), subcats: ["Briefs", "Panties", "Boxers"] },
+          { label: t("tripDetail.socks"), subcats: ["Socks", "Tights"] },
+          { label: t("tripDetail.sleepwear"), subcats: ["Sleepwear"] },
+          { label: t("tripDetail.shapewear"), subcats: ["Shapewear"] },
+        ];
+        const underwearPacking = packingItems.filter((p) => {
+          const it = wardrobeItems.find((w) => w.id === p.item_id);
+          return it?.category === "Underwear";
+        });
+        if (!underwearPacking.length) return null;
+        const groups = UNDERWEAR_GROUPS.map((g) => ({
+          ...g,
+          rows: underwearPacking.filter((p) => {
+            const it = wardrobeItems.find((w) => w.id === p.item_id);
+            return it?.subcategory && g.subcats.includes(it.subcategory);
+          }),
+        })).filter((g) => g.rows.length > 0);
+        if (!groups.length) return null;
+
+        return (
+          <section className="px-6 mt-8">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-serif text-xl italic">{t("tripDetail.underwear")}</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {t("tripDetail.packedCount", { packed: underwearPacking.filter((p) => p.status === "packed").length, total: underwearPacking.length })}
+              </p>
             </div>
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <div key={g.label}>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">{g.label} · {g.rows.length}</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {g.rows.map((p) => {
+                      const it = wardrobeItems.find((w) => w.id === p.item_id);
+                      const src = it ? thumbSrc(it, wardrobeSigned) : "";
+                      return (
+                        <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
+                          <button onClick={() => void togglePackedStatus(p)} className="h-full w-full">
+                            {src ? <img src={src} className={`h-full w-full object-contain p-1.5 ${p.status === "packed" ? "opacity-40" : ""}`} alt="" loading="lazy" /> : null}
+                          </button>
+                          {p.status === "packed" && (
+                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="h-6 w-6 rounded-full bg-foreground text-background flex items-center justify-center"><Check size={13} /></span>
+                            </span>
+                          )}
+                          <button
+                            onClick={() => void togglePackingItem(p.item_id)}
+                            aria-label={t("tripDetail.removeFromPackingAria")}
+                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
+                          ><X size={11} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.yourWardrobe")}</p>
+              <p className="font-serif text-xl">{t("tripDetail.tapToAddOrRemove")}</p>
+            </div>
+            <button onClick={() => setPickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={16} /></button>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+          <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
+            {wardrobeLoading ? (
+              <div className="flex justify-center mt-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
+            ) : wardrobeItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground mt-8 text-center">{t("tripDetail.noPiecesYet")}</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {wardrobeItems.map((it) => {
+                  const src = thumbSrc(it, wardrobeSigned);
+                  const added = packedItemIds.has(it.id);
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => void togglePackingItem(it.id)}
+                      disabled={pendingItemId === it.id}
+                      className={`relative aspect-square rounded-xl overflow-hidden border-2 transition ${added ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: "#FFFFFF" }}
+                    >
+                      {src ? <img src={src} className="h-full w-full object-contain p-1.5" alt="" loading="lazy" /> : null}
+                      {added && <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background text-[10px] flex items-center justify-center">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
