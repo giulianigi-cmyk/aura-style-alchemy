@@ -885,6 +885,7 @@
     "generatedCount_other": "{{count}} générées",
     "buildsPackingCapsuleHint": "Crée une capsule de bagages et un look pour chaque jour du voyage, en utilisant les activités enregistrées ci-dessus là où vous les avez ajoutées, et un look générique jour + soir partout ailleurs.",
     "regenerateOutfitAria": "Régénérer la tenue pour {{name}}",
+    "saveToCanvasAria": "Enregistrer {{name}} sur le canevas",
     "editOutfitAria": "Modifier la tenue pour {{name}}",
     "deleteOutfitAria": "Supprimer la tenue pour {{name}}",
     "estimated": "Estimé",
