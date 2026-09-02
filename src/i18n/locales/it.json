@@ -902,6 +902,7 @@
     "generatedCount_other": "{{count}} generati",
     "buildsPackingCapsuleHint": "Crea una capsule per la valigia e un look per ogni giorno del viaggio, usando le attività registrate sopra dove le hai aggiunte, e un look generico giorno + sera altrove.",
     "regenerateOutfitAria": "Rigenera outfit per {{name}}",
+    "saveToCanvasAria": "Salva {{name}} su tela",
     "editOutfitAria": "Modifica outfit per {{name}}",
     "deleteOutfitAria": "Elimina outfit per {{name}}",
     "estimated": "Stimato",
