@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { listOpenWeatherProposals, resolveWeatherProposal } from "@/lib/plan-weather.functions";
 import { WeatherProposalCard, type WeatherProposal } from "../WeatherProposalCard";
-import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Plus, X, Trash2, Briefcase, Palmtree, Shuffle, CalendarDays, Sun, Moon, Luggage, Sparkles, AlertCircle, Info, Copy, Pencil, Image as ImageIcon } from "lucide-react";
 import { PiecePicker } from "../PiecePicker";
 import { toast } from "sonner";
 import type { Screen } from "../AuraApp";
@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { OCCASIONS } from "./Planner";
 import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
 import i18n from "@/i18n/config";
+import type { BuilderInit } from "../AuraApp";
 
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
@@ -31,12 +32,18 @@ function fmtDate(d: string) {
 
 type OutfitPlan = { id: string; date: string; day_segment: string | null; item_ids: string[]; occasion: string | null; trip_activity_id: string | null; weather_temp: number | null; weather_condition: string | null; weather_estimated: boolean | null };
 
-export function TripDetail({ go, tripId, focusActivityId = null }: {
+export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: {
   go: (s: Screen) => void;
   tripId: string;
   /** Set when arriving from a weather_change notification: that activity's
    *  card is scrolled to and shows the proposal inline. */
   focusActivityId?: string | null;
+  /** Opens the outfit canvas editor, pre-loaded with a trip outfit's
+   *  pieces — from there it can be saved and, from the saved outfit,
+   *  shared with friends or exported for social, same as any other
+   *  saved outfit. Trip outfits never had this before: item thumbnails
+   *  only, no way to turn one into an actual shareable image. */
+  openBuilder: (init: BuilderInit) => void;
 }) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -807,6 +814,15 @@ export function TripDetail({ go, tripId, focusActivityId = null }: {
                       </button>
                       {op && (
                         <>
+                          <button
+                            onClick={() => openBuilder({
+                              itemIds: op.item_ids,
+                              name: `${a.activity_type} — ${fmtDate(a.activity_date)}`,
+                              occasion: op.occasion ?? a.activity_type,
+                            })}
+                            aria-label={t("tripDetail.saveToCanvasAria", { name: a.activity_type })}
+                            className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90"
+                          ><ImageIcon size={12} /></button>
                           <button
                             onClick={() => startEditPlan(op)}
                             aria-label={t("tripDetail.editOutfitAria", { name: a.activity_type })}
