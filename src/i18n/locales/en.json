@@ -902,6 +902,7 @@
     "generatedCount_other": "{{count}} generated",
     "buildsPackingCapsuleHint": "Builds a packing capsule and a look for each day of the trip — using the activities logged above where you've added them, and a generic day + evening look everywhere else.",
     "regenerateOutfitAria": "Regenerate outfit for {{name}}",
+    "saveToCanvasAria": "Save {{name}} to canvas",
     "editOutfitAria": "Edit outfit for {{name}}",
     "deleteOutfitAria": "Delete outfit for {{name}}",
     "estimated": "Estimated",
