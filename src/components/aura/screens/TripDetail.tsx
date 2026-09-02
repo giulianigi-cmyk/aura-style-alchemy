@@ -22,6 +22,8 @@ import { OCCASIONS } from "./Planner";
 import { matchCulturalDressNotes } from "@/lib/cultural-dress-notes";
 import i18n from "@/i18n/config";
 import type { BuilderInit } from "../AuraApp";
+import { listCalendarEventsForTrip, importCalendarEventToTrip, linkExistingOutfitToTripActivity, type CalendarEventForTrip } from "@/lib/trip-calendar-link.functions";
+import { CalendarPlus } from "lucide-react";
 
 
 const TYPE_ICON: Record<TripType, typeof Briefcase> = { work: Briefcase, leisure: Palmtree, mixed: Shuffle };
@@ -80,6 +82,18 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
   const [editItemIds, setEditItemIds] = useState<string[]>([]);
   const [savingPlan, setSavingPlan] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  // "Choose from calendar" — a separate, explicit picker over the trip's
+  // real calendar events (never auto-imported, see
+  // trip-calendar-link.functions.ts). importingEventId tracks which row
+  // is mid-import for its own spinner; reuseOffer holds an already-saved
+  // outfit found for the just-imported event, prompting a yes/no before
+  // touching outfit_plans at all.
+  const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEventForTrip[]>([]);
+  const [loadingCalendarEvents, setLoadingCalendarEvents] = useState(false);
+  const [importingEventId, setImportingEventId] = useState<string | null>(null);
+  const [reuseOffer, setReuseOffer] = useState<{ activityId: string; activityType: string; itemIds: string[]; occasion: string | null; date: string } | null>(null);
+  const [linkingOutfit, setLinkingOutfit] = useState(false);
   // Open weather proposals for this trip's plans, keyed by activity.
   const [proposals, setProposals] = useState<WeatherProposal[]>([]);
   const loadProposals = useServerFn(listOpenWeatherProposals);
@@ -211,6 +225,77 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
     setAddingActivity(false);
     setDuplicatingActivity(null);
     setActType(""); setActDressCode(""); setActSegment("day"); setActDate("");
+  };
+
+  const listCalendarEvents = useServerFn(listCalendarEventsForTrip);
+  const importCalendarEvent = useServerFn(importCalendarEventToTrip);
+  const linkOutfit = useServerFn(linkExistingOutfitToTripActivity);
+
+  const openCalendarPicker = async () => {
+    if (!trip) return;
+    setCalendarPickerOpen(true);
+    setLoadingCalendarEvents(true);
+    try {
+      const res = await listCalendarEvents({ data: { tripId: trip.id } });
+      setCalendarEvents(res.events);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntLoadCalendarEvents"));
+    } finally {
+      setLoadingCalendarEvents(false);
+    }
+  };
+
+  const importFromCalendar = async (event: CalendarEventForTrip) => {
+    if (!trip || importingEventId) return;
+    setImportingEventId(event.id);
+    try {
+      const res = await importCalendarEvent({ data: { tripId: trip.id, calendarEventId: event.id } });
+      setActivities((prev) => [...prev, res.activity].sort((a, b) => a.activity_date.localeCompare(b.activity_date)));
+      setCalendarEvents((prev) => prev.filter((e) => e.id !== event.id));
+      if (res.existingOutfit) {
+        // Hold the picker open behind the confirm prompt — closing it
+        // immediately would hide the just-added activity right as the
+        // person needs to decide about its outfit.
+        setReuseOffer({
+          activityId: res.activity.id,
+          activityType: res.activity.activity_type,
+          itemIds: res.existingOutfit.itemIds,
+          occasion: res.existingOutfit.occasion,
+          date: res.activity.activity_date,
+        });
+      } else {
+        setCalendarPickerOpen(false);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntImportEvent"));
+    } finally {
+      setImportingEventId(null);
+    }
+  };
+
+  const confirmReuseOutfit = async (reuse: boolean) => {
+    if (!reuseOffer || !trip) return;
+    if (!reuse) { setReuseOffer(null); setCalendarPickerOpen(false); return; }
+    setLinkingOutfit(true);
+    try {
+      await linkOutfit({
+        data: {
+          tripId: trip.id,
+          tripActivityId: reuseOffer.activityId,
+          itemIds: reuseOffer.itemIds,
+          occasion: reuseOffer.occasion,
+          date: reuseOffer.date,
+        },
+      });
+      toast.success(t("tripDetail.outfitReused"));
+      setReuseOffer(null);
+      setCalendarPickerOpen(false);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("tripDetail.couldntReuseOutfit"));
+    } finally {
+      setLinkingOutfit(false);
+    }
   };
 
   const removeActivity = async (id: string) => {
@@ -744,12 +829,81 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
-            className="mt-3 w-full h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
-          ><Plus size={13} /> {t("tripDetail.addActivity")}</button>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => { setDuplicatingActivity(null); setActDate(minDate ?? ""); setActSegment("day"); setActType(""); setActDressCode(""); setAddingActivity(true); }}
+              className="flex-1 h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
+            ><Plus size={13} /> {t("tripDetail.addActivity")}</button>
+            <button
+              onClick={() => void openCalendarPicker()}
+              className="flex-1 h-11 rounded-full border border-dashed border-border text-[10px] uppercase tracking-[0.3em] text-muted-foreground flex items-center justify-center gap-2"
+            ><CalendarPlus size={13} /> {t("tripDetail.chooseFromCalendar")}</button>
+          </div>
         )}
       </section>
+
+      {calendarPickerOpen && (
+        <div className="fixed inset-0 z-[70] bg-background flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.yourCalendar")}</p>
+              <p className="font-serif text-xl">{t("tripDetail.pickEventsToImport")}</p>
+            </div>
+            <button onClick={() => { setCalendarPickerOpen(false); setReuseOffer(null); }} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={16} /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
+            {loadingCalendarEvents ? (
+              <div className="flex justify-center mt-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
+            ) : calendarEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground mt-8 text-center">{t("tripDetail.noCalendarEventsInRange")}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {calendarEvents.map((ev) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => void importFromCalendar(ev)}
+                    disabled={importingEventId === ev.id}
+                    className="w-full flex items-center gap-3 rounded-xl bg-secondary/40 px-3 py-2.5 text-left disabled:opacity-60"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{ev.title || t("tripDetail.untitledEvent")}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(ev.start_time).toLocaleDateString(i18n.language, { month: "short", day: "numeric" })}
+                        {!ev.all_day && ` · ${new Date(ev.start_time).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}`}
+                      </p>
+                    </div>
+                    {importingEventId === ev.id ? <Loader2 size={14} className="animate-spin shrink-0" /> : <Plus size={14} className="shrink-0 text-muted-foreground" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {reuseOffer && (
+        <div className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => !linkingOutfit && confirmReuseOutfit(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe">
+            <p className="font-serif text-lg text-center">{t("tripDetail.foundExistingOutfitTitle")}</p>
+            <p className="text-xs text-muted-foreground text-center mt-1">{t("tripDetail.foundExistingOutfitHint", { name: reuseOffer.activityType })}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => void confirmReuseOutfit(false)}
+                disabled={linkingOutfit}
+                className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+              >{t("tripDetail.generateNewInstead")}</button>
+              <button
+                onClick={() => void confirmReuseOutfit(true)}
+                disabled={linkingOutfit}
+                className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {linkingOutfit && <Loader2 size={12} className="animate-spin" />}
+                {t("tripDetail.useThisOutfit")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="px-6 mt-8">
         {visibleCulturalNotes.length > 0 && (
