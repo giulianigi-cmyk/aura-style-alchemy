@@ -659,12 +659,12 @@ export async function generateTripCapsuleCore({ data, context }: {
     let packingItemsAdded = 0;
     if (allChosenItemIds.size) {
       const { data: existingPacking } = await (supabase.from("trip_packing_items" as never) as any)
-        .select("item_id").eq("trip_id", data.tripId);
-      const already = new Set(((existingPacking ?? []) as { item_id: string }[]).map((r) => r.item_id));
+        .select("wardrobe_item_id").eq("trip_id", data.tripId);
+      const already = new Set(((existingPacking ?? []) as { wardrobe_item_id: string }[]).map((r) => r.wardrobe_item_id));
       const toInsert = Array.from(allChosenItemIds).filter((id) => !already.has(id));
       if (toInsert.length) {
         const { error: packErr } = await (supabase.from("trip_packing_items" as never) as any)
-          .insert(toInsert.map((item_id) => ({ trip_id: data.tripId, item_id, status: "to_pack" })));
+          .insert(toInsert.map((wardrobe_item_id) => ({ trip_id: data.tripId, wardrobe_item_id, status: "to_pack" })));
         if (!packErr) packingItemsAdded = toInsert.length;
       }
     }
