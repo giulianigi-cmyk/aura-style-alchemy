@@ -902,6 +902,7 @@
     "generatedCount_other": "{{count}} generados",
     "buildsPackingCapsuleHint": "Crea una cápsula de equipaje y un look para cada día del viaje, usando las actividades registradas arriba donde las hayas añadido, y un look genérico de día + noche en el resto.",
     "regenerateOutfitAria": "Regenerar outfit para {{name}}",
+    "saveToCanvasAria": "Guardar {{name}} en el lienzo",
     "editOutfitAria": "Editar outfit para {{name}}",
     "deleteOutfitAria": "Eliminar outfit para {{name}}",
     "estimated": "Estimado",
