@@ -328,11 +328,11 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
     }
   };
 
-  const packedItemIds = new Set(packingItems.map((p) => p.item_id));
+  const packedItemIds = new Set(packingItems.map((p) => p.wardrobe_item_id));
 
   const togglePackingItem = async (itemId: string) => {
     if (!trip || pendingItemId) return;
-    const existing = packingItems.find((p) => p.item_id === itemId);
+    const existing = packingItems.find((p) => p.wardrobe_item_id === itemId);
     setPendingItemId(itemId);
     try {
       if (existing) {
@@ -577,7 +577,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
         {packingItems.length > 0 && (
           <div className="grid grid-cols-4 gap-2 mb-3">
             {packingItems.map((p) => {
-              const it = wardrobeItems.find((w) => w.id === p.item_id);
+              const it = wardrobeItems.find((w) => w.id === p.wardrobe_item_id);
               const src = it ? thumbSrc(it, wardrobeSigned) : "";
               return (
                 <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
@@ -590,7 +590,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                     </span>
                   )}
                   <button
-                    onClick={() => void togglePackingItem(p.item_id)}
+                    onClick={() => void togglePackingItem(p.wardrobe_item_id)}
                     aria-label={t("tripDetail.removeFromPackingAria")}
                     className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
                   ><X size={11} /></button>
@@ -615,14 +615,14 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
           { label: t("tripDetail.shapewear"), subcats: ["Shapewear"] },
         ];
         const underwearPacking = packingItems.filter((p) => {
-          const it = wardrobeItems.find((w) => w.id === p.item_id);
+          const it = wardrobeItems.find((w) => w.id === p.wardrobe_item_id);
           return it?.category === "Underwear";
         });
         if (!underwearPacking.length) return null;
         const groups = UNDERWEAR_GROUPS.map((g) => ({
           ...g,
           rows: underwearPacking.filter((p) => {
-            const it = wardrobeItems.find((w) => w.id === p.item_id);
+            const it = wardrobeItems.find((w) => w.id === p.wardrobe_item_id);
             return it?.subcategory && g.subcats.includes(it.subcategory);
           }),
         })).filter((g) => g.rows.length > 0);
@@ -642,7 +642,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                   <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-1.5">{g.label} · {g.rows.length}</p>
                   <div className="grid grid-cols-4 gap-2">
                     {g.rows.map((p) => {
-                      const it = wardrobeItems.find((w) => w.id === p.item_id);
+                      const it = wardrobeItems.find((w) => w.id === p.wardrobe_item_id);
                       const src = it ? thumbSrc(it, wardrobeSigned) : "";
                       return (
                         <div key={p.id} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: "#FFFFFF" }}>
@@ -655,7 +655,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                             </span>
                           )}
                           <button
-                            onClick={() => void togglePackingItem(p.item_id)}
+                            onClick={() => void togglePackingItem(p.wardrobe_item_id)}
                             aria-label={t("tripDetail.removeFromPackingAria")}
                             className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
                           ><X size={11} /></button>
@@ -970,7 +970,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                         <>
                           <button
                             onClick={() => openBuilder({
-                              itemIds: op.item_ids,
+                              itemIds: op.wardrobe_item_ids,
                               name: `${a.activity_type} — ${fmtDate(a.activity_date)}`,
                               occasion: op.occasion ?? a.activity_type,
                             })}
@@ -1008,7 +1008,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                     )}
                     {op ? (
                       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                        {op.item_ids.map((id) => {
+                        {op.wardrobe_item_ids.map((id) => {
                           const it = wardrobeItems.find((w) => w.id === id);
                           const src = it ? thumbSrc(it, wardrobeSigned) : "";
                           return (
