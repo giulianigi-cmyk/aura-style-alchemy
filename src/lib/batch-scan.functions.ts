@@ -307,7 +307,9 @@ export const listBatchScans = createServerFn({ method: "GET" })
       }))
       .filter((s) => {
         const stillProcessing = s.jobCounts.queued > 0 || s.jobCounts.processing > 0;
-        return stillProcessing || s.pendingReviewCount > 0;
+        // Keep batches with failed jobs visible so the user sees the error
+        // and can delete them; otherwise a fully-failed batch silently vanishes.
+        return stillProcessing || s.pendingReviewCount > 0 || s.jobCounts.failed > 0;
       });
   });
 

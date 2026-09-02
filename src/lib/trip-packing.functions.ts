@@ -5,7 +5,7 @@ import { z } from "zod";
 export type TripPackingItem = {
   id: string;
   trip_id: string;
-  item_id: string;
+  wardrobe_item_id: string;
   category: string | null;
   quantity: number;
   source_location_id: string | null;
@@ -42,7 +42,7 @@ export const addTripPackingItem = createServerFn({ method: "POST" })
     const { data: inserted, error } = await (supabase.from("trip_packing_items" as never) as any)
       .insert({
         trip_id: data.tripId,
-        item_id: data.itemId,
+        wardrobe_item_id: data.itemId,
         category: data.category ?? item.category ?? null,
         source_location_id: data.sourceLocationId ?? null,
         status: "to_pack",
