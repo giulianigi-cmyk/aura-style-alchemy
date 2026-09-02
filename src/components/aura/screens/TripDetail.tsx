@@ -970,7 +970,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                         <>
                           <button
                             onClick={() => openBuilder({
-                              itemIds: op.wardrobe_item_ids,
+                              itemIds: op.item_ids,
                               name: `${a.activity_type} — ${fmtDate(a.activity_date)}`,
                               occasion: op.occasion ?? a.activity_type,
                             })}
@@ -1008,7 +1008,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                     )}
                     {op ? (
                       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                        {op.wardrobe_item_ids.map((id) => {
+                        {op.item_ids.map((id) => {
                           const it = wardrobeItems.find((w) => w.id === id);
                           const src = it ? thumbSrc(it, wardrobeSigned) : "";
                           return (
