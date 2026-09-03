@@ -107,7 +107,8 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         const built: Draft[] = [];
         clearSegmentationCache();
         setLoadProgress({ done: 0, total: res.items.length });
-        for (const it of res.items) {
+        for (const it0 of res.items) {
+          const it = it0 as typeof it0 & Record<string, any>;
           try {
             const path = pathById.get(it.job_id);
             const src = path ? signed.get(path) : undefined;

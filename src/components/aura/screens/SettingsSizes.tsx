@@ -42,7 +42,7 @@ export function SettingsSizes({ go }: { go: (s: Screen) => void }) {
       setGender(profileRow?.gender ?? null);
       setValues({ tops: s.tops ?? "", bottoms: s.bottoms ?? "", dresses: s.dresses ?? "", shoes: s.shoes ?? "", bra: s.bra ?? "", underwear: s.underwear ?? "" });
 
-      const counts: Record<SizeKey, Map<string, number>> = { tops: new Map(), bottoms: new Map(), dresses: new Map(), shoes: new Map() };
+      const counts: Record<SizeKey, Map<string, number>> = { tops: new Map(), bottoms: new Map(), dresses: new Map(), shoes: new Map(), bra: new Map(), underwear: new Map() };
       for (const it of (items ?? []) as { category: string | null; size: string | null }[]) {
         const size = it.size?.trim();
         if (!size) continue;
