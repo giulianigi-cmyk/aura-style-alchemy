@@ -728,6 +728,8 @@
     "confirmWorn": "Confirm worn"
   },
   "aiStylist": {
+    "openOnCanvas": "Open on canvas",
+    "openOnCanvasAria": "Open this outfit on the canvas",
     "notEnoughActivePieces_one": "You have {{count}} piece in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.",
     "notEnoughActivePieces_other": "You have {{count}} pieces in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.",
     "noCategoriesSet": "None of your pieces have a category set. Edit your items and assign a category (Tops, Bottoms, Shoes…) so AURA can compose an outfit.",
