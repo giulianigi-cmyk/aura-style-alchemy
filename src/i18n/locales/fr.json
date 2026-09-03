@@ -711,6 +711,8 @@
     "confirmWorn": "Confirmer le port"
   },
   "aiStylist": {
+    "openOnCanvas": "Ouvrir sur la toile",
+    "openOnCanvasAria": "Ouvrir cette tenue sur la toile",
     "notEnoughActivePieces_one": "Vous avez {{count}} pièce dans votre garde-robe active. Ajoutez-en au moins 3 (ou restaurez-en une archivée) pour générer une tenue IA.",
     "notEnoughActivePieces_other": "Vous avez {{count}} pièces dans votre garde-robe active. Ajoutez-en au moins 3 (ou restaurez-en une archivée) pour générer une tenue IA.",
     "noCategoriesSet": "Aucune de vos pièces n'a de catégorie définie. Modifiez vos pièces et attribuez une catégorie (Hauts, Bas, Chaussures…) pour qu'AURA puisse composer une tenue.",
