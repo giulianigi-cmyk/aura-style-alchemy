@@ -39,9 +39,17 @@ import {
 import { listLocations, moveItemsToLocation } from "@/lib/wardrobe-locations.functions";
 import type { WardrobeLocation } from "@/lib/wardrobe-location";
 import i18n from "@/i18n/config";
+import {
+  computeItemValuation,
+  fetchValuationConfig,
+  EMPTY_VALUATION_CONFIG,
+  type ValuationConfig,
+  type Iconicity,
+} from "@/lib/wardrobe-value-engine";
 
 const categories = ["All", ...ITEM_CATEGORIES];
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
+const ICONICITY_OPTIONS: Iconicity[] = ["iconic", "timeless", "classic", "seasonal", "trend_driven", "basic"];
 
 const splitCsv = (v: string | null | undefined) =>
   (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -105,10 +113,21 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     price: "" as string,
     currency: "EUR",
     purchaseDate: "" as string,
+    currentRetailPrice: "" as string,
+    historicalRetailPrice: "" as string,
+    iconicity: "" as Iconicity | "",
+    model: "" as string,
+    bagSizeClass: "" as string,
   });
+  const [valuationConfig, setValuationConfig] = useState<ValuationConfig>(EMPTY_VALUATION_CONFIG);
+
+  useEffect(() => {
+    fetchValuationConfig().then(setValuationConfig).catch((e) => console.error("[AURA wardrobe] valuation config", e));
+  }, []);
 
   const openEdit = () => {
     if (!detail) return;
+    const raw = detail as unknown as { current_retail_price?: number | null; historical_retail_price?: number | null; iconicity?: Iconicity | null; model?: string | null; bag_size_class?: string | null };
     setEdit({
       brand: detail.brand ?? "",
       size: detail.size ?? "",
@@ -121,6 +140,11 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
       price: detail.price != null ? String(detail.price) : "",
       currency: (detail.currency && CURRENCY_OPTIONS.includes(detail.currency)) ? detail.currency : "EUR",
       purchaseDate: (detail as unknown as { purchase_date?: string | null }).purchase_date ?? "",
+      currentRetailPrice: raw.current_retail_price != null ? String(raw.current_retail_price) : "",
+      historicalRetailPrice: raw.historical_retail_price != null ? String(raw.historical_retail_price) : "",
+      iconicity: raw.iconicity ?? "",
+      model: raw.model ?? "",
+      bagSizeClass: raw.bag_size_class ?? "",
     });
     setEditing(true);
   };
@@ -146,6 +170,10 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
     try {
       const priceNum = edit.price.trim() === "" ? null : Number(edit.price);
       if (priceNum != null && !Number.isFinite(priceNum)) throw new Error(t("wardrobe.invalidPrice"));
+      const retailNum = edit.currentRetailPrice.trim() === "" ? null : Number(edit.currentRetailPrice);
+      if (retailNum != null && !Number.isFinite(retailNum)) throw new Error(t("wardrobe.invalidPrice"));
+      const historicalRetailNum = edit.historicalRetailPrice.trim() === "" ? null : Number(edit.historicalRetailPrice);
+      if (historicalRetailNum != null && !Number.isFinite(historicalRetailNum)) throw new Error(t("wardrobe.invalidPrice"));
 
       // Only the fields AI ever classifies get tracked here — price,
       // size and purchase date are never AI-assigned, so there's nothing
@@ -181,6 +209,13 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         price: priceNum,
         currency: priceNum != null ? edit.currency : null,
         purchase_date: edit.purchaseDate || null,
+        current_retail_price: retailNum,
+        current_retail_source: retailNum != null ? "user" : null,
+        current_retail_updated_at: retailNum != null ? new Date().toISOString() : null,
+        historical_retail_price: historicalRetailNum,
+        iconicity: edit.iconicity || null,
+        model: edit.model.trim() || null,
+        bag_size_class: edit.bagSizeClass || null,
         user_edited_fields: userEditedFields,
       };
       const { data, error } = await supabase
@@ -1077,6 +1112,78 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                   );
                 })()}
 
+                {detail.price != null && (() => {
+                  const raw = detail as unknown as {
+                    current_retail_price?: number | null; current_retail_source?: string | null;
+                    historical_retail_price?: number | null; iconicity?: Iconicity | null;
+                    purchase_date?: string | null; model?: string | null; bag_size_class?: string | null;
+                  };
+                  const val = computeItemValuation(
+                    {
+                      price: detail.price,
+                      currentRetailPrice: raw.current_retail_price ?? null,
+                      currentRetailSource: (raw.current_retail_source as "user" | "ai_lookup_verified" | "ai_lookup_unverified" | "product_link" | null) ?? null,
+                      historicalRetailPrice: raw.historical_retail_price ?? null,
+                      purchaseDate: raw.purchase_date ?? null,
+                      wornCount: detail.worn_count ?? 0,
+                      brand: detail.brand ?? null,
+                      category: detail.category ?? null,
+                      subcategory: (detail as unknown as { subcategory?: string | null }).subcategory ?? null,
+                      materials: Array.isArray(detail.material) ? detail.material : [],
+                      model: raw.model ?? null,
+                      bagSizeClass: raw.bag_size_class ?? null,
+                      iconicity: raw.iconicity ?? null,
+                    },
+                    valuationConfig
+                  );
+                  const cur = detail.currency ?? "€";
+                  const symbol = currencySymbol[cur] ?? cur;
+                  const fmtV = (n: number) => `${symbol}${Math.round(n).toLocaleString(i18n.language)}`;
+                  return (
+                    <div className="mt-5 rounded-2xl border border-border bg-secondary/30 p-4 space-y-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground text-center mb-1">
+                        {t("wardrobe.valueSectionTitle")}
+                      </p>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{t("wardrobe.purchasedValueLabel")}</span>
+                        <span>{fmtV(detail.price)}</span>
+                      </div>
+                      {val.currentRetailPrice != null && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{t("wardrobe.currentRetailLabel")}</span>
+                          <span>{fmtV(val.currentRetailPrice)}</span>
+                        </div>
+                      )}
+                      {val.resaleLow != null && val.resaleHigh != null && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{t("wardrobe.estimatedResaleLabel")}</span>
+                          <span>{fmtV(val.resaleLow)}–{fmtV(val.resaleHigh)}</span>
+                        </div>
+                      )}
+                      {val.resaleChangeVsPurchase != null && (
+                        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/60">
+                          <span>{t("wardrobe.valueChangeLabel")}</span>
+                          <span>
+                            {val.resaleChangeVsPurchase.amount >= 0 ? "+" : ""}
+                            {fmtV(val.resaleChangeVsPurchase.amount)} · {val.resaleChangeVsPurchase.pct >= 0 ? "+" : ""}
+                            {Math.round(val.resaleChangeVsPurchase.pct)}%
+                          </span>
+                        </div>
+                      )}
+                      {val.marketPremium && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center pt-1">
+                          {t("wardrobe.marketPremiumNote")}
+                        </p>
+                      )}
+                      {val.valuationConfidence && (
+                        <p className="text-[10px] text-muted-foreground text-center pt-1">
+                          {t(`wardrobe.confidence.${val.valuationConfidence}`)}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <button
                   onClick={openEdit}
                   className="mt-5 w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] inline-flex items-center justify-center gap-2 active:scale-95"
@@ -1353,6 +1460,82 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                     onChange={(e) => setEdit((s) => ({ ...s, purchaseDate: e.target.value }))}
                     className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none"
                   />
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.currentRetailPriceLabel")}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground w-6 text-center">{currencySymbol[edit.currency]}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={edit.currentRetailPrice}
+                      onChange={(e) => setEdit((s) => ({ ...s, currentRetailPrice: e.target.value }))}
+                      placeholder={t("wardrobe.currentRetailPricePlaceholder")}
+                      className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-muted-foreground px-1">{t("wardrobe.currentRetailPriceHint")}</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.historicalRetailPriceLabel")}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground w-6 text-center">{currencySymbol[edit.currency]}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={edit.historicalRetailPrice}
+                      onChange={(e) => setEdit((s) => ({ ...s, historicalRetailPrice: e.target.value }))}
+                      placeholder={t("wardrobe.historicalRetailPricePlaceholder")}
+                      className="flex-1 bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-muted-foreground px-1">{t("wardrobe.historicalRetailPriceHint")}</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.modelLabel")}</p>
+                  <input
+                    type="text"
+                    value={edit.model}
+                    onChange={(e) => setEdit((s) => ({ ...s, model: e.target.value }))}
+                    placeholder={t("wardrobe.modelPlaceholder")}
+                    className="mt-2 w-full bg-secondary/60 rounded-full px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                  <p className="mt-1.5 text-[10px] text-muted-foreground px-1">{t("wardrobe.modelHint")}</p>
+                </div>
+
+                {edit.category === "Bags" && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.bagSizeLabel")}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(["mini", "small", "medium", "large", "jumbo"] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setEdit((s) => ({ ...s, bagSizeClass: s.bagSizeClass === opt ? "" : opt }))}
+                          className={`rounded-full px-3 py-1.5 text-xs ${
+                            edit.bagSizeClass === opt ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                          }`}
+                        >{t(`wardrobe.bagSizeOptions.${opt}`)}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("wardrobe.iconicityLabel")}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {ICONICITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => setEdit((s) => ({ ...s, iconicity: s.iconicity === opt ? "" : opt }))}
+                        className={`rounded-full px-3 py-1.5 text-xs ${
+                          edit.iconicity === opt ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                        }`}
+                      >{t(`wardrobe.iconicityOptions.${opt}`)}</button>
+                    ))}
+                  </div>
                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 pt-2 sticky bottom-24 z-50 bg-card pb-1 rounded-2xl shadow-luxe -mx-1 px-1">
