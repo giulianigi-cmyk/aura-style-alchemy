@@ -1,4 +1,4 @@
-import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus } from "lucide-react";
+import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus, Image as ImageIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -473,6 +473,16 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     ? <ItemThumbs ids={tp.item_ids} />
                     : <EditableItemThumbs planId={tp.id} ids={getWornIds(tp)} />}
                 </div>
+                {getWornIds(tp).length > 0 && (
+                  <button
+                    onClick={() => openBuilder({
+                      itemIds: getWornIds(tp),
+                      name: label,
+                      occasion: tp.calendar_event_id ? label : undefined,
+                    })}
+                    className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                  ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
+                )}
                 {tp.weather_temp != null && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     {Math.round(tp.weather_temp)}°{tp.weather_condition ? ` · ${tp.weather_condition}` : ""}
@@ -510,6 +520,13 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   className="h-9 w-9 rounded-full border border-border flex items-center justify-center disabled:opacity-60"
                   aria-label={t("aiStylist.iDidntWearThisAria")}
                 ><X size={14} /></button>
+                {getWornIds(p).length > 0 && (
+                  <button
+                    onClick={() => openBuilder({ itemIds: getWornIds(p), occasion: p.occasion ?? undefined })}
+                    aria-label={t("aiStylist.openOnCanvasAria")}
+                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center disabled:opacity-60"
+                  ><ImageIcon size={14} /></button>
+                )}
               </div>
             </div>
           ))}
@@ -552,6 +569,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     ><X size={13} /></button>
                   </div>
                   <ItemThumbs ids={p.item_ids} size="h-14 w-14" />
+                  {p.item_ids.length > 0 && (
+                    <button
+                      onClick={() => openBuilder({ itemIds: p.item_ids, occasion: p.occasion ?? undefined })}
+                      className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                    ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
+                  )}
                 </div>
               ))}
             </div>
@@ -567,6 +590,12 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     {dateLabel(w.date)}{w.outfitName ? ` · ${w.outfitName}` : w.occasion ? ` · ${w.occasion}` : ""}
                   </p>
                   <ItemThumbs ids={w.itemIds} size="h-14 w-14" />
+                  {w.itemIds.length > 0 && (
+                    <button
+                      onClick={() => openBuilder({ itemIds: w.itemIds, name: w.outfitName ?? undefined, occasion: w.occasion ?? undefined })}
+                      className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                    ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
+                  )}
                 </div>
               ))}
             </div>
