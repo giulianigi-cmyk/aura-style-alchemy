@@ -88,6 +88,10 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               description: string | null; bbox: BBox | null;
               brand: string | null; price: number | null; currency: string | null;
               style: string | null; occasion: string | null;
+              sleeve_length?: string | null; formality?: number | string | null;
+              day_evening?: string | null; length?: string | null; fit?: string | null;
+              heel_height?: string | null; toe_shape?: string | null; closure?: string | null;
+              gender?: string | null; style_tags?: string[] | null;
             }>;
             jobs: Array<{ id: string; image_path: string }>;
           }>,
@@ -149,7 +153,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
               purchaseDate: new Date().toISOString().slice(0, 10),
               sleeveLength: it.sleeve_length ?? "",
-              formality: it.formality ?? null,
+              formality: it.formality != null ? Number(it.formality) : null,
               dayEvening: it.day_evening ?? "",
               length: it.length ?? "",
               fit: it.fit ?? "",
