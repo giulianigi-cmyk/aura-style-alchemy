@@ -245,7 +245,7 @@ export function Shop({ go }: { go: (s: Screen) => void }) {
                   {result.product.brand && <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{result.product.brand}</p>}
                   <p className="font-serif text-base leading-tight truncate">{result.product.title || [result.analysis.subcategory, result.analysis.category].filter(Boolean).join(" · ") || t("shop.unknownPiece")}</p>
                   {result.product.price && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{result.product.price}{result.product.currency ? ` ${result.product.currency}` : ""}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{result.product.price}</p>
                   )}
                   {result.product.sourceUrl && (
                     <a
