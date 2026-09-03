@@ -45,6 +45,7 @@ import {
   EMPTY_VALUATION_CONFIG,
   type ValuationConfig,
   type Iconicity,
+  type CurrentRetailSource,
 } from "@/lib/wardrobe-value-engine";
 
 const categories = ["All", ...ITEM_CATEGORIES];
@@ -1123,7 +1124,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                     {
                       price: detail.price,
                       currentRetailPrice: raw.current_retail_price ?? null,
-                      currentRetailSource: (raw.current_retail_source as "user" | "import" | "ai_lookup_verified" | "ai_lookup_unverified" | "product_link" | null) ?? null,
+                      currentRetailSource: (raw.current_retail_source === "import" ? "user" : (raw.current_retail_source as CurrentRetailSource | null)) ?? null,
                       historicalRetailPrice: raw.historical_retail_price ?? null,
                       purchaseDate: raw.purchase_date ?? null,
                       wornCount: detail.worn_count ?? 0,
