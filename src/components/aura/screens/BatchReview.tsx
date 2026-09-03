@@ -158,7 +158,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               dayEvening: it.day_evening ?? "",
               length: it.length ?? "",
               fit: it.fit ?? "",
-              heelHeight: it.heel_height ?? "",
+              heelHeight: it.heel_height != null ? Number(it.heel_height) : null,
               toeShape: it.toe_shape ?? "",
               closure: it.closure ?? "",
               gender: it.gender ?? "",
