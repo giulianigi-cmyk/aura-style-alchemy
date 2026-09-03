@@ -940,6 +940,27 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
       priceCurrency = metaCur ? metaCur.toUpperCase() : null;
     }
   }
+  if (priceValue == null && html) {
+    // Twitter Card "Product" convention (twitter:label1/data1, label2/data2):
+    // several storefronts — Zalando included — expose the price this way
+    // even when there's no JSON-LD or og:price meta at all on the
+    // server-rendered page (client-side-rendered price otherwise invisible
+    // to a plain fetch). Only trust it when the label actually says
+    // "price"/"prezzo"/"precio"/"prix"/"preis", never guess from position.
+    const PRICE_LABEL_RE = /^(price|prezzo|precio|prix|preis)$/i;
+    for (const n of [1, 2] as const) {
+      const label = pickMeta(html, `twitter:label${n}`);
+      if (label && PRICE_LABEL_RE.test(label.trim())) {
+        const data = pickMeta(html, `twitter:data${n}`);
+        const parsed = parsePriceNum(data ?? "");
+        if (parsed != null) {
+          priceValue = parsed;
+          priceCurrency = /€/.test(data ?? "") ? "EUR" : /\$/.test(data ?? "") ? "USD" : /£/.test(data ?? "") ? "GBP" : null;
+          break;
+        }
+      }
+    }
+  }
   if (originalPriceValue == null && html) {
     // Some storefronts expose a separate "regular" (pre-discount) price meta
     // tag alongside the sale one — same conservative, structured-only approach.
@@ -951,11 +972,30 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
     }
   }
   if (priceValue == null && html) {
+    // Last resort: scan the visible page text for a €-adjacent number.
+    // Genuinely risky — boilerplate like a free-shipping-threshold banner
+    // ("free shipping over €29.90") reads exactly like a price and, being
+    // near the top of most pages, used to win by simply being first. Reject
+    // any match sitting inside a window that also mentions shipping/
+    // delivery/returns, in the languages this app already supports.
+    const SHIPPING_NEARBY_RE = /(spedizion|consegna|gratuit|reso|delivery|shipping|free\b|envío|envio|entrega|gratis|livraison|versand|lieferung|kostenlos)/i;
     const text = decodeHtml(stripExcludedSections(html).replace(/<[^>]+>/g, " "));
-    const m =
-      text.match(/(?:€|\bEUR\b)\s{0,2}(\d{1,4}(?:[.,]\d{2})?)/) ||
-      text.match(/(\d{1,4}(?:[.,]\d{2}))\s{0,2}(?:€|\bEUR\b)/);
-    const n = parsePriceNum(m?.[1] ?? "");
+    const patterns = [
+      /(?:€|\bEUR\b)\s{0,2}(\d{1,4}(?:[.,]\d{2})?)/g,
+      /(\d{1,4}(?:[.,]\d{2}))\s{0,2}(?:€|\bEUR\b)/g,
+    ];
+    let accepted: string | null = null;
+    for (const re of patterns) {
+      for (const m of text.matchAll(re)) {
+        const start = Math.max(0, (m.index ?? 0) - 40);
+        const end = Math.min(text.length, (m.index ?? 0) + m[0].length + 40);
+        if (SHIPPING_NEARBY_RE.test(text.slice(start, end))) continue;
+        accepted = m[1];
+        break;
+      }
+      if (accepted) break;
+    }
+    const n = parsePriceNum(accepted ?? "");
     if (n != null && n >= 1 && n <= 20000) {
       priceValue = n;
       priceCurrency = "EUR";
