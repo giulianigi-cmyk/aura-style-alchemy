@@ -9,24 +9,17 @@ import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
 import { convertCurrency, RATES_AS_OF } from "@/lib/currency-rates";
 import { Loader2 } from "lucide-react";
 import i18n from "@/i18n/config";
+import {
+  aggregateWardrobeValuation,
+  fetchValuationConfig,
+  EMPTY_VALUATION_CONFIG,
+  type ValuationConfig,
+  type Iconicity,
+} from "@/lib/wardrobe-value-engine";
 
 const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", GBP: "£" };
 const fmt = (n: number, currency: string) => `${currencySymbol[currency] ?? currency}${Math.round(n).toLocaleString(i18n.language)}`;
-// Deliberately simple and stated plainly, not tuned to feel precise:
-// linear decline from 100% at purchase to a 25% floor by year 5, flat
-// after that. This is a general rule of thumb, not a market appraisal —
-// it doesn't know brand, condition, or trends, and never claims to.
-// Wear count is NOT a factor here on purpose: how often something has
-// been worn barely moves resale value (condition and brand do); it's
-// already the input for cost-per-wear above, which answers a different
-// question ("was this worth it for me") from this one ("what's it
-// roughly worth now").
-const RETENTION_FLOOR = 0.25;
-const RETENTION_CLIFF_YEARS = 5;
-function retentionFactor(ageYears: number): number {
-  const t = Math.min(Math.max(ageYears, 0), RETENTION_CLIFF_YEARS) / RETENTION_CLIFF_YEARS;
-  return 1 - (1 - RETENTION_FLOOR) * t;
-}
+const fmtRange = (low: number, high: number, currency: string) => `${fmt(low, currency)}–${fmt(high, currency)}`;
 
 export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; openWardrobeGap: (filter: "price" | "purchase_date") => void }) {
   const { t } = useTranslation();
@@ -44,6 +37,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
   };
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [valuationConfig, setValuationConfig] = useState<ValuationConfig>(EMPTY_VALUATION_CONFIG);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -55,6 +49,7 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         setSigned(await resolveWardrobeUrls(list));
         setLoading(false);
       });
+    fetchValuationConfig().then(setValuationConfig).catch((e) => console.error("[AURA insights] valuation config", e));
   }, [user]);
 
   const stats = useMemo(() => {
@@ -91,15 +86,42 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
       .sort((a, b) => b.value - a.value || b.count - a.count);
     const topCategory = categoryRows.find((c) => c.value > 0) ?? null;
 
-    const now = Date.now();
-    const withPurchaseDate = inPrimary.filter((it) => (it as unknown as { purchase_date?: string | null }).purchase_date);
-    const estimatedValue = withPurchaseDate.reduce((sum, it) => {
-      const pd = new Date(`${(it as unknown as { purchase_date: string }).purchase_date}T00:00:00`);
-      const ageYears = (now - pd.getTime()) / (365.25 * 24 * 3600 * 1000);
-      return sum + toPrimary(it) * retentionFactor(ageYears);
-    }, 0);
-    const estimatedValueCount = withPurchaseDate.length;
-    const estimatedValueExcluded = inPrimary.length - withPurchaseDate.length;
+    // Value engine works in the primary currency: every item's price and
+    // current_retail_price get converted before being handed to it, so the
+    // resulting ranges/sums are directly comparable and summable.
+    const valuationItems = items.map((it) => {
+      const raw = it as unknown as {
+        current_retail_price?: number | null;
+        current_retail_source?: string | null;
+        purchase_date?: string | null;
+        iconicity?: Iconicity | null;
+        subcategory?: string | null;
+        model?: string | null;
+        bag_size_class?: string | null;
+      };
+      return {
+        id: it.id,
+        price: it.price != null ? convertCurrency(it.price, it.currency || "EUR", primaryCurrency) : null,
+        currentRetailPrice: raw.current_retail_price != null ? convertCurrency(raw.current_retail_price, it.currency || "EUR", primaryCurrency) : null,
+        currentRetailSource: (raw.current_retail_source as "user" | "ai_lookup_verified" | "ai_lookup_unverified" | "product_link" | null) ?? null,
+        purchaseDate: raw.purchase_date ?? null,
+        wornCount: it.worn_count ?? 0,
+        brand: it.brand ?? null,
+        category: it.category ?? null,
+        subcategory: raw.subcategory ?? null,
+        materials: Array.isArray(it.material) ? it.material : [],
+        model: raw.model ?? null,
+        bagSizeClass: raw.bag_size_class ?? null,
+        iconicity: raw.iconicity ?? null,
+      };
+    });
+    const valuation = aggregateWardrobeValuation(valuationItems, valuationConfig);
+    const estimatedValueLow = valuation.totalResaleLow;
+    const estimatedValueHigh = valuation.totalResaleHigh;
+    const estimatedValueCount = valuation.resaleCount;
+    const estimatedValueExcluded = items.length - valuation.resaleCount;
+    const totalCurrentRetail = valuation.totalCurrentRetail;
+    const currentRetailCount = valuation.currentRetailCount;
 
     const missingPriceCount = items.filter((it) => it.price == null || it.price <= 0).length;
     const missingPurchaseDateCount = items.filter((it) => !(it as unknown as { purchase_date?: string | null }).purchase_date).length;
@@ -107,10 +129,11 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
     return {
       totalValue, primaryCurrency, convertedCount, pricedCount: priced.length,
       neverWornCount, neverWornPct, avgCpw, bestValue, categoryRows, topCategory,
-      estimatedValue, estimatedValueCount, estimatedValueExcluded,
+      estimatedValueLow, estimatedValueHigh, estimatedValueCount, estimatedValueExcluded,
+      totalCurrentRetail, currentRetailCount,
       missingPriceCount, missingPurchaseDateCount,
     };
-  }, [items]);
+  }, [items, valuationConfig]);
 
   const thumb = (it: WardrobeItem) => {
     const path = toStoragePath(it.image_url);
@@ -290,13 +313,25 @@ export function Insights({ go, openWardrobeGap }: { go: (s: Screen) => void; ope
         </section>
       )}
 
+      {stats.currentRetailCount > 0 && (
+        <section className="mx-6 mt-6 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.currentRetailValue")}</p>
+          <p className="font-serif text-2xl mt-1">{showValues ? fmt(stats.totalCurrentRetail, stats.primaryCurrency) : "••••"}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+            {t("insights.currentRetailBasedOn", { count: stats.currentRetailCount })}
+          </p>
+        </section>
+      )}
+
       <section className="mx-6 mt-6 mb-2 rounded-2xl border border-dashed border-border/60 p-4 animate-fade-up">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("insights.estimatedCurrentValue")}</p>
         {stats.estimatedValueCount > 0 ? (
           <>
-            <p className="font-serif text-2xl mt-1">{showValues ? fmt(stats.estimatedValue, stats.primaryCurrency) : "••••"}</p>
+            <p className="font-serif text-2xl mt-1">
+              {showValues ? fmtRange(stats.estimatedValueLow, stats.estimatedValueHigh, stats.primaryCurrency) : "••••"}
+            </p>
             <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-              {t("insights.estimatedBasedOn", { count: stats.estimatedValueCount, pct: Math.round(RETENTION_FLOOR * 100), years: RETENTION_CLIFF_YEARS })}
+              {t("insights.estimatedBasedOnRange", { count: stats.estimatedValueCount })}
               {stats.estimatedValueExcluded > 0 ? ` ${t("insights.moreNotIncluded", { count: stats.estimatedValueExcluded })}` : ""}
             </p>
           </>
