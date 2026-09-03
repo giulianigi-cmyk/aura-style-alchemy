@@ -175,7 +175,9 @@
     "someone": "they",
     "toastRequestDeclined": "Request declined",
     "toastRequestCancelled": "Request cancelled",
-    "toastFriendRemoved": "Friend removed"
+    "toastFriendRemoved": "Friend removed",
+    "youSharedToFeed": "You shared to the Feed",
+    "sharedToFeed": "On the Feed"
   },
   "chats": {
     "title": "Chat",
@@ -728,8 +730,6 @@
     "confirmWorn": "Confirm worn"
   },
   "aiStylist": {
-    "openOnCanvas": "Open on canvas",
-    "openOnCanvasAria": "Open this outfit on the canvas",
     "notEnoughActivePieces_one": "You have {{count}} piece in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.",
     "notEnoughActivePieces_other": "You have {{count}} pieces in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.",
     "noCategoriesSet": "None of your pieces have a category set. Edit your items and assign a category (Tops, Bottoms, Shoes…) so AURA can compose an outfit.",
@@ -806,7 +806,9 @@
     "wardrobeToUse": "Wardrobe to use",
     "multiLocationHint": "Select more than one to include items from all of them in this batch.",
     "fillsInWorkDaysOnly": "Fills in your work days only (set in your profile) — never touches a day you've already planned, and never touches an outfit already linked to a specific event.",
-    "generate": "Generate"
+    "generate": "Generate",
+    "openOnCanvas": "Open on canvas",
+    "openOnCanvasAria": "Open this outfit on the canvas"
   },
   "outfitBuilder": {
     "itemNoImage": "This item has no image yet",
@@ -1519,7 +1521,17 @@
     "couldNotShareWithCount": "Could not share with {{count}} friends",
     "shareWithFriends": "Share with friends",
     "noFriendsYetHint": "You have no friends yet. Head to Community → Friends to add people first.",
-    "share": "Share"
+    "share": "Share",
+    "shareOutfit": "Share outfit",
+    "modeFriend": "To a friend",
+    "modeFeed": "To the Feed",
+    "modeFriendHint": "Sent as a private message — only the person you pick sees it.",
+    "modeFeedHint": "Visible to all your accepted friends, like a shared board.",
+    "sendInChat": "Send in chat",
+    "shareToFeedButton": "Share to Feed",
+    "sentInChatCount": "Sent in chat to {{count}} people",
+    "sharedToFeed": "Shared to Feed",
+    "alreadyOnFeed": "This outfit is already on the Feed"
   },
   "myQrCode": {
     "linkCopied": "Link copied",
