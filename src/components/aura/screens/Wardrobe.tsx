@@ -213,6 +213,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
         current_retail_source: retailNum != null ? "user" : null,
         current_retail_updated_at: retailNum != null ? new Date().toISOString() : null,
         historical_retail_price: historicalRetailNum,
+        historical_retail_source: historicalRetailNum != null ? "user" : null,
         iconicity: edit.iconicity || null,
         model: edit.model.trim() || null,
         bag_size_class: edit.bagSizeClass || null,
@@ -1122,7 +1123,7 @@ export function Wardrobe({ go, gapFilter, onClearGapFilter }: {
                     {
                       price: detail.price,
                       currentRetailPrice: raw.current_retail_price ?? null,
-                      currentRetailSource: (raw.current_retail_source as "user" | "ai_lookup_verified" | "ai_lookup_unverified" | "product_link" | null) ?? null,
+                      currentRetailSource: (raw.current_retail_source as "user" | "import" | "ai_lookup_verified" | "ai_lookup_unverified" | "product_link" | null) ?? null,
                       historicalRetailPrice: raw.historical_retail_price ?? null,
                       purchaseDate: raw.purchase_date ?? null,
                       wornCount: detail.worn_count ?? 0,
