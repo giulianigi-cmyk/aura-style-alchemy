@@ -258,6 +258,20 @@ export function AddItem({ onClose }: { onClose: () => void }) {
   const [currency, setCurrency] = useState("EUR");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [composition, setComposition] = useState<CompositionEntry[]>([]);
+  const [currentRetailPrice, setCurrentRetailPrice] = useState("");
+  // True only while the current value still matches what the URL import
+  // found, untouched by the person — flips to false the moment they edit
+  // it, so we know whether to tag current_retail_source as 'import' or
+  // 'user' at save time.
+  const [currentRetailFromImport, setCurrentRetailFromImport] = useState(false);
+  const [historicalRetailPrice, setHistoricalRetailPrice] = useState("");
+  // Same idea: true only while it still matches the pre-discount price the
+  // import deduced from the product page — an estimate, never a certain
+  // fact, so it gets tagged historical_retail_source = 'import_estimate'
+  // instead of 'user' at save time, and shown with an "estimated" hint.
+  const [historicalRetailFromImport, setHistoricalRetailFromImport] = useState(false);
+  const [model, setModel] = useState("");
+  const [bagSizeClass, setBagSizeClass] = useState("");
 
   const resetFields = () => {
     setBrand(""); setSize(""); setCategory("Tops"); setSubcategory(""); setColors([]);
@@ -267,6 +281,9 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     setSeasons([]); setStyles([]); setOccasions([]); setMaterials([]);
     setPrice(""); setCurrency("EUR"); setComposition([]);
     setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setCurrentRetailPrice(""); setCurrentRetailFromImport(false);
+    setHistoricalRetailPrice(""); setHistoricalRetailFromImport(false);
+    setModel(""); setBagSizeClass("");
     setDetectedProductCode(""); setDetectedManufacturer("");
   };
 
@@ -274,6 +291,8 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     brand?: string; source?: "photo" | "url" | "library"; price?: string; currency?: string;
     materials?: string[]; composition?: CompositionEntry[]; productId?: string;
     category?: string; subcategory?: string; colors?: string[]; season?: string;
+    currentRetailPrice?: string; currentRetailFromImport?: boolean;
+    historicalRetailPrice?: string; historicalRetailFromImport?: boolean;
   }) => {
 
     const compressedFile = await compressImageForUpload(initialFile);
@@ -291,6 +310,10 @@ export function AddItem({ onClose }: { onClose: () => void }) {
     if (opts?.subcategory) setSubcategory(opts.subcategory);
     if (opts?.colors?.length) setColors(opts.colors);
     if (opts?.season) setSeasons([opts.season]);
+    if (opts?.currentRetailPrice) setCurrentRetailPrice(opts.currentRetailPrice);
+    if (opts?.currentRetailFromImport) setCurrentRetailFromImport(true);
+    if (opts?.historicalRetailPrice) setHistoricalRetailPrice(opts.historicalRetailPrice);
+    if (opts?.historicalRetailFromImport) setHistoricalRetailFromImport(true);
     setSelectedProductId(opts?.productId ?? null);
 
     const dataUrl = await readFileAsDataUrl(compressedFile);
@@ -358,8 +381,11 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       await runPipeline(file, {
         brand: result.brand || undefined,
         source: "url",
-        price: result.priceValue != null ? String(result.priceValue) : undefined,
         currency: result.priceCurrency || undefined,
+        currentRetailPrice: result.priceValue != null ? String(result.priceValue) : undefined,
+        currentRetailFromImport: result.priceValue != null,
+        historicalRetailPrice: result.originalPriceValue != null ? String(result.originalPriceValue) : undefined,
+        historicalRetailFromImport: result.originalPriceValue != null,
         materials: result.materials?.length ? result.materials : undefined,
         composition: result.composition?.length ? result.composition : undefined,
       });
@@ -778,6 +804,13 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         purchase_date: purchaseDate || null,
                location_id: activeLocationId,
         product_id: selectedProductId,
+        current_retail_price: currentRetailPrice.trim() === "" ? null : Number(currentRetailPrice),
+        current_retail_source: currentRetailPrice.trim() === "" ? null : (currentRetailFromImport ? "import" : "user"),
+        current_retail_updated_at: currentRetailPrice.trim() === "" ? null : new Date().toISOString(),
+        historical_retail_price: historicalRetailPrice.trim() === "" ? null : Number(historicalRetailPrice),
+        historical_retail_source: historicalRetailPrice.trim() === "" ? null : (historicalRetailFromImport ? "import_estimate" : "user"),
+        model: model.trim() || null,
+        bag_size_class: bagSizeClass || null,
       } as unknown as TablesInsert<"wardrobe_items">;
       let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
@@ -1247,6 +1280,59 @@ export function AddItem({ onClose }: { onClose: () => void }) {
                 className="mt-1 w-full bg-transparent font-serif text-lg outline-none"
               />
             </div>
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.currentRetailPriceLabel")}</p>
+              <input
+                value={currentRetailPrice}
+                onChange={(e) => { setCurrentRetailPrice(e.target.value.replace(/[^0-9.,]/g, "")); setCurrentRetailFromImport(false); }}
+                inputMode="decimal"
+                placeholder={t("addItem.currentRetailPricePlaceholder")}
+                className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {currentRetailFromImport ? t("addItem.currentRetailPriceFromImportHint") : t("addItem.currentRetailPriceHint")}
+              </p>
+            </div>
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.historicalRetailPriceLabel")}</p>
+              <input
+                value={historicalRetailPrice}
+                onChange={(e) => { setHistoricalRetailPrice(e.target.value.replace(/[^0-9.,]/g, "")); setHistoricalRetailFromImport(false); }}
+                inputMode="decimal"
+                placeholder={t("addItem.historicalRetailPricePlaceholder")}
+                className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {historicalRetailFromImport ? t("addItem.historicalRetailPriceFromImportHint") : t("addItem.historicalRetailPriceHint")}
+              </p>
+            </div>
+            <div className="border-b border-border/60 pb-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.modelLabel")}</p>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={t("addItem.modelPlaceholder")}
+                className="mt-1 w-full bg-transparent font-serif text-lg outline-none placeholder:text-muted-foreground/50"
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">{t("addItem.modelHint")}</p>
+            </div>
+            {category === "Bags" && (
+              <div className="border-b border-border/60 pb-3">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("addItem.bagSizeLabel")}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(["mini", "small", "medium", "large", "jumbo"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setBagSizeClass((s) => (s === opt ? "" : opt))}
+                      className={`rounded-full px-3 py-1.5 text-xs ${
+                        bagSizeClass === opt ? "bg-foreground text-background" : "bg-secondary/60 text-foreground/70"
+                      }`}
+                    >{t(`addItem.bagSizeOptions.${opt}`)}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             <ChipGroup
               label={t("addItem.categoryLabel")}
               options={categories}
