@@ -728,6 +728,8 @@
     "confirmWorn": "Confirmar uso"
   },
   "aiStylist": {
+    "openOnCanvas": "Abrir en el lienzo",
+    "openOnCanvasAria": "Abrir este look en el lienzo",
     "notEnoughActivePieces_one": "Tienes {{count}} prenda en tu armario activo. Añade al menos 3 (o restaura una archivada) para generar un outfit con IA.",
     "notEnoughActivePieces_other": "Tienes {{count}} prendas en tu armario activo. Añade al menos 3 (o restaura una archivada) para generar un outfit con IA.",
     "noCategoriesSet": "Ninguna de tus prendas tiene categoría asignada. Edita tus prendas y asigna una categoría (Tops, Bottoms, Zapatos…) para que AURA pueda componer un outfit.",
