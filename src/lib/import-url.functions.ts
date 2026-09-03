@@ -314,7 +314,20 @@ function urlSlugTokens(u: URL): string[] {
   return parts.filter((p) => p.length >= 3 && !/^\d+$/.test(p));
 }
 
-function nodeMatchesUrl(node: ProductJson, target: URL): boolean {
+function titleTokens(title: string | null): string[] {
+  if (!title) return [];
+  return title.toLowerCase().split(/[^a-z0-9à-ÿ]+/).filter((p) => p.length >= 3);
+}
+
+/** Scores how likely a JSON-LD Product node is the one the page is actually
+ *  about, vs. an unrelated product also embedded on the page (e.g. a
+ *  "complete the look" / cross-sell carousel — Zalando product pages are a
+ *  known case where this happens and previously caused the wrong price/name
+ *  to be picked, silently, whenever the URL-only match below failed). Exact
+ *  canonical URL match wins outright; otherwise the node whose `name` best
+ *  overlaps EITHER the URL slug OR the page's own og:title wins — two
+ *  independent signals instead of one, since either alone can miss. */
+function nodeMatchScore(node: ProductJson, target: URL, ogTitle: string | null): number {
   const canonicals: string[] = [];
   if (typeof node.url === "string") canonicals.push(node.url);
   const offers = Array.isArray(node.offers) ? node.offers : node.offers ? [node.offers] : [];
@@ -322,16 +335,20 @@ function nodeMatchesUrl(node: ProductJson, target: URL): boolean {
   for (const c of canonicals) {
     try {
       const cu = new URL(c, target);
-      if (cu.pathname === target.pathname) return true;
+      if (cu.pathname === target.pathname) return 1000;
     } catch { /* ignore */ }
   }
-  const slug = urlSlugTokens(target);
-  if (!slug.length) return false;
   const name = (node.name ?? "").toLowerCase();
-  if (!name) return false;
-  const overlap = slug.filter((tok) => name.includes(tok)).length;
-  return overlap >= Math.min(2, slug.length);
+  if (!name) return 0;
+  const urlOverlap = urlSlugTokens(target).filter((tok) => name.includes(tok)).length;
+  const titleOverlap = titleTokens(ogTitle).filter((tok) => name.includes(tok)).length;
+  return Math.max(urlOverlap, titleOverlap);
 }
+
+// nodeMatchesUrl was superseded by nodeMatchScore above (same exact-URL
+// check, plus the og:title signal that fixed the Zalando "wrong product
+// price" case) — removed rather than left dead.
+
 
 function jsonLdImages(node: ProductJson): string[] {
   const img = node.image;
@@ -348,11 +365,16 @@ function jsonLdImages(node: ProductJson): string[] {
   return out;
 }
 
-function selectProductNode(nodes: ProductJson[], target: URL): ProductJson | null {
+function selectProductNode(nodes: ProductJson[], target: URL, ogTitle: string | null): ProductJson | null {
   if (!nodes.length) return null;
   if (nodes.length === 1) return nodes[0];
-  const matched = nodes.find((n) => nodeMatchesUrl(n, target));
-  return matched ?? nodes[0];
+  let best = nodes[0];
+  let bestScore = -1;
+  for (const n of nodes) {
+    const score = nodeMatchScore(n, target, ogTitle);
+    if (score > bestScore) { bestScore = score; best = n; }
+  }
+  return best;
 }
 
 const MODEL_KEYWORDS = /(model|worn|lifestyle|editorial|campaign|onbody|on-body|lookbook|-(?:fi|bi|m|dt\d*w?)\.(?:jpe?g|png|webp)(?:\?|$))/i;
@@ -777,7 +799,7 @@ async function extractFromHtml(html: string, target: URL): Promise<Extracted> {
   const ogTitle = pickMeta(html, "og:title") || pickMeta(html, "twitter:title");
 
   const productNodes = collectProductNodes(html);
-  const productNode = selectProductNode(productNodes, target);
+  const productNode = selectProductNode(productNodes, target, ogTitle);
 
   const ldImgs = productNode
     ? jsonLdImages(productNode)
@@ -880,13 +902,26 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
   let price: string | null = null;
   let priceValue: number | null = null;
   let priceCurrency: string | null = null;
+  // Original/pre-discount price, best-effort only: structured data alone
+  // (schema.org AggregateOffer.highPrice, or a second priceSpecification
+  // entry some sites use for the "was" price). Deliberately NOT scraped via
+  // <del>/<s> tags or class-name heuristics — too fragile across sites, and
+  // an empty result here is honest; a wrong one isn't.
+  let originalPriceValue: number | null = null;
+  let originalPriceCurrency: string | null = null;
   const offerList: OfferLike[] = Array.isArray(ld?.offers) ? ld?.offers ?? [] : ld?.offers ? [ld.offers] : [];
   for (const offer of offerList) {
-    const spec = Array.isArray(offer.priceSpecification) ? offer.priceSpecification[0] : offer.priceSpecification;
+    const specs = Array.isArray(offer.priceSpecification) ? offer.priceSpecification : offer.priceSpecification ? [offer.priceSpecification] : [];
+    const spec = specs[0];
     const candidate = parsePriceNum(offer.price) ?? parsePriceNum(offer.lowPrice) ?? parsePriceNum(spec?.price);
     if (candidate != null) {
       priceValue = candidate;
       priceCurrency = String(offer.priceCurrency || spec?.priceCurrency || "").toUpperCase() || null;
+      const highCandidate = parsePriceNum((offer as unknown as { highPrice?: unknown }).highPrice) ?? parsePriceNum(specs[1]?.price);
+      if (highCandidate != null && highCandidate > candidate) {
+        originalPriceValue = highCandidate;
+        originalPriceCurrency = priceCurrency;
+      }
       break;
     }
   }
@@ -905,6 +940,16 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
       priceCurrency = metaCur ? metaCur.toUpperCase() : null;
     }
   }
+  if (originalPriceValue == null && html) {
+    // Some storefronts expose a separate "regular" (pre-discount) price meta
+    // tag alongside the sale one — same conservative, structured-only approach.
+    const metaOriginal = pickMeta(html, "product:price:regular_amount") || pickMeta(html, "og:price:regular_amount");
+    const n = parsePriceNum(metaOriginal);
+    if (n != null && priceValue != null && n > priceValue) {
+      originalPriceValue = n;
+      originalPriceCurrency = priceCurrency;
+    }
+  }
   if (priceValue == null && html) {
     const text = decodeHtml(stripExcludedSections(html).replace(/<[^>]+>/g, " "));
     const m =
@@ -919,6 +964,10 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
   if (priceValue != null) {
     price = priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue);
   }
+  let originalPrice: string | null = null;
+  if (originalPriceValue != null) {
+    originalPrice = originalPriceCurrency ? `${originalPriceValue} ${originalPriceCurrency}` : String(originalPriceValue);
+  }
 
   // The product's own description text (fabric, fit, styling notes) was
   // already being read internally just to pull material percentages out
@@ -930,7 +979,9 @@ function extractProductMeta(html: string | null, target: URL, extracted: Extract
   const description = rawDescription ? rawDescription.slice(0, 500) : null;
 
   return {
-    brand, title, price, priceValue, priceCurrency, description,
+    brand, title, price, priceValue, priceCurrency,
+    originalPrice, originalPriceValue, originalPriceCurrency,
+    description,
     colorWarning: colorAmbiguityWarning(target, extracted.productNode),
     ...extractMaterials(html, extracted.productNode),
   };
@@ -1315,6 +1366,13 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
     const priceValue = meta.priceValue ?? aiMeta?.priceValue ?? null;
     const priceCurrency = meta.priceCurrency ?? aiMeta?.priceCurrency ?? null;
     const price = priceValue != null ? (priceCurrency ? `${priceValue} ${priceCurrency}` : String(priceValue)) : meta.price;
+    // Original/pre-discount price: structured-data-only (see extractProductMeta),
+    // never inferred by the AI fallback — best effort, often empty, that's fine.
+    const originalPriceValue = meta.originalPriceValue ?? null;
+    const originalPriceCurrency = meta.originalPriceCurrency ?? null;
+    const originalPrice = originalPriceValue != null
+      ? (originalPriceCurrency ? `${originalPriceValue} ${originalPriceCurrency}` : String(originalPriceValue))
+      : null;
 
     // The "wrong photo? pick another" strip renders these as bare <img>
     // tags with no server-side download step, so an un-validated candidate
@@ -1330,6 +1388,9 @@ export const importProductFromUrl = createServerFn({ method: "POST" })
       price,
       priceValue,
       priceCurrency,
+      originalPrice,
+      originalPriceValue,
+      originalPriceCurrency,
       sourceUrl: target.toString(),
       extractionMethod: aiMeta ? "ai-fallback" : extracted.method,
       confidence: aiMeta ? "medium" as const : extracted.confidence,
