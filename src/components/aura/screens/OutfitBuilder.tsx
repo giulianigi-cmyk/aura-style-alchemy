@@ -729,11 +729,14 @@ export function OutfitBuilder({ go, init }: { go: (s: Screen) => void; init?: Bu
               );
             })}
 
-          {/* AURA watermark — matches the wordmark style used on the Splash screen exactly */}
+          {/* AURA watermark — matches the wordmark style used on the Splash screen exactly.
+              Sized up from clamp(12px, 3cqmin, 28px): it was the only mark
+              left after removing the redundant "@handle · AURA" chat-share
+              stamp, and at the old size it was unreadable. */}
           <div className="absolute bottom-3 right-4 pointer-events-none select-none">
             <span
               className="font-serif italic tracking-tight text-black/70"
-              style={{ fontSize: "clamp(12px, 3cqmin, 28px)" }}
+              style={{ fontSize: "clamp(16px, 4.5cqmin, 34px)" }}
             >aura</span>
           </div>
 
