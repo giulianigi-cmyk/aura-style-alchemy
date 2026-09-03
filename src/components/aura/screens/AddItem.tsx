@@ -782,9 +782,16 @@ export function AddItem({ onClose }: { onClose: () => void }) {
       let { data: inserted, error: insErr } = await supabase
         .from("wardrobe_items").insert(fullPayload).select("*").single();
       if (insErr && /column .* does not exist|composition/i.test(String(insErr.message))) {
-        console.warn("[AURA wardrobe] new column not in cache yet — saving without extended attributes", insErr.message);
+        // Root cause: only `composition` is a recently-added column that can
+        // lag behind in Supabase's schema cache right after a migration.
+        // Drop ONLY that field and retry — every other extended attribute
+        // (purchase_date included) must still be saved. Falling back to the
+        // bare `payload` here used to silently drop purchase_date on every
+        // import that included a composition reading — that was the bug.
+        console.warn("[AURA wardrobe] composition column not in cache yet — retrying without it only", insErr.message);
+        const { composition: _composition, ...payloadWithoutComposition } = fullPayload;
         ({ data: inserted, error: insErr } = await supabase
-          .from("wardrobe_items").insert(payload as never).select("*").single());
+          .from("wardrobe_items").insert(payloadWithoutComposition as never).select("*").single());
       }
       if (insErr) throw insErr;
       toast.success(t("addItem.toastAddedToCloset"));
