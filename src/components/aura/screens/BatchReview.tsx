@@ -107,7 +107,19 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         const built: Draft[] = [];
         clearSegmentationCache();
         setLoadProgress({ done: 0, total: res.items.length });
-        for (const it of res.items) {
+        type EnrichedScanItem = (typeof res.items)[number] & {
+          sleeve_length?: string | null;
+          formality?: number | string | null;
+          day_evening?: string | null;
+          length?: string | null;
+          fit?: string | null;
+          heel_height?: string | null;
+          toe_shape?: string | null;
+          closure?: string | null;
+          gender?: string | null;
+          style_tags?: string[] | null;
+        };
+        for (const it of res.items as EnrichedScanItem[]) {
           try {
             const path = pathById.get(it.job_id);
             const src = path ? signed.get(path) : undefined;
@@ -149,7 +161,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
               purchaseDate: new Date().toISOString().slice(0, 10),
               sleeveLength: it.sleeve_length ?? "",
-              formality: it.formality ?? null,
+              formality: it.formality == null ? null : Number(it.formality),
               dayEvening: it.day_evening ?? "",
               length: it.length ?? "",
               fit: it.fit ?? "",
