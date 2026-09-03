@@ -153,7 +153,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
               purchaseDate: new Date().toISOString().slice(0, 10),
               sleeveLength: it.sleeve_length ?? "",
-              formality: it.formality ?? null,
+              formality: it.formality != null ? Number(it.formality) : null,
               dayEvening: it.day_evening ?? "",
               length: it.length ?? "",
               fit: it.fit ?? "",

@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { WardrobeItem } from "@/lib/aura-types";
 import { resolveWardrobeUrls, toStoragePath } from "@/lib/wardrobe-image";
-import { supabase } from "@/integrations/supabase/client";
 import { analyzeWardrobeGap, type GapSuggestion } from "@/lib/wardrobe-gap.functions";
 import { analyzePurchase, type PurchaseAdvisorResult } from "@/lib/purchase-advisor.functions";
 

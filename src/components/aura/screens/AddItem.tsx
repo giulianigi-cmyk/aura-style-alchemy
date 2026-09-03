@@ -789,7 +789,7 @@ export function AddItem({ onClose }: { onClose: () => void }) {
         // bare `payload` here used to silently drop purchase_date on every
         // import that included a composition reading — that was the bug.
         console.warn("[AURA wardrobe] composition column not in cache yet — retrying without it only", insErr.message);
-        const { composition: _composition, ...payloadWithoutComposition } = fullPayload;
+        const { composition: _composition, ...payloadWithoutComposition } = fullPayload as Record<string, unknown>;
         ({ data: inserted, error: insErr } = await supabase
           .from("wardrobe_items").insert(payloadWithoutComposition as never).select("*").single());
       }
