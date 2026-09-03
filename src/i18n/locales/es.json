@@ -175,7 +175,9 @@
     "someone": "esta persona",
     "toastRequestDeclined": "Solicitud rechazada",
     "toastRequestCancelled": "Solicitud cancelada",
-    "toastFriendRemoved": "Amigo eliminado"
+    "toastFriendRemoved": "Amigo eliminado",
+    "youSharedToFeed": "Compartiste en el Feed",
+    "sharedToFeed": "En el Feed"
   },
   "chats": {
     "title": "Chat",
@@ -728,8 +730,6 @@
     "confirmWorn": "Confirmar uso"
   },
   "aiStylist": {
-    "openOnCanvas": "Abrir en el lienzo",
-    "openOnCanvasAria": "Abrir este look en el lienzo",
     "notEnoughActivePieces_one": "Tienes {{count}} prenda en tu armario activo. Añade al menos 3 (o restaura una archivada) para generar un outfit con IA.",
     "notEnoughActivePieces_other": "Tienes {{count}} prendas en tu armario activo. Añade al menos 3 (o restaura una archivada) para generar un outfit con IA.",
     "noCategoriesSet": "Ninguna de tus prendas tiene categoría asignada. Edita tus prendas y asigna una categoría (Tops, Bottoms, Zapatos…) para que AURA pueda componer un outfit.",
@@ -806,7 +806,9 @@
     "wardrobeToUse": "Armario a usar",
     "multiLocationHint": "Selecciona más de una para incluir prendas de todas en esta generación.",
     "fillsInWorkDaysOnly": "Rellena solo tus días laborables (definidos en tu perfil). Nunca toca un día que ya hayas planificado, ni un outfit ya vinculado a un evento específico.",
-    "generate": "Generar"
+    "generate": "Generar",
+    "openOnCanvas": "Abrir en el lienzo",
+    "openOnCanvasAria": "Abrir este look en el lienzo"
   },
   "outfitBuilder": {
     "itemNoImage": "Esta prenda aún no tiene imagen",
@@ -1519,7 +1521,17 @@
     "couldNotShareWithCount": "No se pudo compartir con {{count}} amigos",
     "shareWithFriends": "Compartir con amigos",
     "noFriendsYetHint": "Aún no tienes amigos. Ve a Comunidad → Amigos para añadir gente primero.",
-    "share": "Compartir"
+    "share": "Compartir",
+    "shareOutfit": "Compartir look",
+    "modeFriend": "A un amigo",
+    "modeFeed": "Al Feed",
+    "modeFriendHint": "Se envía como mensaje privado — solo lo ve la persona que elijas.",
+    "modeFeedHint": "Visible para todos tus amigos aceptados, como un tablón compartido.",
+    "sendInChat": "Enviar en el chat",
+    "shareToFeedButton": "Compartir en el Feed",
+    "sentInChatCount": "Enviado en el chat a {{count}} personas",
+    "sharedToFeed": "Compartido en el Feed",
+    "alreadyOnFeed": "Este look ya está en el Feed"
   },
   "myQrCode": {
     "linkCopied": "Enlace copiado",
