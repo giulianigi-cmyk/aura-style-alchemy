@@ -359,7 +359,44 @@
     "selectedCount_other": "{{count}} selezionati",
     "moveToButton": "Sposta in…",
     "moveSelectionTitle_one": "Sposta {{count}} capo in…",
-    "moveSelectionTitle_other": "Sposta {{count}} capi in…"
+    "moveSelectionTitle_other": "Sposta {{count}} capi in…",
+    "valueSectionTitle": "Valore",
+    "purchasedValueLabel": "Acquistato",
+    "currentRetailLabel": "Prezzo retail attuale",
+    "estimatedResaleLabel": "Resale stimato",
+    "valueChangeLabel": "Variazione vs acquisto",
+    "confidence": {
+      "low": "Stima a bassa confidenza",
+      "medium": "Stima a media confidenza",
+      "high": "Stima ad alta confidenza"
+    },
+    "currentRetailPriceLabel": "Prezzo retail attuale",
+    "currentRetailPricePlaceholder": "Se ancora in vendita",
+    "currentRetailPriceHint": "Facoltativo. Se il modello è ancora venduto, inserisci il prezzo attuale.",
+    "iconicityLabel": "Natura del capo",
+    "iconicityOptions": {
+      "iconic": "Iconico",
+      "timeless": "Intramontabile",
+      "classic": "Classico",
+      "seasonal": "Stagionale",
+      "trend_driven": "Di tendenza",
+      "basic": "Basic"
+    },
+    "historicalRetailPriceLabel": "Prezzo retail all'acquisto",
+    "historicalRetailPricePlaceholder": "Se diverso da quanto pagato",
+    "historicalRetailPriceHint": "Facoltativo. Quanto costava il modello quando l'hai comprato, se diverso dal prezzo pagato.",
+    "modelLabel": "Modello",
+    "modelPlaceholder": "es. Classic Flap",
+    "modelHint": "Facoltativo. Se riconosciuto, AURA usa dati di mercato più precisi per questo modello specifico.",
+    "bagSizeLabel": "Taglia della borsa",
+    "bagSizeOptions": {
+      "mini": "Mini",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "jumbo": "Jumbo"
+    },
+    "marketPremiumNote": "Stima sopra il prezzo retail — supportata da dati di mercato specifici per questo modello, non un calcolo generico."
   },
   "addItem": {
     "toastSelectImage": "Seleziona un'immagine",
@@ -1274,7 +1311,10 @@
     "estimatedCurrentValue": "Valore attuale stimato",
     "estimatedBasedOn": "Stimato: basato su {{count}} capi con data d'acquisto, assumendo che il valore scenda gradualmente a circa il {{pct}}% del prezzo originale entro l'anno {{years}}. Non è una perizia di mercato, non conosce brand, condizioni o tendenze.",
     "moreNotIncluded": "{{count}} altri capi con prezzo non hanno una data d'acquisto, quindi non sono inclusi.",
-    "addPurchaseDateHint": "Aggiungi una data d'acquisto ai tuoi capi per vederlo qui."
+    "addPurchaseDateHint": "Aggiungi una data d'acquisto ai tuoi capi per vederlo qui.",
+    "currentRetailValue": "Valore retail attuale",
+    "currentRetailBasedOn": "Basato su {{count}} capi con prezzo retail noto",
+    "estimatedBasedOnRange": "Stima su {{count}} capi, con range e confidenza per ciascuno"
   },
   "dressPrefs": {
     "dressPreferences": "Preferenze di abbigliamento",
