@@ -728,6 +728,8 @@
     "confirmWorn": "Conferma indossato"
   },
   "aiStylist": {
+    "openOnCanvas": "Apri sulla tela",
+    "openOnCanvasAria": "Apri questo outfit sulla tela",
     "notEnoughActivePieces_one": "Hai {{count}} capo nel guardaroba attivo. Aggiungine almeno 3 (o ripristina uno archiviato) per generare un outfit AI.",
     "notEnoughActivePieces_other": "Hai {{count}} capi nel guardaroba attivo. Aggiungine almeno 3 (o ripristina uno archiviato) per generare un outfit AI.",
     "noCategoriesSet": "Nessuno dei tuoi capi ha una categoria impostata. Modifica i tuoi capi e assegna una categoria (Top, Bottom, Scarpe…) così AURA può comporre un outfit.",
