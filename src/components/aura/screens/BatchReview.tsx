@@ -109,7 +109,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         setLoadProgress({ done: 0, total: res.items.length });
         type EnrichedScanItem = (typeof res.items)[number] & {
           sleeve_length?: string | null;
-          formality?: string | null;
+          formality?: number | string | null;
           day_evening?: string | null;
           length?: string | null;
           fit?: string | null;
@@ -161,7 +161,7 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
               occasions: it.occasion ? it.occasion.split(",").map((s) => s.trim()).filter(Boolean) : [],
               purchaseDate: new Date().toISOString().slice(0, 10),
               sleeveLength: it.sleeve_length ?? "",
-              formality: it.formality ?? null,
+              formality: it.formality == null ? null : Number(it.formality),
               dayEvening: it.day_evening ?? "",
               length: it.length ?? "",
               fit: it.fit ?? "",
