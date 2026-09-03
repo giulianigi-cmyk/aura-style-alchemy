@@ -980,6 +980,7 @@ export type Database = {
           value: string | null
           work_days: string[]
           work_dress_code: string | null
+          work_dress_preferences: Json | null
           work_end_time: string
           work_start_time: string
         }
@@ -1017,6 +1018,7 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_dress_preferences?: Json | null
           work_end_time?: string
           work_start_time?: string
         }
@@ -1054,6 +1056,7 @@ export type Database = {
           value?: string | null
           work_days?: string[]
           work_dress_code?: string | null
+          work_dress_preferences?: Json | null
           work_end_time?: string
           work_start_time?: string
         }
@@ -1372,6 +1375,7 @@ export type Database = {
         Row: {
           activity_date: string
           activity_type: string
+          calendar_event_id: string | null
           created_at: string
           day_segment: string | null
           destination_id: string | null
@@ -1383,6 +1387,7 @@ export type Database = {
         Insert: {
           activity_date: string
           activity_type: string
+          calendar_event_id?: string | null
           created_at?: string
           day_segment?: string | null
           destination_id?: string | null
@@ -1394,6 +1399,7 @@ export type Database = {
         Update: {
           activity_date?: string
           activity_type?: string
+          calendar_event_id?: string | null
           created_at?: string
           day_segment?: string | null
           destination_id?: string | null
@@ -1403,6 +1409,13 @@ export type Database = {
           trip_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "trip_day_activities_calendar_event_id_fkey"
+            columns: ["calendar_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events_cache"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trip_day_activities_destination_id_fkey"
             columns: ["destination_id"]
@@ -1703,6 +1716,153 @@ export type Database = {
         }
         Relationships: []
       }
+      valuation_brand_modifiers: {
+        Row: {
+          brand: string
+          category: string
+          evidence: string
+          id: string
+          modifier: number
+          notes: string | null
+          subcategory: string | null
+        }
+        Insert: {
+          brand: string
+          category: string
+          evidence?: string
+          id?: string
+          modifier: number
+          notes?: string | null
+          subcategory?: string | null
+        }
+        Update: {
+          brand?: string
+          category?: string
+          evidence?: string
+          id?: string
+          modifier?: number
+          notes?: string | null
+          subcategory?: string | null
+        }
+        Relationships: []
+      }
+      valuation_category_profiles: {
+        Row: {
+          category: string
+          default_iconicity: string | null
+          evidence_floor: string
+          floor: number
+          id: string
+          notes: string | null
+          subcategory: string | null
+          tau_years: number
+          wear_expected_life_wears: number
+          wear_max_penalty: number
+        }
+        Insert: {
+          category: string
+          default_iconicity?: string | null
+          evidence_floor: string
+          floor: number
+          id?: string
+          notes?: string | null
+          subcategory?: string | null
+          tau_years: number
+          wear_expected_life_wears: number
+          wear_max_penalty: number
+        }
+        Update: {
+          category?: string
+          default_iconicity?: string | null
+          evidence_floor?: string
+          floor?: number
+          id?: string
+          notes?: string | null
+          subcategory?: string | null
+          tau_years?: number
+          wear_expected_life_wears?: number
+          wear_max_penalty?: number
+        }
+        Relationships: []
+      }
+      valuation_material_modifiers: {
+        Row: {
+          material: string
+          modifier: number
+        }
+        Insert: {
+          material: string
+          modifier: number
+        }
+        Update: {
+          material?: string
+          modifier?: number
+        }
+        Relationships: []
+      }
+      valuation_model_profiles: {
+        Row: {
+          brand: string
+          category: string
+          ceiling: number
+          evidence_tier: string
+          floor: number
+          id: string
+          model: string
+          notes: string
+          subcategory: string | null
+          tau_years: number
+          wear_expected_life_wears: number
+          wear_max_penalty: number
+        }
+        Insert: {
+          brand: string
+          category: string
+          ceiling?: number
+          evidence_tier: string
+          floor: number
+          id?: string
+          model: string
+          notes: string
+          subcategory?: string | null
+          tau_years: number
+          wear_expected_life_wears: number
+          wear_max_penalty: number
+        }
+        Update: {
+          brand?: string
+          category?: string
+          ceiling?: number
+          evidence_tier?: string
+          floor?: number
+          id?: string
+          model?: string
+          notes?: string
+          subcategory?: string | null
+          tau_years?: number
+          wear_expected_life_wears?: number
+          wear_max_penalty?: number
+        }
+        Relationships: []
+      }
+      valuation_size_modifiers: {
+        Row: {
+          category: string
+          modifier: number
+          size_class: string
+        }
+        Insert: {
+          category: string
+          modifier: number
+          size_class: string
+        }
+        Update: {
+          category?: string
+          modifier?: number
+          size_class?: string
+        }
+        Relationships: []
+      }
       wardrobe_event_items: {
         Row: {
           event_id: string
@@ -1815,10 +1975,92 @@ export type Database = {
           },
         ]
       }
+      wardrobe_item_valuations: {
+        Row: {
+          anchor_type: string | null
+          anchor_value: number | null
+          breakdown: Json | null
+          calendar_age_years: number | null
+          computed_at: string
+          cost_per_wear: number | null
+          data_confidence: string | null
+          engine_version: string
+          id: string
+          is_active: boolean
+          level: string
+          market_curve_value: number | null
+          market_premium: boolean
+          market_value_factor: number | null
+          resale_high: number | null
+          resale_low: number | null
+          retention_factor: number | null
+          user_id: string
+          valuation_confidence: string | null
+          wardrobe_item_id: string
+          wear_condition_factor: number | null
+        }
+        Insert: {
+          anchor_type?: string | null
+          anchor_value?: number | null
+          breakdown?: Json | null
+          calendar_age_years?: number | null
+          computed_at?: string
+          cost_per_wear?: number | null
+          data_confidence?: string | null
+          engine_version?: string
+          id?: string
+          is_active?: boolean
+          level: string
+          market_curve_value?: number | null
+          market_premium?: boolean
+          market_value_factor?: number | null
+          resale_high?: number | null
+          resale_low?: number | null
+          retention_factor?: number | null
+          user_id: string
+          valuation_confidence?: string | null
+          wardrobe_item_id: string
+          wear_condition_factor?: number | null
+        }
+        Update: {
+          anchor_type?: string | null
+          anchor_value?: number | null
+          breakdown?: Json | null
+          calendar_age_years?: number | null
+          computed_at?: string
+          cost_per_wear?: number | null
+          data_confidence?: string | null
+          engine_version?: string
+          id?: string
+          is_active?: boolean
+          level?: string
+          market_curve_value?: number | null
+          market_premium?: boolean
+          market_value_factor?: number | null
+          resale_high?: number | null
+          resale_low?: number | null
+          retention_factor?: number | null
+          user_id?: string
+          valuation_confidence?: string | null
+          wardrobe_item_id?: string
+          wear_condition_factor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wardrobe_item_valuations_wardrobe_item_id_fkey"
+            columns: ["wardrobe_item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wardrobe_items: {
         Row: {
+          active_loan_id: string | null
           archived: boolean
           attrs_backfilled_at: string | null
+          bag_size_class: string | null
           brand: string | null
           category: string | null
           closure: string | null
@@ -1826,17 +2068,23 @@ export type Database = {
           colors: string[]
           created_at: string
           currency: string | null
+          current_retail_price: number | null
+          current_retail_source: string | null
+          current_retail_updated_at: string | null
           day_evening: string | null
           fit: string | null
           formality: number | null
           gender: string | null
           heel_height: string | null
+          historical_retail_price: number | null
+          iconicity: string | null
           id: string
           image_url: string
           last_worn: string | null
           length: string | null
           location_id: string | null
           material: string[]
+          model: string | null
           occasion: string | null
           price: number | null
           product_id: string | null
@@ -1855,8 +2103,10 @@ export type Database = {
           worn_count: number
         }
         Insert: {
+          active_loan_id?: string | null
           archived?: boolean
           attrs_backfilled_at?: string | null
+          bag_size_class?: string | null
           brand?: string | null
           category?: string | null
           closure?: string | null
@@ -1864,17 +2114,23 @@ export type Database = {
           colors?: string[]
           created_at?: string
           currency?: string | null
+          current_retail_price?: number | null
+          current_retail_source?: string | null
+          current_retail_updated_at?: string | null
           day_evening?: string | null
           fit?: string | null
           formality?: number | null
           gender?: string | null
           heel_height?: string | null
+          historical_retail_price?: number | null
+          iconicity?: string | null
           id?: string
           image_url: string
           last_worn?: string | null
           length?: string | null
           location_id?: string | null
           material?: string[]
+          model?: string | null
           occasion?: string | null
           price?: number | null
           product_id?: string | null
@@ -1893,8 +2149,10 @@ export type Database = {
           worn_count?: number
         }
         Update: {
+          active_loan_id?: string | null
           archived?: boolean
           attrs_backfilled_at?: string | null
+          bag_size_class?: string | null
           brand?: string | null
           category?: string | null
           closure?: string | null
@@ -1902,17 +2160,23 @@ export type Database = {
           colors?: string[]
           created_at?: string
           currency?: string | null
+          current_retail_price?: number | null
+          current_retail_source?: string | null
+          current_retail_updated_at?: string | null
           day_evening?: string | null
           fit?: string | null
           formality?: number | null
           gender?: string | null
           heel_height?: string | null
+          historical_retail_price?: number | null
+          iconicity?: string | null
           id?: string
           image_url?: string
           last_worn?: string | null
           length?: string | null
           location_id?: string | null
           material?: string[]
+          model?: string | null
           occasion?: string | null
           price?: number | null
           product_id?: string | null
@@ -1932,6 +2196,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "wardrobe_items_active_loan_id_fkey"
+            columns: ["active_loan_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_loans"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "wardrobe_items_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
@@ -1943,6 +2214,57 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wardrobe_loans: {
+        Row: {
+          borrower_name: string
+          created_at: string
+          id: string
+          item_id: string
+          loaned_at: string
+          returned_at: string | null
+          returned_to_location_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          borrower_name: string
+          created_at?: string
+          id?: string
+          item_id: string
+          loaned_at?: string
+          returned_at?: string | null
+          returned_to_location_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          borrower_name?: string
+          created_at?: string
+          id?: string
+          item_id?: string
+          loaned_at?: string
+          returned_at?: string | null
+          returned_to_location_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wardrobe_loans_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wardrobe_loans_returned_to_location_id_fkey"
+            columns: ["returned_to_location_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -2299,12 +2621,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2328,11 +2650,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2353,11 +2675,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2378,11 +2700,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2395,11 +2717,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
