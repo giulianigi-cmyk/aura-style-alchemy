@@ -1,1 +1,1 @@
-export { LanguagePicker } from "@/components/aura/LanguagePicker";
+export { LanguagePicker } from "../LanguagePicker";
