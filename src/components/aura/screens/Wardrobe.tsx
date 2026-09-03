@@ -45,6 +45,7 @@ import {
   EMPTY_VALUATION_CONFIG,
   type ValuationConfig,
   type Iconicity,
+  type CurrentRetailSource,
 } from "@/lib/wardrobe-value-engine";
 
 const categories = ["All", ...ITEM_CATEGORIES];

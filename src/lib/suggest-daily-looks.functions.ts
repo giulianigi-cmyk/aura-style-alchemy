@@ -426,7 +426,7 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
           })).text;
           const retryParsed = parseAiJson(retryText, RetryOutputSchema);
           for (const l of retryParsed.curated) {
-            if (missingOccasions.includes(l.occasion) && isValidCuratedLook(l, seenSoFar)) {
+            if ((missingOccasions as string[]).includes(l.occasion) && isValidCuratedLook(l, seenSoFar)) {
               clean.curated.push(l);
               seenSoFar.push(l.item_ids);
             }
