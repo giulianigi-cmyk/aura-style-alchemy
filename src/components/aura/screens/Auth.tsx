@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/use-auth";
 import { Sparkles, ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { LanguagePicker } from "./LanguagePicker";
+import { LanguagePicker } from "@/components/aura/LanguagePicker";
 
 type Mode = "signin" | "signup" | "forgot";
 
