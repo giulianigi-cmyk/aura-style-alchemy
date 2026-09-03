@@ -107,7 +107,12 @@ export function BatchReview({ go, scanId }: { go: (s: Screen) => void; scanId: s
         const built: Draft[] = [];
         clearSegmentationCache();
         setLoadProgress({ done: 0, total: res.items.length });
-        for (const it of res.items) {
+        for (const rawItem of res.items) {
+          const it = rawItem as typeof rawItem & {
+            sleeve_length?: string | null; formality?: number | string | null; day_evening?: string | null;
+            length?: string | null; fit?: string | null; heel_height?: string | null; toe_shape?: string | null;
+            closure?: string | null; gender?: string | null; style_tags?: string[] | null;
+          };
           try {
             const path = pathById.get(it.job_id);
             const src = path ? signed.get(path) : undefined;
