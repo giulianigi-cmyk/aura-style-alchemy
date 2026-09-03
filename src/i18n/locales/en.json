@@ -359,7 +359,44 @@
     "selectedCount_other": "{{count}} selected",
     "moveToButton": "Move to…",
     "moveSelectionTitle_one": "Move {{count}} piece to…",
-    "moveSelectionTitle_other": "Move {{count}} pieces to…"
+    "moveSelectionTitle_other": "Move {{count}} pieces to…",
+    "valueSectionTitle": "Value",
+    "purchasedValueLabel": "Purchased",
+    "currentRetailLabel": "Current retail",
+    "estimatedResaleLabel": "Estimated resale",
+    "valueChangeLabel": "Value vs purchase",
+    "confidence": {
+      "low": "Low-confidence estimate",
+      "medium": "Medium-confidence estimate",
+      "high": "High-confidence estimate"
+    },
+    "currentRetailPriceLabel": "Current retail price",
+    "currentRetailPricePlaceholder": "If still sold today",
+    "currentRetailPriceHint": "Optional. If this model is still sold, enter today's price.",
+    "iconicityLabel": "Piece type",
+    "iconicityOptions": {
+      "iconic": "Iconic",
+      "timeless": "Timeless",
+      "classic": "Classic",
+      "seasonal": "Seasonal",
+      "trend_driven": "Trend-driven",
+      "basic": "Basic"
+    },
+    "historicalRetailPriceLabel": "Retail price at purchase",
+    "historicalRetailPricePlaceholder": "If different from what you paid",
+    "historicalRetailPriceHint": "Optional. What this model retailed for when you bought it, if different from what you paid.",
+    "modelLabel": "Model",
+    "modelPlaceholder": "e.g. Classic Flap",
+    "modelHint": "Optional. If recognized, AURA uses more precise market data for this specific model.",
+    "bagSizeLabel": "Bag size",
+    "bagSizeOptions": {
+      "mini": "Mini",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "jumbo": "Jumbo"
+    },
+    "marketPremiumNote": "Estimate above retail price — backed by market data specific to this model, not a generic calculation."
   },
   "addItem": {
     "toastSelectImage": "Please select an image",
@@ -1274,7 +1311,10 @@
     "estimatedCurrentValue": "Estimated current value",
     "estimatedBasedOn": "Estimated — based on {{count}} piece(s) with a purchase date, assuming value tapers gradually to about {{pct}}% of the original price by year {{years}}. Not a market appraisal — it doesn't know brand, condition or trends.",
     "moreNotIncluded": "{{count}} more priced piece(s) don't have a purchase date, so aren't included.",
-    "addPurchaseDateHint": "Add a purchase date to your pieces to see this."
+    "addPurchaseDateHint": "Add a purchase date to your pieces to see this.",
+    "currentRetailValue": "Current retail value",
+    "currentRetailBasedOn": "Based on {{count}} pieces with a known retail price",
+    "estimatedBasedOnRange": "Estimated across {{count}} pieces, each with its own range and confidence"
   },
   "dressPrefs": {
     "dressPreferences": "Dress preferences",
