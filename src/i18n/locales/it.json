@@ -498,7 +498,26 @@
     "formality5": "5 · Formale",
     "dayEveningDay": "Giorno",
     "dayEveningEvening": "Sera",
-    "dayEveningBoth": "Entrambi"
+    "dayEveningBoth": "Entrambi",
+    "currentRetailPriceLabel": "Prezzo retail attuale",
+    "currentRetailPricePlaceholder": "Se ancora in vendita",
+    "currentRetailPriceHint": "Facoltativo. Se il modello è ancora venduto, inserisci il prezzo attuale.",
+    "currentRetailPriceFromImportHint": "Preso dalla pagina importata. Modificalo se non è corretto.",
+    "historicalRetailPriceLabel": "Prezzo retail all'acquisto",
+    "historicalRetailPricePlaceholder": "Se diverso da quanto pagato",
+    "historicalRetailPriceHint": "Facoltativo. Quanto costava il modello quando l'hai comprato, se diverso dal prezzo pagato.",
+    "modelLabel": "Modello",
+    "modelPlaceholder": "es. Classic Flap",
+    "modelHint": "Facoltativo. Se riconosciuto, AURA usa dati di mercato più precisi per questo modello specifico.",
+    "bagSizeLabel": "Taglia della borsa",
+    "bagSizeOptions": {
+      "mini": "Mini",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "jumbo": "Jumbo"
+    },
+    "historicalRetailPriceFromImportHint": "Stima dal prezzo originale trovato sulla pagina — verificalo."
   },
   "stylistChat": {
     "feedbackLiked": "Mi piace questo outfit",
