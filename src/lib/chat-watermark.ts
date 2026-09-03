@@ -1,9 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Burns a discreet sender watermark into an outfit snapshot and uploads it as a
- * NEW object in the `outfits` bucket, used only for chat shares
- * (message_references.snapshot_image_url).
+ * Produces a fresh, standalone copy of an outfit canvas for a chat share
+ * (message_references.snapshot_image_url) — no watermark burned in anymore
+ * (that used to duplicate the "aura" mark already on the canvas itself, see
+ * OutfitBuilder.tsx, and was too small to read regardless).
  *
  * Never mutates the original outfit `canvas_image_url`, the shared library, or
  * the community feed images: every share produces its own distinct file.
@@ -35,78 +36,6 @@ async function loadSourceImage(pathOrUrl: string): Promise<HTMLImageElement> {
   }
 }
 
-/** Draws the watermark bottom-left with an adaptive ink colour: samples the
- *  pixels under the text area and picks black or white accordingly. */
-function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, label: string) {
-  const size = Math.max(14, Math.round(Math.min(w, h) * 0.032));
-  const pad = Math.round(size * 1.1);
-
-  ctx.save();
-  ctx.font = `500 ${size}px ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif`;
-  ctx.textBaseline = "alphabetic";
-  ctx.textAlign = "left";
-  try {
-    ctx.letterSpacing = `${Math.round(size * 0.08)}px`;
-  } catch {
-    /* letterSpacing unsupported */
-  }
-
-  const x = pad;
-  const y = h - pad;
-
-  // Sample exactly the glyph box: from the baseline upwards (ascent), not below it.
-  const m = ctx.measureText(label);
-  const ascent = m.actualBoundingBoxAscent || size * 0.72;
-  const descent = m.actualBoundingBoxDescent || size * 0.2;
-  const textW = Math.ceil(m.width) || size * 4;
-
-  const boxX = Math.max(0, Math.floor(x));
-  const boxY = Math.max(0, Math.floor(y - ascent));
-  const boxW = Math.max(1, Math.min(Math.ceil(textW), w - boxX));
-  const boxH = Math.max(1, Math.min(Math.ceil(ascent + descent), h - boxY));
-
-  let ink = "255,255,255";
-  let luma = 0;
-  let sampled = false;
-  try {
-    const { data } = ctx.getImageData(boxX, boxY, boxW, boxH);
-    let sum = 0;
-    let count = 0;
-    // step over whole pixels (multiple of 4) to keep channel alignment
-    const step = 4 * Math.max(1, Math.floor((boxW * boxH) / 4000));
-    for (let i = 0; i + 3 < data.length; i += step) {
-      const a = data[i + 3] / 255;
-      // pixels are composited over the white base we painted first
-      const r = data[i] * a + 255 * (1 - a);
-      const g = data[i + 1] * a + 255 * (1 - a);
-      const b = data[i + 2] * a + 255 * (1 - a);
-      sum += 0.299 * r + 0.587 * g + 0.114 * b;
-      count++;
-    }
-    if (count) {
-      luma = sum / count;
-      sampled = true;
-      ink = luma >= 140 ? "0,0,0" : "255,255,255";
-    }
-  } catch (e) {
-    // Tainted canvas: we cannot know the background -> white reads better on
-    // photos than black, and stays visible on mid tones.
-    console.warn("[watermark] getImageData failed, defaulting to white ink", e);
-  }
-  console.log("[watermark] luma", sampled ? Math.round(luma) : "n/a", "ink", ink, {
-    boxX,
-    boxY,
-    boxW,
-    boxH,
-  });
-
-  ctx.fillStyle = `rgba(${ink},0.78)`;
-  ctx.fillText(label, x, y);
-  ctx.restore();
-}
-
-
-
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export non riuscito"))), "image/png", 0.95);
@@ -132,8 +61,11 @@ export async function createWatermarkedChatSnapshot(params: {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  const handle = params.senderUsername?.trim() || "aura";
-  drawWatermark(ctx, canvas.width, canvas.height, `@${handle} · AURA`);
+  // The sender-handle watermark ("@handle · AURA") used to be burned in here,
+  // stacked on top of the outfit canvas's own "aura" signature — redundant,
+  // and too small to read either way. Removed: the canvas's own mark (now
+  // sized up in OutfitBuilder.tsx) is the only watermark now. senderId is
+  // still needed below for the storage path.
 
   const blob = await canvasToBlob(canvas);
   const path = `${params.senderId}/chat/share-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
