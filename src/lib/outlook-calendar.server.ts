@@ -5,6 +5,8 @@
 // on purpose — both write into the same provider-agnostic
 // calendar_connections / calendar_events_cache tables.
 
+import { computeRemovedEventIds } from "./calendar-sync-diff";
+
 const MS_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const GRAPH_CALENDARVIEW_URL = "https://graph.microsoft.com/v1.0/me/calendarView";
@@ -143,12 +145,27 @@ export async function syncOutlookCalendar(userId: string): Promise<{ ok: boolean
         description: e.bodyPreview ?? null,
         all_day: Boolean(e.isAllDay),
         raw: e,
+        removed_from_source: false,
       }));
+
+    const { data: previouslyCached } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+      .select("external_event_id")
+      .eq("connection_id", conn.id)
+      .eq("removed_from_source", false);
+    const previouslyCachedIds = ((previouslyCached ?? []) as { external_event_id: string }[]).map((r) => r.external_event_id);
 
     if (rows.length) {
       const { error: upsertErr } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
         .upsert(rows, { onConflict: "connection_id,external_event_id" });
       if (upsertErr) throw new Error(upsertErr.message);
+    }
+
+    const removedIds = computeRemovedEventIds(previouslyCachedIds, rows.map((r) => r.external_event_id));
+    if (removedIds.length) {
+      await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+        .update({ removed_from_source: true, removed_detected_at: new Date().toISOString() })
+        .eq("connection_id", conn.id)
+        .in("external_event_id", removedIds);
     }
 
     await (supabaseAdmin.from("calendar_connections" as never) as any)
