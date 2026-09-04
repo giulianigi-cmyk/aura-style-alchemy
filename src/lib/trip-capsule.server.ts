@@ -137,7 +137,7 @@ function matchesSeasonLoose(itemSeason: string | null | undefined, season: strin
   return s.includes(season.toLowerCase());
 }
 
-type PoolItem = {
+export type PoolItem = {
   id: string;
   category: string | null;
   subcategory: string | null;
@@ -151,7 +151,7 @@ type PoolItem = {
   dayEvening: string;
 };
 
-type Requirement = {
+export type Requirement = {
   activityId: string;
   date: string;
   daySegment: "day" | "evening";
@@ -220,8 +220,20 @@ function hasRole(items: PoolItem[], role: Set<string>): boolean {
  * Levels 1-3 (coverage, validity) are what every eligibility check above
  * is already enforcing.
  */
-function buildCapsule(pool: PoolItem[], requirements: Requirement[], seasonByDate: Map<string, string>): Set<string> {
-  const capsule = new Set<string>();
+export function buildCapsule(
+  pool: PoolItem[],
+  requirements: Requirement[],
+  seasonByDate: Map<string, string>,
+  existingCapsuleSeed: string[] = [],
+): Set<string> {
+  // Items already chosen for OTHER activities of this same trip in a
+  // previous, separate generation call (days already planned, and
+  // therefore excluded from `requirements` above) start the capsule
+  // instead of an empty one. Without this, adding one new day to a trip
+  // that already has confirmed days built a capsule from scratch, blind
+  // to what those confirmed days already established — the exact
+  // "Day 3 proposes completely different pieces than Day 1" gap.
+  const capsule = new Set<string>(existingCapsuleSeed.filter((id) => pool.some((p) => p.id === id)));
 
   // 2 per role was a flat floor regardless of trip length — fine for a
   // weekend, thin for anything longer (a 10-day trip with only 2 tops
@@ -361,7 +373,7 @@ export async function generateTripCapsuleCore({ data, context }: {
         (supabase.from("profiles" as never) as any).select("dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle(),
         (supabase.from("trip_source_locations" as never) as any).select("location_id").eq("trip_id", data.tripId),
         (supabase.from("trip_day_activities" as never) as any).select("*").eq("trip_id", data.tripId).order("activity_date"),
-        (supabase.from("outfit_plans" as never) as any).select("trip_activity_id").eq("trip_id", data.tripId),
+        (supabase.from("outfit_plans" as never) as any).select("trip_activity_id, item_ids").eq("trip_id", data.tripId),
         supabase.from("wardrobe_items").select("*").eq("user_id", userId).eq("archived", false),
       ]);
 
@@ -493,7 +505,18 @@ export async function generateTripCapsuleCore({ data, context }: {
     const seasonByDate = new Map<string, string>();
     capped.forEach((r) => { if (!seasonByDate.has(r.date)) seasonByDate.set(r.date, seasonForDate(r.date)); });
 
-    const capsule = buildCapsule(pool, capped, seasonByDate);
+    // Seed for buildCapsule (see its own comment): every item already
+    // used in a plan for this trip that generation is skipping this run
+    // (i.e. days already planned — targeted runs never skip anything, so
+    // this collapses to empty there, which is correct: a targeted
+    // regenerate of one activity has no business pulling in unrelated
+    // days' items as a "preference").
+    const existingCapsuleSeed: string[] = targeted
+      ? []
+      : ((existingPlans ?? []) as { trip_activity_id: string | null; item_ids: string[] | null }[])
+          .flatMap((p) => p.item_ids ?? []);
+
+    const capsule = buildCapsule(pool, capped, seasonByDate, existingCapsuleSeed);
 
     const created: { date: string; daySegment: string }[] = [];
     const failed: { date: string; daySegment: string; reason: string }[] = [];
