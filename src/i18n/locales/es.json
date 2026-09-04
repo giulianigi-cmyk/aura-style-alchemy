@@ -770,6 +770,7 @@
     "toastOutfitDeleted": "Outfit eliminado",
     "toastMarkedAsWorn": "Marcado como usado",
     "removeThisPieceAria": "Eliminar esta prenda",
+    "couldntUpdateOutfit": "No se pudo actualizar el look", "addAPiece": "Añadir una prenda", "sizeLabel": "Talla {{size}}",
     "addAPieceAria": "Añadir una prenda",
     "atelier": "Atelier",
     "stylist": "Estilista",
