@@ -88,3 +88,73 @@ test("REGRESSIONE — un capo 'universale' preso dal giorno più vincolato non d
   const topsInCapsule = Array.from(capsule).filter((id) => id.startsWith("top-"));
   assert.ok(topsInCapsule.length > 1, `attesi più top in capsule (i top estivi eleggibili non dovevano restare esclusi), trovati solo: ${topsInCapsule.join(", ")}`);
 });
+
+
+
+test("REGRESSIONE — una scarpa non-sneaker eleggibile entra in capsule per gli slot serali invece delle sole sneakers", () => {
+  // Un guardaroba con 2 sneakers e 1 paio di ballerine, tutti eleggibili
+  // (stessa stagione, nessun vincolo escludente). Senza il nudge di
+  // versatility(), le sneakers (più "versatili" a parità di altri
+  // punteggi) potevano riempire da sole tutto lo shoeTarget, lasciando le
+  // ballerine fuori dalla capsule anche per gli slot serali — la scarpa
+  // "giusta" non entrava mai nel pool che l'AI vede, a monte.
+  const pool: PoolItem[] = [
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers", formality: 2, dayEvening: "both" }),
+    item({ id: "sneaker-2", category: "Shoes", subcategory: "Sneakers", formality: 2, dayEvening: "both" }),
+    item({ id: "flats-1", category: "Shoes", subcategory: "Ballet Flats", formality: 3, dayEvening: "both" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "d1-day", date: "2026-07-10", daySegment: "day", dressCode: null, label: "Day" },
+    { activityId: "d1-eve", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Evening" },
+  ];
+  const seasonByDate = new Map([["2026-07-10", "Summer"]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  assert.ok(capsule.has("flats-1"), "le ballerine dovevano entrare in capsule per lo slot serale, non solo le sneakers");
+});
+
+test("REGRESSIONE — uno stivaletto elegante non deve battere un tacco/sandalo estivo per una cena d'estate", () => {
+  // Il trip ha una sola attività con segnale di eleganza (una cena),
+  // in un giorno estivo. Il guardaroba ha sia stivaletti eleganti che
+  // sandali eleganti, entrambi formality 4+. Senza la penalità stagionale,
+  // versatility() da sola poteva far vincere lo stivaletto (formality
+  // "giusta", colore neutro) anche in piena estate.
+  const pool: PoolItem[] = [
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"] }),
+    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"] }),
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers", formality: 2 }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Cena da Mario" },
+  ];
+  const seasonByDate = new Map([["2026-07-10", "Summer"]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  assert.ok(capsule.has("sandal-elegant"), "il sandalo elegante estivo doveva essere scelto per la cena");
+  assert.ok(!capsule.has("boot-elegant"), "lo stivaletto non doveva essere scelto per una cena in piena estate");
+});
+
+test("Uno stivaletto elegante resta comunque scelto se è l'unica scarpa formale disponibile, anche d'estate", () => {
+  // Nessuna alternativa elegante estiva nel guardaroba — lo slot riservato
+  // non deve mai restare vuoto per una preferenza di stile.
+  const pool: PoolItem[] = [
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4 }),
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers", formality: 2 }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Cena da Mario" },
+  ];
+  const seasonByDate = new Map([["2026-07-10", "Summer"]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  assert.ok(capsule.has("boot-elegant"), "in assenza di alternative, lo stivaletto va comunque scelto — mai lasciare lo slot vuoto");
+});
