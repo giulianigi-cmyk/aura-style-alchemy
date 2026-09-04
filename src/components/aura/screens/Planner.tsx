@@ -21,7 +21,10 @@ import { ItemImageViewer } from "../ItemImageViewer";
 import i18n from "@/i18n/config";
 
 type OutfitPlan = Tables<"outfit_plans"> & { status?: string | null };
-type ImportedEvent = { id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean };
+type ImportedEvent = {
+  id: string; title: string | null; start_time: string; end_time: string | null; location: string | null; all_day: boolean;
+  removed_from_source?: boolean;
+};
 
 export const OCCASIONS = ["Work", "Evening", "Weekend", "Formal", "Travel", "Sport", "Everyday"];
 
@@ -85,6 +88,8 @@ export function Planner({ go, openStylistChat, focus }: {
   const [anchor, setAnchor] = useState<Date>(startOfDay(new Date()));
   const [plans, setPlans] = useState<OutfitPlan[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<ImportedEvent[]>([]);
+  const [dismissedEvents, setDismissedEvents] = useState<ImportedEvent[]>([]);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -96,21 +101,50 @@ export function Planner({ go, openStylistChat, focus }: {
   const reload = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     setLoading(true);
-    const [{ data: it }, { data: pl }, { data: ev }] = await Promise.all([
+    const [{ data: it }, { data: pl }, { data: ev }, { data: dismissed }] = await Promise.all([
       supabase.from("wardrobe_items").select("*").eq("user_id", user.id),
       supabase.from("outfit_plans").select("*").eq("user_id", user.id).order("date"),
       (supabase.from("calendar_events_cache" as never) as any)
-        .select("id, title, start_time, end_time, location, all_day")
+        .select("id, title, start_time, end_time, location, all_day, removed_from_source")
         .eq("user_id", user.id)
+        .eq("dismissed_by_user", false)
+        .order("start_time"),
+      (supabase.from("calendar_events_cache" as never) as any)
+        .select("id, title, start_time, end_time, location, all_day, removed_from_source")
+        .eq("user_id", user.id)
+        .eq("dismissed_by_user", true)
         .order("start_time"),
     ]);
     const list = (it ?? []) as WardrobeItem[];
     setItems(list);
     setPlans((pl ?? []) as OutfitPlan[]);
     setCalendarEvents((ev ?? []) as ImportedEvent[]);
+    setDismissedEvents((dismissed ?? []) as ImportedEvent[]);
     setSigned(await resolveWardrobeUrls(list));
     setLoading(false);
   }, [user]);
+
+  const dismissEvent = async (eventId: string) => {
+    setCalendarEvents((prev) => prev.filter((e) => e.id !== eventId));
+    const { error } = await (supabase.from("calendar_events_cache" as never) as any)
+      .update({ dismissed_by_user: true }).eq("id", eventId);
+    if (error) {
+      toast.error(t("planner.couldntDismissEvent"));
+      void reload();
+      return;
+    }
+    void reload();
+  };
+
+  const recoverEvent = async (eventId: string) => {
+    setDismissedEvents((prev) => prev.filter((e) => e.id !== eventId));
+    const { error } = await (supabase.from("calendar_events_cache" as never) as any)
+      .update({ dismissed_by_user: false }).eq("id", eventId);
+    if (error) {
+      toast.error(t("planner.couldntRecoverEvent"));
+    }
+    void reload();
+  };
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -316,6 +350,33 @@ export function Planner({ go, openStylistChat, focus }: {
         </div>
       )}
 
+      {dismissedEvents.length > 0 && (
+        <div className="px-6 mt-4">
+          <button
+            onClick={() => setShowDismissed((s) => !s)}
+            className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground"
+          >{t("planner.dismissedEventsCount", { count: dismissedEvents.length })}</button>
+          {showDismissed && (
+            <div className="mt-2 space-y-1.5">
+              {dismissedEvents.map((e) => (
+                <div key={e.id} className="flex items-center justify-between gap-2 rounded-xl bg-secondary/40 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{e.title || t("planner.untitledEvent")}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(e.start_time).toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void recoverEvent(e.id)}
+                    className="shrink-0 h-8 px-3 rounded-full border border-border text-[9px] uppercase tracking-[0.2em]"
+                  >{t("planner.recoverEvent")}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {selectedDate && (
         <DayDetail
           date={selectedDate}
@@ -330,6 +391,7 @@ export function Planner({ go, openStylistChat, focus }: {
           onProposalResolved={() => { void reloadProposals(); void reload(); }}
           onClose={() => setSelectedDate(null)}
           onSaved={reload}
+          onDismissEvent={dismissEvent}
         />
       )}
     </div>
@@ -345,7 +407,7 @@ const slotKey = (s: Slot) => (s.type === "general" ? "general" : `event:${s.even
 
 function DayDetail({
   date, plans, calendarEvents, openStylistChat, items, signed, weather, currentTempC,
-  proposals, onProposalResolved, onClose, onSaved,
+  proposals, onProposalResolved, onClose, onSaved, onDismissEvent,
 }: {
   date: string;
   plans: OutfitPlan[];
@@ -359,6 +421,7 @@ function DayDetail({
   onProposalResolved: () => void;
   onClose: () => void;
   onSaved: () => void;
+  onDismissEvent: (eventId: string) => void;
 }) {
 
   const { t } = useTranslation();
@@ -593,13 +656,22 @@ function DayDetail({
   const dayProposals = proposals.filter((n) => n.data?.date === date);
 
 
-  const SlotRow = ({ label, sublabel, slotPlan, onOpen, onAsk }: {
+  const SlotRow = ({ label, sublabel, slotPlan, onOpen, onAsk, onDismiss, removedFromSource }: {
     label: string; sublabel: string | null; slotPlan: OutfitPlan | null; onOpen: () => void; onAsk: () => void;
+    onDismiss?: () => void; removedFromSource?: boolean;
   }) => (
     <div className="rounded-2xl bg-secondary/40 p-4">
-      <button onClick={onOpen} className="flex items-center justify-between w-full text-left">
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={onOpen} className="flex items-center justify-between flex-1 min-w-0 text-left">
                 <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{label}</p>
+          <p className="text-sm font-medium truncate">
+            {label}
+            {removedFromSource && (
+              <span className="ml-1.5 text-[9px] uppercase tracking-widest text-muted-foreground align-middle">
+                {t("planner.removedFromCalendar")}
+              </span>
+            )}
+          </p>
           {sublabel && <p className="text-[11px] text-muted-foreground">{sublabel}</p>}
         </div>
         {slotPlan && (
@@ -607,7 +679,15 @@ function DayDetail({
             {slotPlan.status === "worn" ? t("planner.worn") : t("planner.planned")}
           </span>
         )}
-      </button>
+        </button>
+        {onDismiss && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            aria-label={t("planner.dismissEventAria")}
+            className="shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground active:scale-90"
+          ><X size={13} /></button>
+        )}
+      </div>
       {slotPlan ? (
         <div className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar w-full">
           {slotPlan.item_ids.map((id) => {
@@ -690,6 +770,8 @@ function DayDetail({
                 slotPlan={planForEvent(e.id)}
                 onOpen={() => setActiveSlot({ type: "event", event: e })}
                 onAsk={() => askStylistFor(e)}
+                onDismiss={() => onDismissEvent(e.id)}
+                removedFromSource={e.removed_from_source ?? false}
               />
             ))}
           </div>
