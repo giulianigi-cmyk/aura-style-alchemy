@@ -3,6 +3,8 @@
 // secrets (GOOGLE_CALENDAR_CLIENT_ID / GOOGLE_CALENDAR_CLIENT_SECRET),
 // never shipped to the browser.
 
+import { computeRemovedEventIds } from "./calendar-sync-diff";
+
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -133,13 +135,35 @@ export async function syncUserCalendar(userId: string): Promise<{ ok: boolean; e
           description: e.description ?? null,
           all_day: isAllDay,
           raw: e,
+          // Explicit reset: an event that was previously flagged removed
+          // and has now reappeared in the source is no longer removed.
+          removed_from_source: false,
         };
       });
+
+    // Snapshot of what was cached for this connection BEFORE this sync,
+    // taken before the upsert below changes anything — needed to detect
+    // which of those ids the provider no longer returned. Only rows not
+    // already flagged removed are considered, so a re-sync doesn't keep
+    // resetting removed_detected_at on something already known gone.
+    const { data: previouslyCached } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+      .select("external_event_id")
+      .eq("connection_id", conn.id)
+      .eq("removed_from_source", false);
+    const previouslyCachedIds = ((previouslyCached ?? []) as { external_event_id: string }[]).map((r) => r.external_event_id);
 
     if (rows.length) {
       const { error: upsertErr } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
         .upsert(rows, { onConflict: "connection_id,external_event_id" });
       if (upsertErr) throw new Error(upsertErr.message);
+    }
+
+    const removedIds = computeRemovedEventIds(previouslyCachedIds, rows.map((r) => r.external_event_id));
+    if (removedIds.length) {
+      await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+        .update({ removed_from_source: true, removed_detected_at: new Date().toISOString() })
+        .eq("connection_id", conn.id)
+        .in("external_event_id", removedIds);
     }
 
     await (supabaseAdmin.from("calendar_connections" as never) as any)
