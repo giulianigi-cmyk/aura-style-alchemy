@@ -32,11 +32,20 @@ const REWEARABILITY: Record<string, number> = {
  *  weather is known for the day — a cashmere sweater is wrong for 30°C
  *  regardless of what season it was classified under. Real temperature
  *  wins over the season tag when the two conflict. Applied where the
- *  day's actual weather is available (see the main generation loop);
- *  capsule building itself still uses season, since it has no per-day
- *  temperature to work with. */
+ *  day's actual weather is available (see the main generation loop). */
 const HEAVY_MATERIALS = ["cashmere", "wool", "mohair", "alpaca", "shearling", "down"];
 const HEAVY_MATERIAL_TEMP_THRESHOLD = 23;
+
+// Soft comfort boundaries for versatility()'s shoe/sleeve nudges — looser
+// than HEAVY_MATERIAL_TEMP_THRESHOLD or the hard hot/cold thresholds in
+// outfit-weather-rules.ts on purpose: those exclude outright (a wool coat
+// at 30°C), these only nudge a ranking (a boot at 21°C isn't wrong the way
+// a coat at 30°C is, just a slightly worse pick than a sandal when one is
+// available). Deliberately not derived from HEAVY_MATERIAL_TEMP_THRESHOLD
+// — a different question (fabric weight vs. general "boots/long sleeves
+// start to feel like too much").
+const MILD_WARM_THRESHOLD_C = 20;
+const MILD_COOL_THRESHOLD_C = 16;
 
 /** Free-text signal for "this trip has a real reason to need an elegant
  *  shoe" — a resort dinner or a wedding guest activity, not just any
@@ -150,6 +159,7 @@ export type PoolItem = {
   locationId: string | null;
   formality: number;
   dayEvening: string;
+  sleeveLength: string | null;
 };
 
 export type Requirement = {
@@ -160,7 +170,7 @@ export type Requirement = {
   label: string | null;
 };
 
-function versatility(it: PoolItem, req?: Requirement): number {
+function versatility(it: PoolItem, req?: Requirement, temperature?: number | null): number {
   let score = 0;
   const colors = (it.colors ?? []).map((c) => c.toLowerCase());
   if (colors.some((c) => NEUTRAL_COLORS.some((n) => c.includes(n)))) score += 2;
@@ -175,6 +185,20 @@ function versatility(it: PoolItem, req?: Requirement): number {
     const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
     if (it.formality >= min && it.formality <= max) score += 3;
     if (it.dayEvening === req.daySegment) score += 2;
+
+    // Real per-requirement temperature (already resolved upstream as
+    // tempMax for day / tempMin for evening — see generateTripCapsuleCore)
+    // when we have it; the month-bucket season as a fallback when we
+    // don't. This replaces a season-only check that silently never fired
+    // for a September trip: seasonForDate() buckets September as
+    // "Autumn", not "Summer", even on a genuinely warm evening — the
+    // exact case that motivated this fix.
+    const isWarm = temperature != null ? temperature >= MILD_WARM_THRESHOLD_C : (() => {
+      const s = seasonForDate(req.date);
+      return s === "Summer" || s === "Spring";
+    })();
+    const isCool = temperature != null && temperature < MILD_COOL_THRESHOLD_C;
+
     // A sneaker isn't wrong for a generic, unlabeled "Evening" slot the
     // way it would be for an actual dinner (hasEleganceSignal already
     // reserves a real elegant shoe for those, hard) — but defaulting to
@@ -186,14 +210,27 @@ function versatility(it: PoolItem, req?: Requirement): number {
     if (req.daySegment === "evening" && it.category === "Shoes") {
       const sub = (it.subcategory ?? "").toLowerCase();
       if (/sneaker|running|trainer|scarpe da ginnastica/.test(sub)) score -= 3;
-      // Same principle, opposite season: a boot reads as wrong for a warm
-      // evening the way a sneaker reads as wrong for any evening. Uses
-      // the requirement's own date (seasonForDate), not an external map,
-      // so this applies everywhere versatility() scores a shoe — both the
-      // normal per-role fill above AND the reserved-elegant-shoe pass
-      // below share this one rule instead of each needing its own copy.
-      const season = seasonForDate(req.date);
-      if ((season === "Summer" || season === "Spring") && /boot|stival/.test(sub)) score -= 3;
+      // Same principle, opposite temperature: a boot reads as wrong for a
+      // warm evening the way a sneaker reads as wrong for any evening.
+      if (isWarm && /boot|stival/.test(sub)) score -= 3;
+    }
+
+    // Sleeve length vs temperature: independent, absolute-threshold nudge
+    // (not a day-vs-evening comparison) — every requirement already
+    // carries its OWN correctly-resolved temperature (cooler for evening,
+    // warmer for day, via the tempMin/tempMax split upstream), so scoring
+    // each requirement against its own temperature already produces the
+    // right day/evening contrast without needing to compare the two
+    // directly. A short-sleeve/sleeveless top on a cool evening, or a
+    // long-sleeve top on a hot day, both lose a little ground — never
+    // excluded outright, since layering or personal preference can
+    // legitimately override this.
+    if (it.category === "Tops" || it.category === "Dresses") {
+      const sleeve = (it.sleeveLength ?? "").toLowerCase();
+      const isShortSleeve = sleeve === "sleeveless" || sleeve === "short sleeve";
+      const isLongSleeve = sleeve === "long sleeve";
+      if (isWarm && isLongSleeve) score -= 2;
+      if (isCool && isShortSleeve) score -= 2;
     }
   }
   return score;
@@ -246,6 +283,7 @@ export function buildCapsule(
   requirements: Requirement[],
   seasonByDate: Map<string, string>,
   existingCapsuleSeed: string[] = [],
+  tempByActivity: Map<string, number | null> = new Map(),
 ): Set<string> {
   // Items already chosen for OTHER activities of this same trip in a
   // previous, separate generation call (days already planned, and
@@ -349,7 +387,7 @@ export function buildCapsule(
       // regenerating now has a real chance of surfacing something else.
       const candidates = eligible
         .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id))
-        .map((it) => ({ it, score: versatility(it, req) + REWEARABILITY[it.category ?? ""] * 0.3 + Math.random() * 2.5 }))
+        .map((it) => ({ it, score: versatility(it, req, tempByActivity.get(req.activityId) ?? null) + REWEARABILITY[it.category ?? ""] * 0.3 + Math.random() * 2.5 }))
         .sort((a, b) => b.score - a.score)
         .map((x) => x.it);
       candidates.slice(0, need).forEach((it) => capsule.add(it.id));
@@ -369,14 +407,16 @@ export function buildCapsule(
     });
     if (!alreadyHasElegantShoe) {
       // Scored against the first elegance-requiring requirement so the
-      // same season-aware boot/sneaker penalties in versatility() apply
-      // here too, not just in the per-role fill above — a multi-season
-      // trip with more than one elegant occasion is a rare enough edge
-      // case that using just the first is a reasonable simplification.
+      // same temperature-aware boot/sneaker penalties in versatility()
+      // apply here too, not just in the per-role fill above — a
+      // multi-occasion trip spanning very different weather is a rare
+      // enough edge case that using just the first is a reasonable
+      // simplification.
       const repReq = eleganceReqs[0];
+      const repTemp = tempByActivity.get(repReq.activityId) ?? null;
       const bestElegantShoe = pool
         .filter((it) => it.category === "Shoes" && it.formality >= 4 && !capsule.has(it.id))
-        .sort((a, b) => versatility(b, repReq) - versatility(a, repReq))[0];
+        .sort((a, b) => versatility(b, repReq, repTemp) - versatility(a, repReq, repTemp))[0];
       if (bestElegantShoe) capsule.add(bestElegantShoe.id);
     }
   }
@@ -564,13 +604,27 @@ export async function generateTripCapsuleCore({ data, context }: {
         colors: it.colors ?? (it.color ? [it.color] : []),
         style: it.style ? (Array.isArray(it.style) ? it.style : [it.style]) : [],
         season: it.season, brand: it.brand, material: Array.isArray(it.material) ? it.material : [],
-        locationId: it.location_id ?? null, formality, dayEvening,
+        locationId: it.location_id ?? null, formality, dayEvening, sleeveLength: it.sleeve_length ?? null,
 
       });
     }
 
     const seasonByDate = new Map<string, string>();
     capped.forEach((r) => { if (!seasonByDate.has(r.date)) seasonByDate.set(r.date, seasonForDate(r.date)); });
+
+    // Resolved once here, ahead of buildCapsule, so both capsule
+    // selection AND the generation loop below score against the exact
+    // same numbers — no risk of the two drifting apart by recomputing
+    // this twice. Same tempMin(evening)/tempMax(day) split as before.
+    const tempByActivity = new Map<string, number | null>();
+    const dayWeatherByActivity = new Map<string, ReturnType<typeof weatherMap.get>>();
+    for (const req of capped) {
+      const dest = destinationForDate(req.date);
+      const wKey = dest?.latitude != null && dest?.longitude != null ? weatherKey(dest.latitude, dest.longitude, req.date) : null;
+      const dw = wKey ? weatherMap.get(wKey) ?? null : null;
+      dayWeatherByActivity.set(req.activityId, dw);
+      tempByActivity.set(req.activityId, dw ? (req.daySegment === "evening" ? dw.tempMin : dw.tempMax) : null);
+    }
 
     // Seed for buildCapsule (see its own comment): the trip's persistent
     // capsule (trip_capsule_items, merged with the legacy fallback) — not
@@ -582,7 +636,7 @@ export async function generateTripCapsuleCore({ data, context }: {
     // exclusions above still apply either way.
     const existingCapsuleSeed: string[] = targeted ? [] : persistedSeedIds;
 
-    const capsule = buildCapsule(pool, capped, seasonByDate, existingCapsuleSeed);
+    const capsule = buildCapsule(pool, capped, seasonByDate, existingCapsuleSeed, tempByActivity);
 
     const created: { date: string; daySegment: string }[] = [];
     const failed: { date: string; daySegment: string; reason: string }[] = [];
@@ -606,11 +660,10 @@ export async function generateTripCapsuleCore({ data, context }: {
       // Real forecast within ~15 days, a 5-year historical average beyond
       // that — see trip-weather.server.ts. Missing coordinates (no
       // destination lat/lon saved) falls back to null exactly as before,
-      // rather than guessing a temperature.
-      const dest = destinationForDate(req.date);
-      const wKey = dest?.latitude != null && dest?.longitude != null ? weatherKey(dest.latitude, dest.longitude, req.date) : null;
-      const dayWeather = wKey ? weatherMap.get(wKey) ?? null : null;
-      const temperature = dayWeather ? (req.daySegment === "evening" ? dayWeather.tempMin : dayWeather.tempMax) : null;
+      // rather than guessing a temperature. Reused from the map built
+      // ahead of buildCapsule above — same numbers, computed once.
+      const dayWeather = dayWeatherByActivity.get(req.activityId) ?? null;
+      const temperature = tempByActivity.get(req.activityId) ?? null;
       const condition = dayWeather ? describeWeather(dayWeather.weatherCode).label : null;
 
       // The season tag is a soft signal (matchesSeasonLoose above); real
@@ -648,33 +701,31 @@ export async function generateTripCapsuleCore({ data, context }: {
       // Evening usually runs cooler than the same day's daytime (that's
       // exactly why temperature above uses tempMin for evening / tempMax
       // for day) — but that fact never reached the model choosing BETWEEN
-      // two similarly-styled tops, only the absolute hot/cold thresholds
-      // did. Result: nothing stopped it picking the warmer piece for Day
-      // and the lighter one for Evening — backwards. A short, deterministic
-      // clause appended to the occasion text fixes the information gap
-      // directly, without a new hard exclusion rule (a light top for
-      // evening isn't WRONG the way a wool coat at 30°C is — it's just a
-      // worse choice when a warmer option is sitting right there).
-      let occasion = occasionText(req);
+      // two similarly-styled tops (a short-sleeve tee vs a long-sleeve
+      // shirt), only the absolute hot/cold thresholds did. A short-sleeve
+      // top for a warm Day and a long-sleeve one for a cooler Evening is a
+      // preference, not a violation (a sleeveless dress is still valid for
+      // a warm evening) — so this is a system-prompt Default rule
+      // (relativeWarmthHint), not a hard exclusion like violatesWeather.
+      let relativeWarmthHint: string | null = null;
       if (dayWeather && Math.abs(dayWeather.tempMax - dayWeather.tempMin) >= 4) {
-        if (req.daySegment === "evening") {
-          occasion += ` (evening, cooler than today's daytime — ~${Math.round(dayWeather.tempMin)}°C vs ~${Math.round(dayWeather.tempMax)}°C. Between similarly-styled tops, prefer the warmer one for this slot.)`;
-        } else {
-          occasion += ` (daytime, warmer than tonight — ~${Math.round(dayWeather.tempMax)}°C vs ~${Math.round(dayWeather.tempMin)}°C. Between similarly-styled tops, prefer the lighter one for this slot.)`;
-        }
+        relativeWarmthHint = req.daySegment === "evening"
+          ? `this evening (~${Math.round(dayWeather.tempMin)}°C) is cooler than today's daytime (~${Math.round(dayWeather.tempMax)}°C) — between similarly-styled tops (e.g. a short-sleeve vs a long-sleeve piece), prefer the warmer one for this look.`
+          : `today's daytime (~${Math.round(dayWeather.tempMax)}°C) is warmer than tonight (~${Math.round(dayWeather.tempMin)}°C) — between similarly-styled tops, prefer the lighter one for this look.`;
       }
 
       const result = await suggestOutfitCore({
         supabase, userId,
         temperature,
         condition,
-        occasion,
+        occasion: occasionText(req),
         dressRules,
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
         items,
         avoidItemIds: usedOutfits.slice(-avoidOutfitWindow).flat(),
         locationIdOverride: null,
+        relativeWarmthHint,
       });
 
       if (!result.ok || !result.item_ids.length) {
