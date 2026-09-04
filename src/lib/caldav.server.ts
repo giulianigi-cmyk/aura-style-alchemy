@@ -7,6 +7,8 @@
 // calendar-home-set) — the actual calendar data lands on a per-account
 // numbered host iCloud tells us about, never guessed.
 
+import { computeRemovedEventIds } from "./calendar-sync-diff";
+
 const ICLOUD_BASE = "https://caldav.icloud.com";
 
 function basicAuthHeader(email: string, password: string): string {
@@ -207,12 +209,27 @@ export async function syncAppleCalendar(userId: string): Promise<{ ok: boolean; 
       description: e.description || null,
       all_day: e.allDay,
       raw: e,
+      removed_from_source: false,
     }));
+
+    const { data: previouslyCached } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+      .select("external_event_id")
+      .eq("connection_id", conn.id)
+      .eq("removed_from_source", false);
+    const previouslyCachedIds = ((previouslyCached ?? []) as { external_event_id: string }[]).map((r) => r.external_event_id);
 
     if (rows.length) {
       const { error: upsertErr } = await (supabaseAdmin.from("calendar_events_cache" as never) as any)
         .upsert(rows, { onConflict: "connection_id,external_event_id" });
       if (upsertErr) throw new Error(upsertErr.message);
+    }
+
+    const removedIds = computeRemovedEventIds(previouslyCachedIds, rows.map((r) => r.external_event_id));
+    if (removedIds.length) {
+      await (supabaseAdmin.from("calendar_events_cache" as never) as any)
+        .update({ removed_from_source: true, removed_detected_at: new Date().toISOString() })
+        .eq("connection_id", conn.id)
+        .in("external_event_id", removedIds);
     }
 
     await (supabaseAdmin.from("calendar_connections" as never) as any)
