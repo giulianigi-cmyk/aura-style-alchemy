@@ -5,6 +5,7 @@ import { z } from "zod";
 import { parseAiJson } from "./ai-json";
 import { isItemAtAnyLocation } from "./wardrobe-location";
 import { isItemAllowedByDressPreferences, hasAnyPreference, type DressPreferences } from "./dress-preferences";
+import { anyItemViolatesWeather } from "./outfit-weather-rules";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -333,43 +334,9 @@ export async function suggestOutfitCore(params: {
       return false;
     });
 
-  // Weather is a hard constraint for EVERY occasion, not just Work —
-  // mirrors the same rule already enforced in suggest-daily-looks.functions.ts
-  // (Home). A wool sweater or wool trousers are never correct at 30°C in
-  // Empoli in August, no matter how good the rest of the outfit reads.
-  const HOT_THRESHOLD_C = 26;
-  const COLD_THRESHOLD_C = 10;
-  const HEAVY_SIGNAL = /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool|lana|maglione|sweater|felted|fleece|boots?\b|stivali|tweed|corduroy|velluto a coste|flannel|flanella|cashmere|cachemire/i;
-  const LIGHT_SIGNAL = /tank|canotta|sandal|sandalo|shorts?\b|infradito|flip.?flop|sleeveless|senza maniche/i;
-  const violatesWeather = (ids: string[]): boolean => {
-    if (params.temperature == null) return false;
-    const hot = params.temperature >= HOT_THRESHOLD_C;
-    const cold = params.temperature <= COLD_THRESHOLD_C;
-    if (!hot && !cold) return false;
-    return ids.some((id) => {
-      const item = catalog.find((c) => c.id === id);
-      if (!item) return false;
-      const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")} ${(item.material ?? []).join(" ")}`;
-      const season = (item.season ?? "").toLowerCase();
-           if (hot) {
-        // season is stored as a comma-joined multi-value string (e.g.
-        // "Autumn, Winter"), never a single exact value — an === check
-        // silently never matches a piece tagged for two seasons, which
-        // is most cold-weather garments. .includes() is correct here.
-        if (season.includes("winter")) return true;
-        if (HEAVY_SIGNAL.test(text)) return true;
-      }
-      if (cold) {
-        if (season.includes("summer") && LIGHT_SIGNAL.test(text)) return true;
-        // Structured signal, not just text pattern-matching: an item
-        // explicitly tagged Open Toe (see the shoe's own toeShape field)
-        // is a bare-foot shoe in cold weather regardless of what its
-        // subcategory text happens to say.
-        if (item.toeShape === "Open Toe") return true;
-      }
-      return false;
-    });
-  };
+  // Weather is a hard constraint for EVERY occasion, not just Work — see
+  // outfit-weather-rules.ts (unica fonte di verità, condivisa con Home).
+  const violatesWeather = (ids: string[]): boolean => anyItemViolatesWeather(ids, catalog, params.temperature);
 
   const isWorkOccasion = (params.occasion ?? "").toLowerCase().startsWith("work");
 
