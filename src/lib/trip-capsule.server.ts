@@ -261,16 +261,22 @@ export function buildCapsule(
   // rotates 5x each). Scales gently with the number of requirements
   // (~2 per day), capped so it never balloons into "pack everything".
   const perRoleTarget = Math.min(2 + Math.floor(requirements.length / 4), 5);
+  const approxTripDays = Math.max(1, Math.ceil(requirements.length / 2));
   // Shoes don't need the same rotation depth as tops/bottoms — they're
   // bulky to pack and get reworn far more before anyone notices. Scaling
   // them the same way as tops turned "add one more top" into "also add a
   // third pair of sneakers", which is the opposite of what a capsule is for.
-  const shoeTarget = Math.min(perRoleTarget, 2);
+  // For a short trip (2 days or fewer) a SECOND pair has no real reason to
+  // exist unless something else earns it — an elegant occasion or a
+  // sport/swim day, both handled by their own reserved-slot logic below,
+  // independently of this target. Without this, a 2-day trip always tried
+  // to seat 2 pairs of sneakers even when one would have covered every
+  // requirement just fine.
+  const shoeTarget = approxTripDays <= 2 ? 1 : Math.min(perRoleTarget, 2);
   // Bags were never guaranteed a slot in the capsule at all before — the
   // AI's gender-aware prompt could suggest one, but only if an eligible
   // bag happened to already be in the pool by chance. A short trip only
   // needs one bag total; a week or longer earns a second (day + evening).
-  const approxTripDays = Math.max(1, Math.ceil(requirements.length / 2));
   const bagTarget = approxTripDays >= 7 ? 2 : 1;
   // Tops in hot weather want closer to one fresh piece per day (sweat,
   // not just looking different) — cooler seasons tolerate a top worn
@@ -638,11 +644,31 @@ export async function generateTripCapsuleCore({ data, context }: {
       // relaxes this itself if excluding recent items leaves too little
       // to compose a real outfit from, so widening this is safe.
       const avoidOutfitWindow = trip.laundry_available ? 3 : 2;
+
+      // Evening usually runs cooler than the same day's daytime (that's
+      // exactly why temperature above uses tempMin for evening / tempMax
+      // for day) — but that fact never reached the model choosing BETWEEN
+      // two similarly-styled tops, only the absolute hot/cold thresholds
+      // did. Result: nothing stopped it picking the warmer piece for Day
+      // and the lighter one for Evening — backwards. A short, deterministic
+      // clause appended to the occasion text fixes the information gap
+      // directly, without a new hard exclusion rule (a light top for
+      // evening isn't WRONG the way a wool coat at 30°C is — it's just a
+      // worse choice when a warmer option is sitting right there).
+      let occasion = occasionText(req);
+      if (dayWeather && Math.abs(dayWeather.tempMax - dayWeather.tempMin) >= 4) {
+        if (req.daySegment === "evening") {
+          occasion += ` (evening, cooler than today's daytime — ~${Math.round(dayWeather.tempMin)}°C vs ~${Math.round(dayWeather.tempMax)}°C. Between similarly-styled tops, prefer the warmer one for this slot.)`;
+        } else {
+          occasion += ` (daytime, warmer than tonight — ~${Math.round(dayWeather.tempMax)}°C vs ~${Math.round(dayWeather.tempMin)}°C. Between similarly-styled tops, prefer the lighter one for this slot.)`;
+        }
+      }
+
       const result = await suggestOutfitCore({
         supabase, userId,
         temperature,
         condition,
-        occasion: occasionText(req),
+        occasion,
         dressRules,
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
