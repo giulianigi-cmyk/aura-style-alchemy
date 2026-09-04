@@ -171,6 +171,8 @@ export function Home({ go }: { go: (s: Screen) => void }) {
                   styleTags: it.style_tags ?? [],
                   sleeveLength: it.sleeve_length ?? "",
                   length: it.length ?? "",
+                  material: Array.isArray(it.material) ? it.material : [],
+                  toeShape: it.toe_shape ?? "",
                   occasion: it.occasion ?? "",
                 })),
                 language: i18n.language,
