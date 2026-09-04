@@ -1,5 +1,7 @@
-import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus, Image as ImageIcon } from "lucide-react";
+import { Copy, Loader2, Share2, Sparkles, Search, Calendar as CalendarIcon, Trash2, Check, X, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { updateTripOutfitPlanItems } from "@/lib/trips.functions";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { BuilderInit, Screen } from "../AuraApp";
@@ -378,6 +380,42 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
     void load();
   };
 
+  // Inline per-piece editing for a still-upcoming (not yet worn) plan —
+  // unlike getWornIds/editedItems above (which only stage changes
+  // locally until "mark as worn" is tapped), every change here writes
+  // straight to outfit_plans.item_ids immediately: this plan may already
+  // be live in a Trip Capsule or the Calendar, and those must see the
+  // same edit, not a local-only view of it. updateTripOutfitPlanItems is
+  // a plain "update this outfit_plans row" call despite its name — no
+  // trip-specific filtering — so this is exactly the same row whichever
+  // surface reads it next.
+  const updatePlanItems = useServerFn(updateTripOutfitPlanItems);
+  const [upcomingBusyPlanId, setUpcomingBusyPlanId] = useState<string | null>(null);
+  const [upcomingPickerFor, setUpcomingPickerFor] = useState<string | null>(null);
+  const [detailItemId, setDetailItemId] = useState<string | null>(null);
+
+  const persistUpcomingItems = async (planId: string, nextIds: string[]) => {
+    setUpcomingBusyPlanId(planId);
+    try {
+      await updatePlanItems({ data: { planId, itemIds: nextIds } });
+      setPlans((prev) => prev.map((p) => (p.id === planId ? { ...p, item_ids: nextIds } : p)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("aiStylist.couldntUpdateOutfit"));
+    } finally {
+      setUpcomingBusyPlanId(null);
+    }
+  };
+
+  const removeFromUpcomingPlan = (plan: OutfitPlan, itemId: string) =>
+    void persistUpcomingItems(plan.id, plan.item_ids.filter((id) => id !== itemId));
+
+  const addToUpcomingPlan = (planId: string, itemId: string) => {
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan || plan.item_ids.includes(itemId)) { setUpcomingPickerFor(null); return; }
+    setUpcomingPickerFor(null);
+    void persistUpcomingItems(planId, [...plan.item_ids, itemId]);
+  };
+
   const ItemThumbs = ({ ids, size = "h-16 w-16" }: { ids: string[]; size?: string }) => (
     <div className="flex gap-2 overflow-x-auto no-scrollbar">
       {ids.map((id) => {
@@ -473,16 +511,6 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     ? <ItemThumbs ids={tp.item_ids} />
                     : <EditableItemThumbs planId={tp.id} ids={getWornIds(tp)} />}
                 </div>
-                {getWornIds(tp).length > 0 && (
-                  <button
-                    onClick={() => openBuilder({
-                      itemIds: getWornIds(tp),
-                      name: label,
-                      occasion: tp.calendar_event_id ? label : undefined,
-                    })}
-                    className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-                  ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
-                )}
                 {tp.weather_temp != null && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     {Math.round(tp.weather_temp)}°{tp.weather_condition ? ` · ${tp.weather_condition}` : ""}
@@ -520,13 +548,6 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   className="h-9 w-9 rounded-full border border-border flex items-center justify-center disabled:opacity-60"
                   aria-label={t("aiStylist.iDidntWearThisAria")}
                 ><X size={14} /></button>
-                {getWornIds(p).length > 0 && (
-                  <button
-                    onClick={() => openBuilder({ itemIds: getWornIds(p), occasion: p.occasion ?? undefined })}
-                    aria-label={t("aiStylist.openOnCanvasAria")}
-                    className="h-9 w-9 rounded-full border border-border flex items-center justify-center disabled:opacity-60"
-                  ><ImageIcon size={14} /></button>
-                )}
               </div>
             </div>
           ))}
@@ -568,13 +589,36 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                       className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground disabled:opacity-50"
                     ><X size={13} /></button>
                   </div>
-                  <ItemThumbs ids={p.item_ids} size="h-14 w-14" />
-                  {p.item_ids.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    {p.item_ids.map((id) => {
+                      const it = items.find((x) => x.id === id);
+                      const path = it ? toStoragePath(it.image_url) : null;
+                      const src = path ? itemSigned[path] : null;
+                      return (
+                        <div
+                          key={id}
+                          onClick={() => setDetailItemId(id)}
+                          className="h-14 w-14 shrink-0 relative rounded-xl overflow-hidden border border-border/60"
+                          style={{ background: "#FFFFFF" }}
+                        >
+                          {src ? <img src={src} alt="" className="h-full w-full object-contain p-1" loading="lazy" /> : null}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeFromUpcomingPlan(p, id); }}
+                            disabled={upcomingBusyPlanId === p.id}
+                            aria-label={t("aiStylist.removeThisPieceAria")}
+                            className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/90 border border-border flex items-center justify-center disabled:opacity-50"
+                          ><X size={10} /></button>
+                        </div>
+                      );
+                    })}
                     <button
-                      onClick={() => openBuilder({ itemIds: p.item_ids, occasion: p.occasion ?? undefined })}
-                      className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-                    ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
-                  )}
+                      onClick={() => setUpcomingPickerFor(p.id)}
+                      disabled={upcomingBusyPlanId === p.id}
+                      className="h-14 w-14 shrink-0 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground disabled:opacity-50"
+                    >
+                      {upcomingBusyPlanId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={16} />}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -590,12 +634,6 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                     {dateLabel(w.date)}{w.outfitName ? ` · ${w.outfitName}` : w.occasion ? ` · ${w.occasion}` : ""}
                   </p>
                   <ItemThumbs ids={w.itemIds} size="h-14 w-14" />
-                  {w.itemIds.length > 0 && (
-                    <button
-                      onClick={() => openBuilder({ itemIds: w.itemIds, name: w.outfitName ?? undefined, occasion: w.occasion ?? undefined })}
-                      className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-                    ><ImageIcon size={12} /> {t("aiStylist.openOnCanvas")}</button>
-                  )}
                 </div>
               ))}
             </div>
@@ -741,6 +779,37 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         </details>
       </section>
 
+      {detailItemId && (() => {
+        const it = items.find((x) => x.id === detailItemId);
+        if (!it) return null;
+        const path = toStoragePath(it.image_url);
+        const src = path ? itemSigned[path] : null;
+        const label = it.colors?.[0] ?? it.color ?? it.category ?? "";
+        return (
+          <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur flex items-end sm:items-center sm:justify-center" onClick={() => setDetailItemId(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-card rounded-t-3xl sm:rounded-3xl border-t sm:border border-border p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              <div className="flex justify-end">
+                <button onClick={() => setDetailItemId(null)} aria-label={t("aiStylist.closeAria")} className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+              </div>
+              <div className="rounded-2xl overflow-hidden mx-auto aspect-square max-w-[220px] -mt-6" style={{ background: "#FFFFFF" }}>
+                {src ? <img src={src} alt="" className="h-full w-full object-contain p-3" /> : null}
+              </div>
+              <div className="mt-4 text-center">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{it.brand ?? it.category}</p>
+                <p className="font-serif text-2xl mt-1">{[label, it.category].filter(Boolean).join(" ")}</p>
+                {it.subcategory && <p className="text-xs text-muted-foreground mt-1">{it.subcategory}</p>}
+              </div>
+              <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                {(Array.isArray(it.material) ? it.material : []).map((m) => (
+                  <span key={m} className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{m}</span>
+                ))}
+                {it.size && <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{t("aiStylist.sizeLabel", { size: it.size })}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {shareFor && <ShareOutfitSheet outfitId={shareFor} onClose={() => setShareFor(null)} />}
 
       {assignFor && (
@@ -761,8 +830,14 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
         </div>
       )}
 
-      {pickerForPlan && (() => {
-        const currentIds = new Set(editedItems[pickerForPlan] ?? plans.find((p) => p.id === pickerForPlan)?.item_ids ?? []);
+      {(pickerForPlan || upcomingPickerFor) && (() => {
+        const activePlanId = (pickerForPlan ?? upcomingPickerFor) as string;
+        const closePicker = () => { setPickerForPlan(null); setUpcomingPickerFor(null); };
+        const currentIds = new Set(
+          pickerForPlan
+            ? (editedItems[pickerForPlan] ?? plans.find((p) => p.id === pickerForPlan)?.item_ids ?? [])
+            : (plans.find((p) => p.id === upcomingPickerFor)?.item_ids ?? [])
+        );
         const activeOnly = items.filter((it) => !(it as unknown as { archived?: boolean }).archived);
         const q = pickerQuery.trim().toLowerCase();
         const matches = activeOnly.filter((it) => {
@@ -773,11 +848,11 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
             .some((v) => v?.toLowerCase().includes(q));
         });
         return (
-          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={() => setPickerForPlan(null)}>
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end" onClick={closePicker}>
             <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card rounded-t-3xl border-t border-border p-5 flex flex-col">
               <div className="flex items-center justify-between shrink-0">
-                <p className="font-serif italic text-lg">{t("aiStylist.whatDidYouWearInstead")}</p>
-                <button onClick={() => setPickerForPlan(null)} aria-label={t("aiStylist.closeAria")} className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
+                <p className="font-serif italic text-lg">{pickerForPlan ? t("aiStylist.whatDidYouWearInstead") : t("aiStylist.addAPiece")}</p>
+                <button onClick={closePicker} aria-label={t("aiStylist.closeAria")} className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center active:scale-90"><X size={14} /></button>
               </div>
               <div className="mt-3 flex items-center gap-2 rounded-full bg-secondary/60 px-4 py-2.5 shrink-0">
                 <Search size={15} className="text-muted-foreground" />
@@ -808,7 +883,7 @@ export function AIStylist({ go, openBuilder }: { go: (s: Screen) => void; openBu
                   return (
                     <button
                       key={it.id}
-                      onClick={() => addToPlan(pickerForPlan, it.id)}
+                      onClick={() => (pickerForPlan ? addToPlan(pickerForPlan, it.id) : addToUpcomingPlan(activePlanId, it.id))}
                       className="text-left"
                     >
                       <div
