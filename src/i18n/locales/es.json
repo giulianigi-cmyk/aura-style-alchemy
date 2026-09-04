@@ -986,7 +986,10 @@
     "foundExistingOutfitTitle": "Ya tienes un look para esto",
     "foundExistingOutfitHint": "Ya planeaste un look para \"{{name}}\" — ¿usar ese o generar uno nuevo para el viaje?",
     "generateNewInstead": "Generar uno nuevo",
-    "useThisOutfit": "Usar este look"
+    "useThisOutfit": "Usar este look",
+    "regenerateWornTitle": "¿Regenerar un look que ya llevaste?",
+    "regenerateWornHint": "Ya confirmaste que llevaste este look para \"{{name}}\". Regenerarlo reemplazará ese registro.",
+    "regenerateAnyway": "Regenerar de todos modos"
   },
   "batchReview": {
     "couldntLoadBatch": "No se pudo cargar este lote.",
