@@ -986,7 +986,10 @@
     "foundExistingOutfitTitle": "You already have an outfit for this",
     "foundExistingOutfitHint": "You already planned an outfit for \"{{name}}\" — use that one, or generate a new one for the trip?",
     "generateNewInstead": "Generate new instead",
-    "useThisOutfit": "Use this outfit"
+    "useThisOutfit": "Use this outfit",
+    "regenerateWornTitle": "Regenerate an outfit you already wore?",
+    "regenerateWornHint": "You already confirmed you wore this look for \"{{name}}\". Regenerating it will replace that record.",
+    "regenerateAnyway": "Regenerate anyway"
   },
   "batchReview": {
     "couldntLoadBatch": "Couldn't load this batch.",
