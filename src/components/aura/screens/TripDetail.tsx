@@ -379,6 +379,12 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
     }
   };
 
+  /** Set when the user taps regenerate on an activity whose plan is
+   *  status "worn" — a logged record of what actually happened, not a
+   *  draft, so overwriting it needs an explicit confirmation instead of
+   *  the silent overwrite a merely-"planned" draft gets. */
+  const [confirmRegenerateWorn, setConfirmRegenerateWorn] = useState<{ activityId: string; activityType: string } | null>(null);
+
   /** Regenerates just this activity's look — the wardrobe pool is read
    *  live server-side, so a piece added today is immediately eligible. */
   const regenerateActivity = async (activityId: string) => {
@@ -394,6 +400,14 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
     } finally {
       setRegeneratingId(null);
     }
+  };
+
+  const requestRegenerateActivity = (activityId: string, activityType: string, currentStatus: string | null | undefined) => {
+    if (currentStatus === "worn") {
+      setConfirmRegenerateWorn({ activityId, activityType });
+      return;
+    }
+    void regenerateActivity(activityId);
   };
 
   const startEditPlan = (plan: OutfitPlan) => {
@@ -881,6 +895,34 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
         </div>
       )}
 
+      {confirmRegenerateWorn && (
+        <div
+          className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6"
+          onClick={() => setConfirmRegenerateWorn(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe">
+            <p className="font-serif text-lg text-center">{t("tripDetail.regenerateWornTitle")}</p>
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              {t("tripDetail.regenerateWornHint", { name: confirmRegenerateWorn.activityType })}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setConfirmRegenerateWorn(null)}
+                className="h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em]"
+              >{t("tripDetail.cancel")}</button>
+              <button
+                onClick={() => {
+                  const id = confirmRegenerateWorn.activityId;
+                  setConfirmRegenerateWorn(null);
+                  void regenerateActivity(id);
+                }}
+                className="h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]"
+              >{t("tripDetail.regenerateAnyway")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {reuseOffer && (
         <div className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => !linkingOutfit && confirmReuseOutfit(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xs rounded-2xl border border-border bg-card p-5 shadow-luxe">
@@ -959,7 +1001,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                         {fmtDate(a.activity_date)} · {a.activity_type}{a.dress_code ? ` · ${a.dress_code}` : ""}
                       </p>
                       <button
-                        onClick={() => void regenerateActivity(a.id)}
+                        onClick={() => requestRegenerateActivity(a.id, a.activity_type, op?.status)}
                         disabled={regeneratingId === a.id}
                         aria-label={t("tripDetail.regenerateOutfitAria", { name: a.activity_type })}
                         className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-muted-foreground active:scale-90 disabled:opacity-40"
