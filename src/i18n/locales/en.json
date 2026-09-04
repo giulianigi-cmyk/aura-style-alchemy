@@ -746,7 +746,13 @@
     "whatDidYouWear": "What did you actually wear?",
     "selectedCount_one": "{{count}} selected",
     "selectedCount_other": "{{count}} selected",
-    "confirmWorn": "Confirm worn"
+    "confirmWorn": "Confirm worn",
+    "dismissEventAria": "Dismiss this event",
+    "couldntDismissEvent": "Couldn't dismiss the event",
+    "couldntRecoverEvent": "Couldn't recover the event",
+    "recoverEvent": "Recover",
+    "dismissedEventsCount": "{{count}} dismissed events",
+    "removedFromCalendar": "· removed from calendar"
   },
   "aiStylist": {
     "notEnoughActivePieces_one": "You have {{count}} piece in your active wardrobe — add at least 3 (or restore an archived one) to generate an AI outfit.",
