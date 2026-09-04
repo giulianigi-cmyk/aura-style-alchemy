@@ -207,8 +207,8 @@ function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolIt
 }
 
 
-function hasRole(items: PoolItem[], role: Set<string>): boolean {
-  return items.some((it) => role.has(it.category ?? ""));
+function countInRole(items: PoolItem[], role: Set<string>): number {
+  return items.filter((it) => role.has(it.category ?? "")).length;
 }
 
 /**
@@ -270,26 +270,36 @@ export function buildCapsule(
   for (const { req, eligible } of withEligibility) {
     const inCapsule = eligible.filter((it) => capsule.has(it.id));
     const kind = activityKind(req);
-    const missingRoles: Set<string>[] = [];
-    // A swim or sport day needs its purpose garment in the capsule
-    // first — otherwise the greedy pass only ever packs city tops and
-    // the AI never sees a swimsuit to pick from.
-    if (kind === "swim" && !hasRole(inCapsule, SWIM_ROLE)) missingRoles.push(SWIM_ROLE);
-    if (kind === "sport" && !hasRole(inCapsule, ACTIVE_ROLE)) missingRoles.push(ACTIVE_ROLE);
-    if (kind !== "swim") {
-      if (!hasRole(inCapsule, TOP_ROLE) && !hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(TOP_ROLE, BOTTOM_ROLE);
-      else {
-        if (!hasRole(inCapsule, TOP_ROLE)) missingRoles.push(TOP_ROLE);
-        if (!hasRole(inCapsule, BOTTOM_ROLE)) missingRoles.push(BOTTOM_ROLE);
-      }
-    }
-    if (!hasRole(inCapsule, SHOE_ROLE)) missingRoles.push(SHOE_ROLE);
-    // A pool day doesn't want a handbag, but everyday/evening looks do —
-    // added last so it never displaces a top/bottom/shoe pick above.
-    if (kind !== "swim" && kind !== "sport" && !hasRole(inCapsule, BAG_ROLE)) missingRoles.push(BAG_ROLE);
 
+    // BUG FIXED HERE: this used to be hasRole() — a boolean "is there at
+    // least one item of this role in the capsule". The first (hardest,
+    // fewest-eligible) requirement processed could satisfy that with a
+    // single top, and every later requirement — even ones with many more
+    // eligible tops — would then see the role as "not missing" and never
+    // top it up toward topTarget. A summer trip could end up with exactly
+    // one top for the whole trip regardless of topTarget=6, which is the
+    // exact "same outfit every day" bug this produced in practice.
+    // countInRole + a real target fixes it: every requirement tries to
+    // top the role up further, converging on the target as looser
+    // requirements reveal more eligible candidates.
+    const topNeed = kind === "swim" ? 0 : Math.max(0, topTarget - countInRole(inCapsule, TOP_ROLE));
+    const bottomNeed = kind === "swim" ? 0 : Math.max(0, perRoleTarget - countInRole(inCapsule, BOTTOM_ROLE));
+    const shoeNeed = Math.max(0, shoeTarget - countInRole(inCapsule, SHOE_ROLE));
+    const bagNeed = (kind === "swim" || kind === "sport") ? 0 : Math.max(0, bagTarget - countInRole(inCapsule, BAG_ROLE));
+    const swimNeed = kind === "swim" ? Math.max(0, perRoleTarget - countInRole(inCapsule, SWIM_ROLE)) : 0;
+    const activeNeed = kind === "sport" ? Math.max(0, perRoleTarget - countInRole(inCapsule, ACTIVE_ROLE)) : 0;
 
-    for (const role of missingRoles) {
+    const roleNeeds: { role: Set<string>; need: number }[] = [
+      { role: SWIM_ROLE, need: swimNeed },
+      { role: ACTIVE_ROLE, need: activeNeed },
+      { role: TOP_ROLE, need: topNeed },
+      { role: BOTTOM_ROLE, need: bottomNeed },
+      { role: SHOE_ROLE, need: shoeNeed },
+      // Bag added last so it never displaces a top/bottom/shoe pick above.
+      { role: BAG_ROLE, need: bagNeed },
+    ].filter((r) => r.need > 0);
+
+    for (const { role, need } of roleNeeds) {
       // Was a pure deterministic sort (versatility, then rewearability) —
       // with the same wardrobe and the same day, that always picked the
       // exact same top-N pieces, every single regenerate. Deleting a plan
@@ -303,12 +313,7 @@ export function buildCapsule(
         .map((it) => ({ it, score: versatility(it, req) + REWEARABILITY[it.category ?? ""] * 0.3 + Math.random() * 2.5 }))
         .sort((a, b) => b.score - a.score)
         .map((x) => x.it);
-      // Add up to perRoleTarget per missing role, not a flat 2 — a single
-      // top or single pair of shoes for the whole trip is technically
-      // minimal but leaves zero room for Level 6 (variety) later. Shoes
-      // and bags use their own lower targets (see above).
-      const target = role === SHOE_ROLE ? shoeTarget : role === BAG_ROLE ? bagTarget : role === TOP_ROLE ? topTarget : perRoleTarget;
-      candidates.slice(0, target).forEach((it) => capsule.add(it.id));
+      candidates.slice(0, need).forEach((it) => capsule.add(it.id));
     }
   }
 
