@@ -158,3 +158,50 @@ test("Uno stivaletto elegante resta comunque scelto se è l'unica scarpa formale
   const capsule = buildCapsule(pool, requirements, seasonByDate, []);
   assert.ok(capsule.has("boot-elegant"), "in assenza di alternative, lo stivaletto va comunque scelto — mai lasciare lo slot vuoto");
 });
+
+test("REGRESSIONE — un trip di 2 giorni non aggiunge una seconda scarpa senza un motivo reale", () => {
+  // Prima del fix, shoeTarget era sempre 2 indipendentemente dalla durata
+  // del trip — un weekend di 2 giorni tentava comunque di inserire 2 paia
+  // di sneakers in capsule anche senza nessuna occasione elegante/sport
+  // che lo giustificasse.
+  const pool: PoolItem[] = [
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "sneaker-2", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "d1-day", date: "2026-07-10", daySegment: "day", dressCode: null, label: "Day" },
+    { activityId: "d1-eve", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Evening" },
+    { activityId: "d2-day", date: "2026-07-11", daySegment: "day", dressCode: null, label: "Day" },
+    { activityId: "d2-eve", date: "2026-07-11", daySegment: "evening", dressCode: null, label: "Evening" },
+  ];
+  const seasonByDate = new Map([["2026-07-10", "Summer"], ["2026-07-11", "Summer"]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const shoesInCapsule = Array.from(capsule).filter((id) => id.startsWith("sneaker-"));
+  assert.equal(shoesInCapsule.length, 1, `un trip di 2 giorni senza occasioni speciali dovrebbe avere 1 sola scarpa, trovate: ${shoesInCapsule.join(", ")}`);
+});
+
+test("Un trip lungo (una settimana+) può comunque avere una seconda scarpa", () => {
+  const pool: PoolItem[] = [
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "sneaker-2", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = Array.from({ length: 16 }, (_, i) => ({
+    activityId: `act-${i}`,
+    date: `2026-07-${10 + Math.floor(i / 2)}`,
+    daySegment: (i % 2 === 0 ? "day" : "evening") as "day" | "evening",
+    dressCode: null,
+    label: i % 2 === 0 ? "Day" : "Evening",
+  }));
+  const seasonByDate = new Map(requirements.map((r) => [r.date, "Summer"]));
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const shoesInCapsule = Array.from(capsule).filter((id) => id.startsWith("sneaker-"));
+  assert.equal(shoesInCapsule.length, 2, `un trip lungo dovrebbe poter avere 2 scarpe, trovate: ${shoesInCapsule.join(", ")}`);
+});
