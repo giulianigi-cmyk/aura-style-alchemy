@@ -175,6 +175,26 @@ function versatility(it: PoolItem, req?: Requirement): number {
     const [min, max] = req.dressCode ? (FORMALITY_RANGE[req.dressCode] ?? DEFAULT_FORMALITY_RANGE) : DEFAULT_FORMALITY_RANGE;
     if (it.formality >= min && it.formality <= max) score += 3;
     if (it.dayEvening === req.daySegment) score += 2;
+    // A sneaker isn't wrong for a generic, unlabeled "Evening" slot the
+    // way it would be for an actual dinner (hasEleganceSignal already
+    // reserves a real elegant shoe for those, hard) — but defaulting to
+    // the exact same trainers worn all day reads as an oversight, not a
+    // choice. This is a soft nudge, not an exclusion: a sneaker still
+    // wins if it's genuinely the only shoe eligible (never leaves a
+    // requirement unfilled over a style preference), it just stops
+    // winning by default the moment any non-sporty shoe is available.
+    if (req.daySegment === "evening" && it.category === "Shoes") {
+      const sub = (it.subcategory ?? "").toLowerCase();
+      if (/sneaker|running|trainer|scarpe da ginnastica/.test(sub)) score -= 3;
+      // Same principle, opposite season: a boot reads as wrong for a warm
+      // evening the way a sneaker reads as wrong for any evening. Uses
+      // the requirement's own date (seasonForDate), not an external map,
+      // so this applies everywhere versatility() scores a shoe — both the
+      // normal per-role fill above AND the reserved-elegant-shoe pass
+      // below share this one rule instead of each needing its own copy.
+      const season = seasonForDate(req.date);
+      if ((season === "Summer" || season === "Spring") && /boot|stival/.test(sub)) score -= 3;
+    }
   }
   return score;
 }
@@ -264,8 +284,21 @@ export function buildCapsule(
   }));
   // Hardest first = fewest eligible candidates in the whole wardrobe —
   // solving these while the capsule is still empty leaves the most
-  // freedom; solving them last could find nothing left to work with.
-  withEligibility.sort((a, b) => a.eligible.length - b.eligible.length);
+  // freedom; solving them last could find nothing left to work with. On
+  // ties (very common — season is the main eligibility filter, so a
+  // same-season day and evening usually have identical eligible counts),
+  // evening/elegant requirements go first: they're the pickier context
+  // for a shared, capped budget like shoeTarget (versatility() penalizes
+  // a sneaker for an evening slot, but that penalty can only matter if
+  // evening gets a real turn at the budget before a same-sized "Day"
+  // requirement — processed first purely by insertion order — fills it
+  // entirely with sneakers that were perfectly fine for THAT day.
+  const requirementPriority = (r: Requirement) => (hasEleganceSignal(r) ? 2 : r.daySegment === "evening" ? 1 : 0);
+  withEligibility.sort((a, b) => {
+    const diff = a.eligible.length - b.eligible.length;
+    if (diff !== 0) return diff;
+    return requirementPriority(b.req) - requirementPriority(a.req);
+  });
 
   for (const { req, eligible } of withEligibility) {
     const inCapsule = eligible.filter((it) => capsule.has(it.id));
@@ -322,15 +355,22 @@ export function buildCapsule(
   // one (see hasEleganceSignal). Owning a heel never forces it in;
   // an activity like a resort dinner does. Deliberately outside the
   // normal target/cap logic: this is a reserved slot, not a ranked pick.
-  if (requirements.some(hasEleganceSignal)) {
+  const eleganceReqs = requirements.filter(hasEleganceSignal);
+  if (eleganceReqs.length) {
     const alreadyHasElegantShoe = Array.from(capsule).some((id) => {
       const it = pool.find((p) => p.id === id);
       return it?.category === "Shoes" && it.formality >= 4;
     });
     if (!alreadyHasElegantShoe) {
+      // Scored against the first elegance-requiring requirement so the
+      // same season-aware boot/sneaker penalties in versatility() apply
+      // here too, not just in the per-role fill above — a multi-season
+      // trip with more than one elegant occasion is a rare enough edge
+      // case that using just the first is a reasonable simplification.
+      const repReq = eleganceReqs[0];
       const bestElegantShoe = pool
         .filter((it) => it.category === "Shoes" && it.formality >= 4 && !capsule.has(it.id))
-        .sort((a, b) => versatility(b) - versatility(a))[0];
+        .sort((a, b) => versatility(b, repReq) - versatility(a, repReq))[0];
       if (bestElegantShoe) capsule.add(bestElegantShoe.id);
     }
   }
