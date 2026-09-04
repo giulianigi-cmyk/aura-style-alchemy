@@ -995,7 +995,13 @@
     "useThisOutfit": "Use this outfit",
     "regenerateWornTitle": "Regenerate an outfit you already wore?",
     "regenerateWornHint": "You already confirmed you wore this look for \"{{name}}\". Regenerating it will replace that record.",
-    "regenerateAnyway": "Regenerate anyway"
+    "regenerateAnyway": "Regenerate anyway",
+    "tripCapsule": "Trip Capsule",
+    "tripCapsuleHint": "Pieces available for this trip. The generator prefers these before proposing anything else.",
+    "addToCapsule": "Add",
+    "tapToAddToCapsule": "Tap to add to the capsule",
+    "removeFromCapsuleAria": "Remove from Trip Capsule",
+    "couldntUpdateCapsule": "Couldn't update the Trip Capsule"
   },
   "batchReview": {
     "couldntLoadBatch": "Couldn't load this batch.",
