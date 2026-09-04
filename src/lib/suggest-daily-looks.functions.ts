@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
 import { parseAiJson } from "./ai-json";
+import { anyItemViolatesWeather } from "./outfit-weather-rules";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -20,6 +21,12 @@ const ItemSchema = z.object({
   // and a Maxi skirt are indistinguishable to both the model and the code.
   length: z.string().nullable().optional(),
   sleeveLength: z.string().nullable().optional(),
+  // material/toeShape were never sent to this engine — the reason the
+  // Home weather hard-check (below) used to miss items like a wool
+  // sweater whose subcategory/styleTags didn't literally say "wool":
+  // material text wasn't even in what it could check against.
+  material: z.array(z.string()).nullable().optional(),
+  toeShape: z.string().nullable().optional(),
   // The piece's OWN occasion tags (Wardrobe → edit → Occasion) — never
   // sent to this engine before, so a bag tagged only "Travel" could
   // freely surface in the Work curated look here, same gap already
@@ -90,6 +97,8 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
       styleTags: it.styleTags ?? [],
             length: it.length ?? "",
       sleeveLength: it.sleeveLength ?? "",
+      material: it.material ?? [],
+      toeShape: it.toeShape ?? "",
       occasion: it.occasion ?? "",
     }));
 
@@ -242,33 +251,12 @@ export const suggestDailyLooks = createServerFn({ method: "POST" })
     // Weather is a hard constraint for EVERY look (today + all curated
     // occasions), not just "today" — enforced in code, mirroring
     // violatesWorkFormality above. A great Work outfit is not an excuse to
-    // wear a wool coat at 39°C.
-    const HOT_THRESHOLD_C = 26;
-    const COLD_THRESHOLD_C = 10;
-    const HEAVY_SIGNAL = /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool knit|maglione|sweater|felted|fleece|boots?\b|stivali/i;
-    const LIGHT_SIGNAL = /tank|canotta|sandal|sandalo|shorts?\b|infradito|flip.?flop|sleeveless|senza maniche/i;
-    /** Hard exclusion for weather: heavy pieces never pass when it's hot,
-     *  bare/light pieces never pass when it's cold — for ANY occasion. */
-    const violatesWeather = (ids: string[]): boolean => {
-      if (data.temperature == null) return false;
-      const hot = data.temperature >= HOT_THRESHOLD_C;
-      const cold = data.temperature <= COLD_THRESHOLD_C;
-      if (!hot && !cold) return false;
-      return ids.some((id) => {
-        const item = catalog.find((c) => c.id === id);
-        if (!item) return false;
-        const text = `${item.category} ${item.subcategory} ${(item.styleTags ?? []).join(" ")}`;
-        const season = (item.season ?? "").toLowerCase();
-        if (hot) {
-          if (season === "winter") return true;
-          if (HEAVY_SIGNAL.test(text)) return true;
-        }
-        if (cold) {
-          if (season === "summer" && LIGHT_SIGNAL.test(text)) return true;
-        }
-        return false;
-      });
-    };
+    // wear a wool coat at 39°C. See outfit-weather-rules.ts: this used to
+    // be a local, divergent copy of the same check used elsewhere — it
+    // missed material entirely and used a strict `season === "winter"`
+    // that silently never matched multi-value season tags like
+    // "Autumn, Winter". Both are fixed by using the shared function.
+    const violatesWeather = (ids: string[]): boolean => anyItemViolatesWeather(ids, catalog, data.temperature ?? null);
 
     // Technical/running shoes are a hard exclusion from every look this
     // engine produces — this engine styles outfits (Today's edit, Work,
