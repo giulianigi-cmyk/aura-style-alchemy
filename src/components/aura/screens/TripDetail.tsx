@@ -57,6 +57,9 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
   const [activities, setActivities] = useState<TripActivity[]>([]);
   const [packingItems, setPackingItems] = useState<TripPackingItem[]>([]);
   const [outfitPlans, setOutfitPlans] = useState<OutfitPlan[]>([]);
+  const [capsuleItems, setCapsuleItems] = useState<{ id: string; wardrobe_item_id: string; source: string }[]>([]);
+  const [capsulePickerOpen, setCapsulePickerOpen] = useState(false);
+  const [capsuleBusyId, setCapsuleBusyId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genResult, setGenResult] = useState<{ generated: number; failed: { date: string; daySegment: string; reason: string }[]; unclassifiedExcluded: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,6 +144,11 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
             setWardrobeItems(list);
             setWardrobeSigned(await resolveWardrobeUrls(list));
           }
+          const { data: capsuleRows } = await (supabase.from("trip_capsule_items" as never) as any)
+            .select("id, wardrobe_item_id, source")
+            .eq("trip_id", tripId)
+            .eq("removed_by_user", false);
+          setCapsuleItems((capsuleRows ?? []) as { id: string; wardrobe_item_id: string; source: string }[]);
         }
       })
       .catch((e) => { console.error("[AURA trip-detail] load failed", e); toast.error(t("tripDetail.couldntLoadTrip")); })
@@ -408,6 +416,36 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
       return;
     }
     void regenerateActivity(activityId);
+  };
+
+  /** A manual removal wins permanently for this trip (see
+   *  trip-capsule-persistence.ts) — upsert rather than delete, so the row
+   *  (and its removed_by_user=true) survives even if the item was never
+   *  in the capsule as an 'automatic' row yet. */
+  const removeFromCapsule = async (wardrobeItemId: string) => {
+    if (!trip) return;
+    setCapsuleBusyId(wardrobeItemId);
+    setCapsuleItems((prev) => prev.filter((c) => c.wardrobe_item_id !== wardrobeItemId));
+    const { error } = await (supabase.from("trip_capsule_items" as never) as any)
+      .upsert(
+        { trip_id: trip.id, wardrobe_item_id: wardrobeItemId, removed_by_user: true },
+        { onConflict: "trip_id,wardrobe_item_id" },
+      );
+    setCapsuleBusyId(null);
+    if (error) { toast.error(t("tripDetail.couldntUpdateCapsule")); load(); }
+  };
+
+  const addToCapsule = async (wardrobeItemId: string) => {
+    if (!trip) return;
+    const already = capsuleItems.some((c) => c.wardrobe_item_id === wardrobeItemId);
+    if (already) return;
+    setCapsuleItems((prev) => [...prev, { id: `pending-${wardrobeItemId}`, wardrobe_item_id: wardrobeItemId, source: "user" }]);
+    const { error } = await (supabase.from("trip_capsule_items" as never) as any)
+      .upsert(
+        { trip_id: trip.id, wardrobe_item_id: wardrobeItemId, source: "user", removed_by_user: false },
+        { onConflict: "trip_id,wardrobe_item_id" },
+      );
+    if (error) { toast.error(t("tripDetail.couldntUpdateCapsule")); load(); }
   };
 
   const startEditPlan = (plan: OutfitPlan) => {
@@ -724,6 +762,47 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
         </div>
       )}
 
+      {capsulePickerOpen && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{t("tripDetail.yourWardrobe")}</p>
+              <p className="font-serif text-xl">{t("tripDetail.tapToAddToCapsule")}</p>
+            </div>
+            <button onClick={() => setCapsulePickerOpen(false)} className="h-9 w-9 rounded-full border border-border flex items-center justify-center"><X size={16} /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-4">
+            {wardrobeLoading ? (
+              <div className="flex justify-center mt-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
+            ) : wardrobeItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground mt-8 text-center">{t("tripDetail.noPiecesYet")}</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {wardrobeItems.map((it) => {
+                  const src = thumbSrc(it, wardrobeSigned);
+                  const inCapsule = capsuleItems.some((c) => c.wardrobe_item_id === it.id);
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => void addToCapsule(it.id)}
+                      disabled={inCapsule}
+                      className={`relative aspect-square rounded-xl overflow-hidden border-2 transition ${inCapsule ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: "#FFFFFF" }}
+                    >
+                      {src ? <img src={src} className="h-full w-full object-contain p-1.5" alt="" loading="lazy" /> : null}
+                      {inCapsule && <span className="absolute top-1 right-1 h-5 w-5 rounded-full bg-foreground text-background text-[10px] flex items-center justify-center">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/60">
+            <button onClick={() => setCapsulePickerOpen(false)} className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em]">{t("tripDetail.done")}</button>
+          </div>
+        </div>
+      )}
+
       {editingPlan && (
         <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-fade-in">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 pt-14">
@@ -967,6 +1046,36 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {capsuleItems.length > 0 && (
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-serif text-xl italic">{t("tripDetail.tripCapsule")}</h2>
+              <button
+                onClick={() => setCapsulePickerOpen(true)}
+                className="h-7 px-3 rounded-full border border-border text-[9px] uppercase tracking-[0.2em]"
+              >{t("tripDetail.addToCapsule")}</button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-2">{t("tripDetail.tripCapsuleHint")}</p>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              {capsuleItems.map((c) => {
+                const it = wardrobeItems.find((w) => w.id === c.wardrobe_item_id);
+                const src = it ? thumbSrc(it, wardrobeSigned) : "";
+                return (
+                  <div key={c.wardrobe_item_id} className="relative shrink-0 h-16 w-16 rounded-xl overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+                    {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
+                    <button
+                      onClick={() => void removeFromCapsule(c.wardrobe_item_id)}
+                      disabled={capsuleBusyId === c.wardrobe_item_id}
+                      aria-label={t("tripDetail.removeFromCapsuleAria")}
+                      className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
+                    ><X size={10} /></button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
