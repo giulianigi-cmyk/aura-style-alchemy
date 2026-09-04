@@ -969,7 +969,10 @@
     "foundExistingOutfitTitle": "Vous avez déjà une tenue pour ça",
     "foundExistingOutfitHint": "Vous avez déjà prévu une tenue pour « {{name}} » — utiliser celle-ci, ou en générer une nouvelle pour le voyage ?",
     "generateNewInstead": "En générer une nouvelle",
-    "useThisOutfit": "Utiliser cette tenue"
+    "useThisOutfit": "Utiliser cette tenue",
+    "regenerateWornTitle": "Régénérer une tenue déjà portée ?",
+    "regenerateWornHint": "Vous avez déjà confirmé avoir porté cette tenue pour \"{{name}}\". La régénérer remplacera cet enregistrement.",
+    "regenerateAnyway": "Régénérer quand même"
   },
   "batchReview": {
     "couldntLoadBatch": "Impossible de charger ce lot.",
