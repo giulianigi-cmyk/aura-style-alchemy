@@ -3,6 +3,7 @@ import { dressPreferencesToPrompt, type DressPreferences } from "./dress-prefere
 import { resolvePlanSlot } from "./outfit-plan-slot";
 import { getTripWeatherMap, weatherKey } from "./trip-weather.server";
 import { describeWeather } from "./weather";
+import { computeCapsuleSeedAndExclusions } from "./trip-capsule-persistence";
 
 function daysBetween(a: string, b: string): number {
   return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
@@ -368,13 +369,14 @@ export async function generateTripCapsuleCore({ data, context }: {
       }, withCoords[0]);
     }
 
-    const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }] =
+    const [{ data: profileRow }, { data: sourceLocRows }, { data: activityRows }, { data: existingPlans }, { data: itemsRaw }, { data: capsuleRows }] =
       await Promise.all([
         (supabase.from("profiles" as never) as any).select("dress_preferences, gender, style_boldness").eq("id", userId).maybeSingle(),
         (supabase.from("trip_source_locations" as never) as any).select("location_id").eq("trip_id", data.tripId),
         (supabase.from("trip_day_activities" as never) as any).select("*").eq("trip_id", data.tripId).order("activity_date"),
         (supabase.from("outfit_plans" as never) as any).select("trip_activity_id, item_ids").eq("trip_id", data.tripId),
         supabase.from("wardrobe_items").select("*").eq("user_id", userId).eq("archived", false),
+        (supabase.from("trip_capsule_items" as never) as any).select("wardrobe_item_id, removed_by_user").eq("trip_id", data.tripId),
       ]);
 
     const profile = profileRow as { dress_preferences?: DressPreferences; gender?: string | null; style_boldness?: string | null } | null;
@@ -481,9 +483,23 @@ export async function generateTripCapsuleCore({ data, context }: {
     const locationFiltered = sourceLocationIds.length
       ? allItems.filter((it) => it.location_id == null || sourceLocationIds.includes(it.location_id))
       : allItems;
+    const persistedCapsule = ((capsuleRows ?? []) as { wardrobe_item_id: string; removed_by_user: boolean }[]);
+    // Legacy fallback for trips generated before trip_capsule_items
+    // existed — see trip-capsule-persistence.ts.
+    const legacyOutfitPlanItemIds = ((existingPlans ?? []) as { trip_activity_id: string | null; item_ids: string[] | null }[])
+      .flatMap((p) => p.item_ids ?? []);
+    const { seedIds: persistedSeedIds, excludedIds: capsuleExcludedIds } =
+      computeCapsuleSeedAndExclusions(persistedCapsule, legacyOutfitPlanItemIds);
+    const capsuleExcludedSet = new Set(capsuleExcludedIds);
+
     const pool: PoolItem[] = [];
     let unclassifiedExcluded = 0;
     for (const it of locationFiltered) {
+      // A manual removal from this trip's capsule wins over everything
+      // else, permanently for this trip — the item isn't just deprioritized,
+      // it's not a candidate at all, so neither buildCapsule nor the AI
+      // inside suggestOutfitCore can pick it back up.
+      if (capsuleExcludedSet.has(it.id)) continue;
       // Swimwear/Activewear are single-purpose categories that almost
       // nobody classifies, so an implicit casual/daytime reading is used
       // instead of dropping them — for every other category a missing
@@ -505,16 +521,15 @@ export async function generateTripCapsuleCore({ data, context }: {
     const seasonByDate = new Map<string, string>();
     capped.forEach((r) => { if (!seasonByDate.has(r.date)) seasonByDate.set(r.date, seasonForDate(r.date)); });
 
-    // Seed for buildCapsule (see its own comment): every item already
-    // used in a plan for this trip that generation is skipping this run
-    // (i.e. days already planned — targeted runs never skip anything, so
-    // this collapses to empty there, which is correct: a targeted
-    // regenerate of one activity has no business pulling in unrelated
-    // days' items as a "preference").
-    const existingCapsuleSeed: string[] = targeted
-      ? []
-      : ((existingPlans ?? []) as { trip_activity_id: string | null; item_ids: string[] | null }[])
-          .flatMap((p) => p.item_ids ?? []);
+    // Seed for buildCapsule (see its own comment): the trip's persistent
+    // capsule (trip_capsule_items, merged with the legacy fallback) — not
+    // just what's already in outfit_plans, so an item added on Day 2 that
+    // never actually made it into that day's chosen outfit is still
+    // available as a preference for Day 3. Targeted runs (regenerate one
+    // activity) never seed — a single-day regenerate has no business
+    // forcing in unrelated days' items as a "preference", though
+    // exclusions above still apply either way.
+    const existingCapsuleSeed: string[] = targeted ? [] : persistedSeedIds;
 
     const capsule = buildCapsule(pool, capped, seasonByDate, existingCapsuleSeed);
 
@@ -619,6 +634,24 @@ export async function generateTripCapsuleCore({ data, context }: {
         continue;
       }
       created.push({ date: req.date, daySegment: req.daySegment });
+    }
+
+    // Persist what was actually chosen this run into the durable capsule
+    // — only items that made it into a real generated outfit, not every
+    // raw buildCapsule() candidate, to keep the persisted capsule genuinely
+    // minimal rather than accumulating "considered but never worn" items.
+    // ignoreDuplicates: a row already present (whatever its source or
+    // removed_by_user) is left exactly as it is — this never resurrects a
+    // manual removal (impossible anyway, since excluded items can't reach
+    // allChosenItemIds) and never overwrites a 'user'-sourced row's source.
+    if (allChosenItemIds.size) {
+      const capsuleRowsToInsert = Array.from(allChosenItemIds).map((wardrobe_item_id) => ({
+        trip_id: data.tripId,
+        wardrobe_item_id,
+        source: "automatic" as const,
+      }));
+      await (supabase.from("trip_capsule_items" as never) as any)
+        .upsert(capsuleRowsToInsert, { onConflict: "trip_id,wardrobe_item_id", ignoreDuplicates: true });
     }
 
     // --- Underwear / sleepwear: excluded from `pool` above along with
