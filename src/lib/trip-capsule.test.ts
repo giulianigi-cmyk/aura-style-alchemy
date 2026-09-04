@@ -55,3 +55,36 @@ test("seed omesso del tutto (retrocompatibilità della firma) equivale a nessun 
   const capsule = buildCapsule(pool, [req], new Map());
   assert.ok(capsule instanceof Set);
 });
+
+test("REGRESSIONE — un capo 'universale' preso dal giorno più vincolato non deve bloccare l'aggiunta di altri capi eleggibili nei giorni successivi", () => {
+  // Riproduce il meccanismo esatto: un top a stagione nulla (eleggibile
+  // ovunque) più 3 top solo estivi. Il giorno invernale (il più vincolato:
+  // solo il top universale è eleggibile) viene processato per primo e
+  // prende quell'unico top. Prima del fix, i giorni estivi vedevano quel
+  // top universale già in inCapsule (è eleggibile anche per loro) e
+  // hasRole() considerava il ruolo Top "già soddisfatto" — i 3 top estivi,
+  // pur eleggibili e mai scelti, non venivano mai aggiunti.
+  const pool: PoolItem[] = [
+    item({ id: "top-universal", category: "Tops", season: null }),
+    item({ id: "top-summer-1", category: "Tops", season: "Summer" }),
+    item({ id: "top-summer-2", category: "Tops", season: "Summer" }),
+    item({ id: "top-summer-3", category: "Tops", season: "Summer" }),
+    item({ id: "bottom-1", category: "Bottoms", season: null }),
+    item({ id: "shoes-1", category: "Shoes", season: null }),
+    item({ id: "bag-1", category: "Bags", season: null }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "d1", date: "2026-01-10", daySegment: "day", dressCode: null, label: "Everyday" },
+    { activityId: "d2", date: "2026-07-10", daySegment: "day", dressCode: null, label: "Everyday" },
+    { activityId: "d3", date: "2026-07-11", daySegment: "day", dressCode: null, label: "Everyday" },
+    { activityId: "d4", date: "2026-07-12", daySegment: "day", dressCode: null, label: "Everyday" },
+  ];
+  const seasonByDate = new Map([
+    ["2026-01-10", "Winter"],
+    ["2026-07-10", "Summer"], ["2026-07-11", "Summer"], ["2026-07-12", "Summer"],
+  ]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const topsInCapsule = Array.from(capsule).filter((id) => id.startsWith("top-"));
+  assert.ok(topsInCapsule.length > 1, `attesi più top in capsule (i top estivi eleggibili non dovevano restare esclusi), trovati solo: ${topsInCapsule.join(", ")}`);
+});
