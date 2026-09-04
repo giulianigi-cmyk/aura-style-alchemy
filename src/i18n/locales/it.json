@@ -746,7 +746,13 @@
     "whatDidYouWear": "Cosa hai indossato realmente?",
     "selectedCount_one": "{{count}} selezionato",
     "selectedCount_other": "{{count}} selezionati",
-    "confirmWorn": "Conferma indossato"
+    "confirmWorn": "Conferma indossato",
+    "dismissEventAria": "Scarta questo evento",
+    "couldntDismissEvent": "Non sono riuscito a scartare l'evento",
+    "couldntRecoverEvent": "Non sono riuscito a recuperare l'evento",
+    "recoverEvent": "Recupera",
+    "dismissedEventsCount": "{{count}} eventi scartati",
+    "removedFromCalendar": "· rimosso dal calendario"
   },
   "aiStylist": {
     "notEnoughActivePieces_one": "Hai {{count}} capo nel guardaroba attivo. Aggiungine almeno 3 (o ripristina uno archiviato) per generare un outfit AI.",
