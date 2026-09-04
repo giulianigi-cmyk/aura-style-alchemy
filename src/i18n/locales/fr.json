@@ -753,6 +753,7 @@
     "toastOutfitDeleted": "Tenue supprimée",
     "toastMarkedAsWorn": "Marquée comme portée",
     "removeThisPieceAria": "Retirer cette pièce",
+    "couldntUpdateOutfit": "Impossible de mettre à jour la tenue", "addAPiece": "Ajouter une pièce", "sizeLabel": "Taille {{size}}",
     "addAPieceAria": "Ajouter une pièce",
     "atelier": "Atelier",
     "stylist": "Styliste",
