@@ -22,6 +22,10 @@ const ListSchema = z.object({ tripId: z.string().uuid() });
  * recurring reminder) — surfacing them here as a pick list, not
  * importing them, is what keeps those out of trip activities and
  * capsule generation entirely unless explicitly chosen.
+ *
+ * Also excludes events the person already dismissed elsewhere (Planner —
+ * dismissed_by_user) and events no longer in the source calendar
+ * (removed_from_source): neither belongs in a "pick one to import" list.
  */
 export const listCalendarEventsForTrip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -51,6 +55,8 @@ export const listCalendarEventsForTrip = createServerFn({ method: "POST" })
     const { data: events, error } = await (supabase.from("calendar_events_cache" as never) as any)
       .select("id, title, start_time, end_time, all_day")
       .eq("user_id", userId)
+      .eq("dismissed_by_user", false)
+      .eq("removed_from_source", false)
       .gte("start_time", `${minDate}T00:00:00Z`)
       .lte("start_time", `${maxDate}T23:59:59Z`)
       .order("start_time");
