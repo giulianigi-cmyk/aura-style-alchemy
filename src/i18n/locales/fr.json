@@ -978,7 +978,13 @@
     "useThisOutfit": "Utiliser cette tenue",
     "regenerateWornTitle": "Régénérer une tenue déjà portée ?",
     "regenerateWornHint": "Vous avez déjà confirmé avoir porté cette tenue pour \"{{name}}\". La régénérer remplacera cet enregistrement.",
-    "regenerateAnyway": "Régénérer quand même"
+    "regenerateAnyway": "Régénérer quand même",
+    "tripCapsule": "Trip Capsule",
+    "tripCapsuleHint": "Pièces disponibles pour ce voyage. Le générateur les privilégie avant d'en proposer d'autres.",
+    "addToCapsule": "Ajouter",
+    "tapToAddToCapsule": "Touchez pour ajouter à la capsule",
+    "removeFromCapsuleAria": "Retirer de la Trip Capsule",
+    "couldntUpdateCapsule": "Impossible de mettre à jour la Trip Capsule"
   },
   "batchReview": {
     "couldntLoadBatch": "Impossible de charger ce lot.",
