@@ -770,6 +770,7 @@
     "toastOutfitDeleted": "Outfit deleted",
     "toastMarkedAsWorn": "Marked as worn",
     "removeThisPieceAria": "Remove this piece",
+    "couldntUpdateOutfit": "Couldn't update outfit", "addAPiece": "Add a piece", "sizeLabel": "Size {{size}}",
     "addAPieceAria": "Add a piece",
     "atelier": "Atelier",
     "stylist": "Stylist",
