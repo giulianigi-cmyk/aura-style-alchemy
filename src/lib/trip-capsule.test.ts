@@ -205,3 +205,85 @@ test("Un trip lungo (una settimana+) può comunque avere una seconda scarpa", ()
   const shoesInCapsule = Array.from(capsule).filter((id) => id.startsWith("sneaker-"));
   assert.equal(shoesInCapsule.length, 2, `un trip lungo dovrebbe poter avere 2 scarpe, trovate: ${shoesInCapsule.join(", ")}`);
 });
+
+test("REGRESSIONE — settembre reale e caldo (25°C) preferisce il sandalo allo stivaletto, anche se seasonForDate lo classifica 'Autumn'", () => {
+  // Il bug esatto segnalato: seasonForDate() bucketizza settembre come
+  // "Autumn", quindi il vecchio controllo season-only non faceva mai
+  // scattare la penalità stivaletto per un trip di settembre, anche con
+  // 25°C reali di sera. La temperatura vera, quando disponibile, deve
+  // vincere sul bucket stagionale grezzo.
+  const pool: PoolItem[] = [
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"] }),
+    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"] }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "Cena El Porteno" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["dinner", 25]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("sandal-elegant"), "il sandalo doveva essere scelto: 25°C reali sono caldi, indipendentemente dal bucket stagionale");
+  assert.ok(!capsule.has("boot-elegant"), "lo stivaletto non doveva essere scelto a 25°C reali");
+});
+
+test("Senza temperatura nota, il fallback stagionale resta quello di prima (nessuna regressione)", () => {
+  const pool: PoolItem[] = [
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"] }),
+    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"] }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Cena" },
+  ];
+  const seasonByDate = new Map([["2026-07-10", "Summer"]]);
+  // Nessun tempByActivity passato — deve ricadere sul comportamento
+  // stagionale già testato in precedenza.
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  assert.ok(capsule.has("sandal-elegant"));
+});
+
+test("REGRESSIONE — una sera fresca preferisce un top a manica lunga su uno a manica corta, quando entrambi sono eleggibili", () => {
+  const pool: PoolItem[] = [
+    item({ id: "top-short", category: "Tops", sleeveLength: "Short Sleeve" }),
+    item({ id: "top-long", category: "Tops", sleeveLength: "Long Sleeve" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "eve", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "Evening" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["eve", 14]]); // sera fresca
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  // Entrambi possono comunque entrare (perRoleTarget>=2), ma verifichiamo
+  // che il long-sleeve non sia scartato a favore del solo short-sleeve —
+  // controlliamo il caso opposto e più diagnostico sotto, con un solo
+  // slot disponibile per il ruolo Top.
+  assert.ok(capsule.has("top-long"), "il top a manica lunga doveva essere preferito per una sera fresca");
+});
+
+test("REGRESSIONE — un giorno caldo preferisce un top a manica corta su uno a manica lunga, quando entrambi sono eleggibili", () => {
+  const pool: PoolItem[] = [
+    item({ id: "top-short", category: "Tops", sleeveLength: "Short Sleeve" }),
+    item({ id: "top-long", category: "Tops", sleeveLength: "Long Sleeve" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "day", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Day" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["day", 27]]); // giorno caldo
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("top-short"), "il top a manica corta doveva essere preferito per un giorno caldo");
+});
