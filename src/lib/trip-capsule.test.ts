@@ -11,7 +11,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity } from "./trip-capsule.server";
+import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity, applyTransportPracticalityFilter } from "./trip-capsule.server";
 
 function item(overrides: Partial<PoolItem> & { id: string }): PoolItem {
   return {
@@ -518,4 +518,36 @@ test("REGRESSIONE — un'attività di trasporto preferisce i pantaloni alla gonn
 
   const capsule = buildCapsule(pool, requirements, seasonByDate, []);
   assert.ok(capsule.has("trousers"), "i pantaloni dovevano essere preferiti per un'attività di trasporto");
+});
+
+// ---------------------------------------------------------------------------
+// applyTransportPracticalityFilter — la regola rigida, non più solo un
+// punteggio più basso
+// ---------------------------------------------------------------------------
+
+test("REGRESSIONE — un'attività di trasporto esclude gonne e abiti corti quando esistono pantaloni disponibili", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "dress", category: "Dresses" }),
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true);
+  assert.ok(!filtered.some((it) => it.id === "skirt"), "la gonna non deve comparire quando i pantaloni sono disponibili");
+  assert.ok(!filtered.some((it) => it.id === "dress"));
+  assert.ok(filtered.some((it) => it.id === "trousers"));
+});
+
+test("Se la gonna è l'unica opzione disponibile per il trasporto, resta quella (mai slot vuoto)", () => {
+  const candidates: PoolItem[] = [item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" })];
+  const filtered = applyTransportPracticalityFilter(candidates, true);
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, "skirt");
+});
+
+test("Nessun filtro applicato quando l'attività NON è di trasporto", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
+  ];
+  assert.equal(applyTransportPracticalityFilter(candidates, false).length, 2);
 });
