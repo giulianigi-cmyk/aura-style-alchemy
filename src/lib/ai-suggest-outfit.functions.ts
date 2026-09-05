@@ -5,7 +5,7 @@ import { z } from "zod";
 import { parseAiJson } from "./ai-json";
 import { isItemAtAnyLocation } from "./wardrobe-location";
 import { isItemAllowedByDressPreferences, hasAnyPreference, type DressPreferences } from "./dress-preferences";
-import { anyItemViolatesWeather } from "./outfit-weather-rules";
+import { anyItemViolatesWeather, violatesSleeveClimate } from "./outfit-weather-rules";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -68,6 +68,14 @@ export async function suggestOutfitCore(params: {
   items: SuggestOutfitItem[];
   avoidItemIds?: string[];
   locationIdOverride?: string | null;
+  // Optional — trip-capsule.server.ts passes this explicitly (it always
+  // knows the real day/evening slot for a requirement, independent of
+  // whatever the activity happens to be called). Falls back to reading
+  // "evening" out of `occasion` text below for callers that don't have a
+  // dedicated field yet (the on-demand/manual generator, where the
+  // person picks "Evening" as one of the seven selectable occasions and
+  // it lands directly in that string).
+  daySegment?: "day" | "evening" | null;
   /**
    * Explicit multi-location selection (e.g. "use my main wardrobe AND
    * the beach house while I'm on this trip") — when provided, this
@@ -84,6 +92,19 @@ export async function suggestOutfitCore(params: {
    * the look rather than preserve summer pieces at any cost.
    */
   baseItemIds?: string[];
+  /**
+   * A ready-made, deterministically-computed sentence about how this
+   * segment's temperature compares to its trip-day counterpart (e.g.
+   * "This evening is cooler than today's daytime..."). Computed by the
+   * caller (trip-capsule.server.ts already has both tempMax and tempMin
+   * for the same date) rather than re-derived here, and injected as a
+   * proper system-prompt "Default:" rule — NOT appended to the occasion
+   * string, which is a much weaker channel: everything else this
+   * function reliably follows lives in the system prompt's own list of
+   * Default rules, so this joins that list instead of being a novel,
+   * easy-to-miss aside.
+   */
+  relativeWarmthHint?: string | null;
 
 }): Promise<{ ok: true; item_ids: string[]; explanation: string } | { ok: false; error: string }> {
   const key = process.env.LOVABLE_API_KEY;
@@ -263,6 +284,7 @@ export async function suggestOutfitCore(params: {
     "Default: an evening-specific piece (an evening gown, a cocktail dress, anything formality 5) belongs in an Evening segment, not Day — deviate only if the eligible pieces genuinely leave nothing better for that day.",
     "Default: keep formality roughly consistent across the outfit — an elegant, dressed-up piece paired with something at the opposite end (flip-flops with a tailored dress, gym sneakers with a cocktail dress) usually reads as unintentional. A deliberate contrast (like a smart top with clean minimal sneakers) can absolutely work when the rest of the outfit supports it as a coherent choice rather than an accident.",
     "Above ~25°C, prefer a top that hasn't already been worn earlier in this batch over one that has, even if it scores slightly lower on style — a fresh piece matters more in hot weather (sweat, hygiene) than in cooler seasons, where repeating a top once or twice is completely normal.",
+    ...(params.relativeWarmthHint ? [`Default: ${params.relativeWarmthHint}`] : []),
     ...(boldnessLine ? [boldnessLine] : []),
     "NEVER pick more than one outerwear/layering piece in the same outfit — a blazer and a cardigan (or any two of blazer/cardigan/jacket/coat) are never worn together. Pick at most one.",
     "A Dress or Jumpsuit is a complete base on its own and REPLACES both top and bottom — NEVER combine a Dress or Jumpsuit with a separate Bottoms item (trousers, jeans, shorts, skirt) in the same outfit. If you pick a Dress or Jumpsuit, do not also pick anything from the Bottoms category.",
@@ -389,6 +411,27 @@ export async function suggestOutfitCore(params: {
       return !tags.includes(targetOccasionBase);
     });
 
+  // Not a hard style rule the way violatesWeather is — a long-sleeve top
+  // isn't wrong at 21°C, just a worse pick than a short-sleeve one when
+  // both sat in the same catalog. violatesSleeveClimate itself only
+  // returns true when that better alternative existed and went unused,
+  // so this never fires when a mismatched top is genuinely the only one
+  // available — see its own comment for the reasoning (this is what
+  // makes a day/evening sleeve contrast enforced rather than hoped for
+  // from a prompt sentence).
+  const violatesSleeve = (ids: string[]): boolean => violatesSleeveClimate(ids, catalog, params.temperature);
+
+  // Sunglasses are a genuinely unconditional exclusion, not a soft
+  // preference — nobody wears them after dark, so there's no fallback
+  // case to protect the way violatesSleeve protects "it was the only
+  // top available". isEvening checks the explicit param first, falling
+  // back to the on-demand generator's occasion text (where "Evening" is
+  // one of the seven literal occasion choices) for callers that don't
+  // pass daySegment yet.
+  const isEvening = params.daySegment === "evening" || (params.occasion ?? "").toLowerCase().includes("evening");
+  const violatesEveningSunglasses = (ids: string[]): boolean =>
+    isEvening && ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Sunglasses");
+
   const isValidResult = (ids: string[]): boolean => {
     if (!ids.length) return false;
     if (hasSlotViolation(ids)) return false;
@@ -397,6 +440,8 @@ export async function suggestOutfitCore(params: {
     if (missingMandatoryBag(ids)) return false;
     if (violatesFootwearRule(ids)) return false;
     if (violatesOccasionTag(ids)) return false;
+    if (violatesSleeve(ids)) return false;
+    if (violatesEveningSunglasses(ids)) return false;
     return true;
   };
 
@@ -443,7 +488,7 @@ export async function suggestOutfitCore(params: {
       try {
         const retry = await generateText({
           model,
-          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, an evening-coded/bare-shoulder piece for a Work occasion, an item excluded by the person's stated dress preferences, a piece unsuitable for the actual temperature — e.g. a wool/heavy piece when it's hot, or a bare/light piece when it's cold — or missing the mandatory bag for a women's outfit). Try again, respecting every rule strictly this time.",
+          system: system + "\n\nIMPORTANT — your previous answer broke a hard rule above (either more than one item in the same slot, an evening-coded/bare-shoulder piece for a Work occasion, an item excluded by the person's stated dress preferences, a piece unsuitable for the actual temperature — e.g. a wool/heavy piece when it's hot, or a bare/light piece when it's cold — a long-sleeve top when a short-sleeve one was available and it's mild-to-warm out, or the reverse when it's mild-to-cool — sunglasses in an evening look — or missing the mandatory bag for a women's outfit). Try again, respecting every rule strictly this time.",
           messages: [{ role: "user", content: userContent }],
         });
         const retryParsed = parseAiJson(retry.text, OutputSchema);
@@ -475,6 +520,7 @@ export async function suggestOutfitCore(params: {
             if (isWorkOccasion && violatesWorkRules([id])) return false;
             if (violatesFootwearRule([id])) return false;
             if (violatesOccasionTag([id])) return false;
+            if (violatesEveningSunglasses([id])) return false;
             return true;
           });
         }
