@@ -508,7 +508,7 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
   const maxDate = destinations.length ? destinations.map((d) => d.end_date).sort().slice(-1)[0] : undefined;
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pb-28">
+    <div className="h-full overflow-y-auto no-scrollbar pb-44">
       <header className="px-6 pt-14 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={() => go("trips")} className="h-10 w-10 rounded-full border border-border flex items-center justify-center active:scale-90 shrink-0">
@@ -1196,14 +1196,16 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
           </div>
         )}
 
-        <button
-          onClick={() => void generateCapsule()}
-          disabled={generating}
-          className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40"
-        >
-          {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-          {outfitPlans.length > 0 ? t("tripDetail.generateRemaining") : t("tripDetail.generateOutfits")}
-        </button>
+        <div className="absolute bottom-20 left-0 right-0 z-30 px-5 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
+          <button
+            onClick={() => void generateCapsule()}
+            disabled={generating}
+            className="w-full h-11 rounded-full bg-foreground text-background text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2 disabled:opacity-40 shadow-luxe pointer-events-auto"
+          >
+            {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {outfitPlans.length > 0 ? t("tripDetail.generateRemaining") : t("tripDetail.generateOutfits")}
+          </button>
+        </div>
         {activities.length === 0 && (
           <p className="mt-2 text-[11px] text-muted-foreground text-center">{t("tripDetail.noActivitiesHint")}</p>
         )}
