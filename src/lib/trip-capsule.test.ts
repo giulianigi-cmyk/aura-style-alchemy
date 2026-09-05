@@ -667,6 +667,38 @@ test("Con 'Soggiorno' loggato lo stesso giorno, il cambio è assunto possibile a
   assert.equal(changeAssumedPossible(train, all, activities), true);
 });
 
+test("REGRESSIONE — settembre a 32°C reali allarga comunque il target dei top, anche se il bucket calendario dice 'Autumn'", () => {
+  // Trip di 5 giorni (10 requisiti, day+evening) — con questa lunghezza
+  // perRoleTarget e approxTripDays divergono abbastanza da rendere la
+  // differenza hot/non-hot davvero verificabile (con pochi requisiti i
+  // due target possono coincidere per coincidenza, mascherando il fix).
+  const pool: PoolItem[] = [
+    item({ id: "tshirt-1", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "tshirt-2", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "tshirt-3", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "tshirt-4", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "tshirt-5", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const dates = ["2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"];
+  const requirements: Requirement[] = dates.flatMap((date) => ([
+    { activityId: `${date}-day`, date, daySegment: "day" as const, dressCode: null, label: "Day" },
+    { activityId: `${date}-eve`, date, daySegment: "evening" as const, dressCode: null, label: "Evening" },
+  ]));
+  const seasonByDate = new Map(dates.map((d) => [d, "Autumn"]));
+  const tempByActivity = new Map(requirements.map((r) => [r.activityId, 32]));
+
+  const hotCapsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  const hotTops = Array.from(hotCapsule).filter((id) => id.startsWith("tshirt-"));
+
+  const noTempCapsule = buildCapsule(pool, requirements, seasonByDate, [], new Map());
+  const noTempTops = Array.from(noTempCapsule).filter((id) => id.startsWith("tshirt-"));
+
+  assert.ok(hotTops.length > noTempTops.length, `il caldo reale doveva allargare la rotazione dei top rispetto al fallback stagionale (bucket 'Autumn'): caldo=${hotTops.length}, fallback=${noTempTops.length}`);
+});
+
 test("isTransportActivity riconosce anche 'Milano Centrale - Firenze SMN 9551' senza la parola treno/train", () => {
   assert.equal(isTransportActivity("Milano Centrale - Firenze SMN 9551"), true, "il caso reale segnalato — nessuna parola 'treno' o 'train', solo nomi di stazione");
   assert.equal(isTransportActivity("Aeroporto di Fiumicino"), true);
