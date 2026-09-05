@@ -558,6 +558,21 @@ export function applyHardDressCodeFilter(candidates: PoolItem[], dressCode: stri
   return candidates;
 }
 
+// A skirt or short dress on a train/flight/ferry isn't a style
+// preference gone slightly wrong, it was reported as actively unwanted —
+// so this is a hard filter like Formal/Sport above, not the softer
+// versatility() nudge alone. Falls back to the unfiltered list only if
+// excluding them would leave nothing at all, same "never fail the slot"
+// guarantee every hard filter in this pipeline follows.
+export function applyTransportPracticalityFilter(candidates: PoolItem[], isTransport: boolean): PoolItem[] {
+  if (!isTransport) return candidates;
+  const practical = candidates.filter((it) => {
+    const isSkirtOrShortDress = it.category === "Dresses" || /skirt|gonna/i.test(it.subcategory ?? "");
+    return !isSkirtOrShortDress;
+  });
+  return practical.length > 0 ? practical : candidates;
+}
+
 export async function generateTripCapsuleCore({ data, context }: {
   data: { tripId: string; activityIds?: string[] };
   context: { supabase: any; userId: string };
@@ -625,16 +640,18 @@ export async function generateTripCapsuleCore({ data, context }: {
     // person entered it. Only runs on a full-trip generate — a targeted
     // regenerate of specific activities has no business inventing new ones.
     //
-    // Exception: the trip's FIRST and LAST dates. A logged transport
-    // activity there (an outbound/return train, flight, ferry) already
-    // answers "what am I doing that day" — arrival/departure day is
-    // built around getting there or getting home, not a separate outfit
-    // for whichever segment the journey didn't happen to land in.
-    // Scaffolding one anyway defeats the exact point of giving the trip
-    // a real, bounded start and end.
+    // Exception: ANY date with a logged transport activity (a train,
+    // flight, ferry — outbound, return, or a leg moving between cities
+    // mid-trip). A travel day already answers "what am I doing that day"
+    // on its own — it doesn't need a separate invented outfit for
+    // whichever segment the journey didn't happen to land in just
+    // because the person hasn't explicitly planned an evening yet. This
+    // used to only apply to the trip's first/last date; a mid-trip city-
+    // to-city train got the same unwanted extra slot as any other day.
     if (!data.activityIds?.length && tripStartDate && tripEndDate) {
-      const hasTransportOnFirstDay = activities.some((a) => a.activity_date === tripStartDate && isTransportActivity(a.activity_type));
-      const hasTransportOnLastDay = activities.some((a) => a.activity_date === tripEndDate && isTransportActivity(a.activity_type));
+      const transportDates = new Set(
+        activities.filter((a) => isTransportActivity(a.activity_type)).map((a) => a.activity_date),
+      );
       const covered = new Set(
         activities.map((a) => `${a.activity_date}|${a.day_segment === "evening" ? "evening" : "day"}`),
       );
@@ -645,7 +662,7 @@ export async function generateTripCapsuleCore({ data, context }: {
       const toInsert = tripDates.flatMap((date) =>
         (["day", "evening"] as const)
           .filter((segment) => !covered.has(`${date}|${segment}`))
-          .filter(() => !(date === tripEndDate && hasTransportOnLastDay) && !(date === tripStartDate && hasTransportOnFirstDay))
+          .filter(() => !transportDates.has(date))
           .map((segment) => ({
             trip_id: data.tripId,
             activity_date: date,
@@ -682,6 +699,18 @@ export async function generateTripCapsuleCore({ data, context }: {
         .map((p) => p.trip_activity_id)
         .filter((id): id is string => !!id),
     );
+    // Two different requests were both routing through "targeted" as if
+    // they were the same thing: regenerating a look you don't like
+    // (which should feel free to try something else — no capsule seed,
+    // see below) and generating the first look for a brand-new activity
+    // that never had one (which should reuse what the trip has already
+    // decided on, exactly like a full-trip run would). Distinguishing
+    // them by whether ANY targeted activity already has a plan is what
+    // fixes "add one more activity → completely different shoes/bag/
+    // trousers, disconnected from everything already packed" — that was
+    // always a fresh, unseeded run because it happened to go through the
+    // single-activity endpoint, not because it needed to be.
+    const isRegeneratingExistingLook = !!targeted && Array.from(targeted).some((id) => plannedActivityIds.has(id));
     const requirements = targeted
       ? allRequirements
       : allRequirements.filter((r) => !plannedActivityIds.has(r.activityId));
@@ -779,7 +808,7 @@ export async function generateTripCapsuleCore({ data, context }: {
     // activity) never seed — a single-day regenerate has no business
     // forcing in unrelated days' items as a "preference", though
     // exclusions above still apply either way.
-    const existingCapsuleSeed: string[] = targeted ? [] : persistedSeedIds;
+    const existingCapsuleSeed: string[] = isRegeneratingExistingLook ? [] : persistedSeedIds;
 
     const capsule = buildCapsule(pool, capped, seasonByDate, existingCapsuleSeed, tempByActivity);
 
@@ -795,13 +824,6 @@ export async function generateTripCapsuleCore({ data, context }: {
     // jeans worn on a 30°C day is completely fine again that evening.
     const sweatConsumedItemIds = new Set<string>();
 
-// Formal and Sport are the only dress codes strong enough to be a real
-// requirement, not just a preference — "Dinner + Evening + Formal" must
-// actually produce a formal outfit, not merely one the AI was told about
-// in a sentence (see docs discussion: "deterministic constraints first,
-// AI styling second"). Evening/Work/Everyday/Weekend/Travel stay purely
-// soft (versatility() scoring) on purpose — "Evening" alone does NOT mean
-// "always evening gown", context decides that, not a hard formality wall.
     for (const req of capped) {
       const season = seasonByDate.get(req.date)!;
       const eligible = eligibleFor(pool, req, season, tempByActivity.get(req.activityId) ?? null);
@@ -811,6 +833,7 @@ export async function generateTripCapsuleCore({ data, context }: {
       // fails a requirement the wardrobe could actually cover.
       if (candidatePool.length < 3) candidatePool = eligible;
       candidatePool = applyHardDressCodeFilter(candidatePool, req.dressCode);
+      candidatePool = applyTransportPracticalityFilter(candidatePool, isTransportActivity(req.label));
 
       if (candidatePool.length === 0) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: "No wardrobe piece matches this activity's dress code, weather window, or day/evening slot." });
