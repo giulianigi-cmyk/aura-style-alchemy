@@ -11,7 +11,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity, applyTransportPracticalityFilter } from "./trip-capsule.server";
+import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity, applyTransportPracticalityFilter, isAccommodationActivity, changeAssumedPossible } from "./trip-capsule.server";
 
 function item(overrides: Partial<PoolItem> & { id: string }): PoolItem {
   return {
@@ -550,4 +550,84 @@ test("Nessun filtro applicato quando l'attività NON è di trasporto", () => {
     item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
   ];
   assert.equal(applyTransportPracticalityFilter(candidates, false).length, 2);
+});
+
+test("REGRESSIONE — un top cut-out viene escluso per un'attività di trasporto quando esiste un top normale", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "cutout-top", category: "Tops", subcategory: "Cut-Out Top" }),
+    item({ id: "plain-top", category: "Tops", subcategory: "T-Shirt" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true);
+  assert.ok(!filtered.some((it) => it.id === "cutout-top"));
+  assert.ok(filtered.some((it) => it.id === "plain-top"));
+});
+
+test("Un top con styleTags 'party'/'club' viene escluso per il trasporto", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "party-top", category: "Tops", subcategory: "Top", style: ["party", "going out"] }),
+    item({ id: "plain-top", category: "Tops", subcategory: "T-Shirt" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true);
+  assert.ok(!filtered.some((it) => it.id === "party-top"));
+});
+
+test("Un body a manica lunga NON viene escluso solo perché è un bodysuit (il problema è l'esposizione, non il tipo di capo)", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "longsleeve-bodysuit", category: "Tops", subcategory: "Bodysuit", sleeveLength: "Long Sleeve" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true);
+  assert.ok(filtered.some((it) => it.id === "longsleeve-bodysuit"), "un bodysuit a manica lunga non ha segnali di esposizione, non deve essere escluso automaticamente");
+});
+
+// ---------------------------------------------------------------------------
+// changeAssumedPossible — Scenari A/B/C del documento
+// ---------------------------------------------------------------------------
+
+test("Scenario A — treno (day) + cena (evening), nessun hotel: segmenti diversi -> cambio assunto possibile", () => {
+  const train: Requirement = { activityId: "train", date: "2026-09-07", daySegment: "day", dressCode: null, label: "Train to Florence" };
+  const dinner: Requirement = { activityId: "dinner", date: "2026-09-07", daySegment: "evening", dressCode: "Formal", label: "Formal Dinner" };
+  const all = [train, dinner];
+  const activities = [
+    { activity_date: "2026-09-07", activity_type: "Train to Florence" },
+    { activity_date: "2026-09-07", activity_type: "Formal Dinner" },
+  ];
+  assert.equal(changeAssumedPossible(train, all, activities), true, "giorno e sera sono ore separate, cambio assunto possibile anche senza hotel esplicito");
+});
+
+test("Scenario B — treno + concerto stesso segmento, nessun hotel: cambio NON assunto possibile", () => {
+  const train: Requirement = { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno per il concerto" };
+  const concert: Requirement = { activityId: "concert", date: "2026-09-06", daySegment: "day", dressCode: null, label: "David Guetta" };
+  const all = [train, concert];
+  const activities = [
+    { activity_date: "2026-09-06", activity_type: "Treno per il concerto" },
+    { activity_date: "2026-09-06", activity_type: "David Guetta" },
+  ];
+  assert.equal(changeAssumedPossible(train, all, activities), false, "stesso segmento, nessun hotel loggato: il filtro pratico va saltato, un solo outfit per entrambi i contesti");
+});
+
+test("Scenario C — treno + hotel + concerto stesso segmento: hotel loggato -> cambio assunto possibile", () => {
+  const train: Requirement = { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno per il concerto" };
+  const concert: Requirement = { activityId: "concert", date: "2026-09-06", daySegment: "day", dressCode: null, label: "David Guetta" };
+  const all = [train, concert];
+  const activities = [
+    { activity_date: "2026-09-06", activity_type: "Treno per il concerto" },
+    { activity_date: "2026-09-06", activity_type: "Check-in Hotel Firenze" },
+    { activity_date: "2026-09-06", activity_type: "David Guetta" },
+  ];
+  assert.equal(changeAssumedPossible(train, all, activities), true, "un hotel loggato lo stesso giorno è il segnale più chiaro possibile che il cambio è previsto");
+});
+
+test("Treno da solo, nessun'altra attività lo stesso giorno -> cambio assunto possibile (nessun conflitto reale)", () => {
+  const train: Requirement = { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno" };
+  const all = [train];
+  const activities = [{ activity_date: "2026-09-06", activity_type: "Treno" }];
+  assert.equal(changeAssumedPossible(train, all, activities), true);
+});
+
+test("isAccommodationActivity riconosce hotel/check-in/albergo/airbnb", () => {
+  assert.equal(isAccommodationActivity("Check-in Hotel Firenze"), true);
+  assert.equal(isAccommodationActivity("Airbnb Milano"), true);
+  assert.equal(isAccommodationActivity("Albergo Centrale"), true);
+  assert.equal(isAccommodationActivity("David Guetta"), false);
+  assert.equal(isAccommodationActivity(null), false);
 });
