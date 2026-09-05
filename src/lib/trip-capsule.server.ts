@@ -105,7 +105,21 @@ type ActivityKind = "swim" | "sport" | null;
 
 /** Swim wins over sport when both read (a "pool workout" still needs a
  *  swimsuit); dress_code "Sport" only ever implies sport. */
-const TRANSPORT_KEYWORDS = ["treno", "nave", "aereo", "volo", "traghetto", "autobus", "pullman", "train", "flight", "plane", "airplane", "ship", "ferry", "transfer", "bus"];
+const TRANSPORT_KEYWORDS = [
+  "treno", "nave", "aereo", "volo", "traghetto", "autobus", "pullman", "train", "flight", "plane", "airplane", "ship", "ferry", "transfer", "bus",
+  // Un'attività importata dal calendario spesso non contiene mai la
+  // parola "treno"/"train" — è solo il nome della tratta ("Milano
+  // Centrale - Firenze SMN 9551", numero del treno incluso). Le stazioni
+  // e i terminal sono un segnale altrettanto affidabile.
+  "stazione", "station", "centrale", "aeroporto", "airport", "terminal", "gare", "estación", "estacion", "bahnhof",
+];
+// A generic "City - City" pattern (both sides starting with a capital
+// letter, separated by a dash) is a strong transport signal on its own —
+// it's how route/transfer names read in any language ("Milano Centrale -
+// Firenze SMN", "Paris - Lyon", "JFK - CDG") without needing the word
+// "treno"/"train" anywhere in them. Catches real-world calendar-imported
+// labels the keyword list alone never will, without having to enumerate
+// every station name that exists.
 export function isTransportActivity(label: string | null): boolean {
   return !!label && TRANSPORT_KEYWORDS.some((k) => label.toLowerCase().includes(k));
 }
@@ -115,7 +129,25 @@ export function isTransportActivity(label: string | null): boolean {
 // logged check-in/hotel activity is the same kind of signal transport
 // already is, just the opposite direction (arriving somewhere to change,
 // not leaving on a journey). Detected the same way, not a new field.
-const ACCOMMODATION_KEYWORDS = ["hotel", "check-in", "checkin", "check in", "albergo", "resort", "b&b", "bnb", "airbnb", "alloggio"];
+// Multilingual on purpose — the app supports IT/EN/ES/FR and a person's
+// activity label can be typed in any of them, or copied straight from a
+// booking confirmation in whichever language that came in.
+const ACCOMMODATION_KEYWORDS = [
+  // Italiano
+  "hotel", "albergo", "alloggio", "soggiorno", "pernottamento", "pernottare", "dormire",
+  "ostello", "residence", "dimora", "foresteria", "agriturismo", "casa vacanze", "appartamento",
+  // English
+  "stay", "overnight", "accommodation", "lodging", "sleep", "sleeping", "resort", "hostel",
+  "guesthouse", "guest house", "apartment", "rental", "inn", "motel", "lodge",
+  // Español
+  "alojamiento", "dormir", "pernoctar", "pernoctación", "pernoctacion", "estancia", "hostal",
+  "albergue", "casa rural",
+  // Français
+  "hôtel", "séjour", "sejour", "nuitée", "nuitee", "hébergement", "hebergement", "auberge",
+  "chambre d'hôtes", "chambre d'hotes", "gîte", "gite",
+  // Condivisi tra più lingue
+  "check-in", "checkin", "check in", "airbnb", "b&b", "bnb", "bed and breakfast",
+];
 export function isAccommodationActivity(label: string | null): boolean {
   return !!label && ACCOMMODATION_KEYWORDS.some((k) => label.toLowerCase().includes(k));
 }
