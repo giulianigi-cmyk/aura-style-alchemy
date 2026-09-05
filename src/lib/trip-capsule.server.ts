@@ -115,7 +115,25 @@ export function isTransportActivity(label: string | null): boolean {
 // logged check-in/hotel activity is the same kind of signal transport
 // already is, just the opposite direction (arriving somewhere to change,
 // not leaving on a journey). Detected the same way, not a new field.
-const ACCOMMODATION_KEYWORDS = ["hotel", "check-in", "checkin", "check in", "albergo", "resort", "b&b", "bnb", "airbnb", "alloggio"];
+// Multilingual on purpose — the app supports IT/EN/ES/FR and a person's
+// activity label can be typed in any of them, or copied straight from a
+// booking confirmation in whichever language that came in.
+const ACCOMMODATION_KEYWORDS = [
+  // Italiano
+  "hotel", "albergo", "alloggio", "soggiorno", "pernottamento", "pernottare", "dormire",
+  "ostello", "residence", "dimora", "foresteria", "agriturismo", "casa vacanze", "appartamento",
+  // English
+  "stay", "overnight", "accommodation", "lodging", "sleep", "sleeping", "resort", "hostel",
+  "guesthouse", "guest house", "apartment", "rental", "inn", "motel", "lodge",
+  // Español
+  "alojamiento", "dormir", "pernoctar", "pernoctación", "pernoctacion", "estancia", "hostal",
+  "albergue", "casa rural",
+  // Français
+  "hôtel", "séjour", "sejour", "nuitée", "nuitee", "hébergement", "hebergement", "auberge",
+  "chambre d'hôtes", "chambre d'hotes", "gîte", "gite",
+  // Condivisi tra più lingue
+  "check-in", "checkin", "check in", "airbnb", "b&b", "bnb", "bed and breakfast",
+];
 export function isAccommodationActivity(label: string | null): boolean {
   return !!label && ACCOMMODATION_KEYWORDS.some((k) => label.toLowerCase().includes(k));
 }
