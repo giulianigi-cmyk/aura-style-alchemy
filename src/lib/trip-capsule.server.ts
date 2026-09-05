@@ -472,9 +472,17 @@ export function buildCapsule(
   const bagTarget = approxTripDays >= 7 ? 2 : 1;
   // Tops in hot weather want closer to one fresh piece per day (sweat,
   // not just looking different) — cooler seasons tolerate a top worn
-  // twice comfortably, which perRoleTarget already reflects.
-  const isSummerTrip = requirements.some((r) => seasonByDate.get(r.date) === "Summer");
-  const topTarget = isSummerTrip ? Math.min(approxTripDays, 6) : perRoleTarget;
+  // twice comfortably, which perRoleTarget already reflects. Real
+  // temperature wins over the calendar-bucket season when both are known
+  // — the same fix already applied to climateSuitability, needed here
+  // too: a September trip at a genuinely hot 30-33°C was bucketed as
+  // "Autumn" by seasonForDate, so isSummerTrip was always false and the
+  // top rotation never widened, no matter how hot it actually was.
+  const isHotTrip = requirements.some((r) => {
+    const temp = tempByActivity.get(r.activityId);
+    return temp != null ? temp >= SWEAT_RELEVANT_TEMP_C : seasonByDate.get(r.date) === "Summer";
+  });
+  const topTarget = isHotTrip ? Math.min(approxTripDays, 6) : perRoleTarget;
   // Bottoms don't need top-level rotation either — not skin-contact (see
   // SKIN_CONTACT_ROLE, sweat isn't the concern the way it is for tops),
   // and in practice people really do rewear the same pair of trousers or
