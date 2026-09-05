@@ -31,7 +31,7 @@ export const MILD_WARM_THRESHOLD_C = 20;
 export const MILD_COOL_THRESHOLD_C = 16;
 
 export const HEAVY_SIGNAL =
-  /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool|lana|maglione|sweater|felted|fleece|boots?\b|stivali|tweed|corduroy|velluto a coste|flannel|flanella|cashmere|cachemire/i;
+  /coat|cappotto|piumino|parka|overcoat|puffer|shearling|montone|wool|lana|maglione|sweater|sweatshirt|felpa|hoodie|felted|fleece|boots?\b|stivali|tweed|corduroy|velluto a coste|flannel|flanella|cashmere|cachemire/i;
 export const LIGHT_SIGNAL = /tank|canotta|sandal|sandalo|shorts?\b|infradito|flip.?flop|sleeveless|senza maniche/i;
 
 export interface WeatherCheckableItem {
