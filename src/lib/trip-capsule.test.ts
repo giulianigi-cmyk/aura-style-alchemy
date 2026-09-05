@@ -779,3 +779,39 @@ test("Il filtro trasporto ora esclude anche in base alla temperatura", () => {
   const mild = applyTransportPracticalityFilter(candidates, true, 14);
   assert.ok(mild.some((it) => it.id === "ls"), "manica lunga ammessa a 14°C");
 });
+
+test("Stivali esclusi col caldo, sandali no — la preferenza estiva regge", () => {
+  const boot = item({ id: "boot", category: "Shoes", subcategory: "Ankle Boots" });
+  const sandal = item({ id: "sandal", category: "Shoes", subcategory: "Sandals" });
+  assert.equal(climateSuitability(boot, 32, "Summer"), "inappropriate", "gli stivaletti a 32°C devono essere esclusi");
+  assert.equal(climateSuitability(sandal, 32, "Summer"), "compatible", "i sandali a 32°C sono la scelta giusta");
+});
+
+test("REGRESSIONE — un trip di più giorni tiene UNA borsa e UN paio di scarpe, non uno per giorno", () => {
+  // Il guardaroba ha 3 borse e 3 paia di sneakers disponibili: la capsule
+  // deve sceglierne poche, non una per ogni giorno.
+  const pool: PoolItem[] = [
+    item({ id: "tee-1", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "tee-2", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "tee-3", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "jeans-1", category: "Bottoms", subcategory: "Jeans" }),
+    item({ id: "jeans-2", category: "Bottoms", subcategory: "Jeans" }),
+    item({ id: "sneaker-1", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "sneaker-2", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "sneaker-3", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "bag-1", category: "Bags", subcategory: "Tote" }),
+    item({ id: "bag-2", category: "Bags", subcategory: "Crossbody" }),
+    item({ id: "bag-3", category: "Bags", subcategory: "Shoulder Bag" }),
+  ];
+  const dates = ["2026-09-06", "2026-09-07", "2026-09-08"];
+  const requirements: Requirement[] = dates.map((date) => ({
+    activityId: `${date}-day`, date, daySegment: "day" as const, dressCode: null, label: "Day",
+  }));
+  const seasonByDate = new Map(dates.map((d) => [d, "Autumn"]));
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const bags = Array.from(capsule).filter((id) => id.startsWith("bag-"));
+  const shoes = Array.from(capsule).filter((id) => id.startsWith("sneaker-"));
+  assert.ok(bags.length <= 1, `un trip di 3 giorni dovrebbe avere 1 borsa, trovate: ${bags.join(", ")}`);
+  assert.ok(shoes.length <= 2, `un trip di 3 giorni dovrebbe avere al massimo 2 paia di scarpe, trovate: ${shoes.join(", ")}`);
+});
