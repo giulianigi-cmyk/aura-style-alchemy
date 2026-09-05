@@ -153,6 +153,13 @@ export function isAccommodationActivity(label: string | null): boolean {
 }
 
 /**
+ * NOT CURRENTLY USED BY GENERATION — kept because it's correct and is the
+ * groundwork for an explicit "will you change before the event?" prompt,
+ * should that ever be added. It deliberately no longer gates the travel
+ * filter: being able to change AFTER a journey says nothing about what's
+ * sensible to wear DURING it, and using it that way is what let a mini
+ * skirt back onto a train whenever a hotel was logged the same day.
+ *
  * Whether a change of clothes between a transport leg and whatever else
  * is happening that day can reasonably be assumed — inferred from the
  * itinerary that already exists, never a new question or a new field.
@@ -641,29 +648,77 @@ export function applyHardDressCodeFilter(candidates: PoolItem[], dressCode: stri
 }
 
 // A skirt/short dress or a cut-out/going-out top on a train/flight/ferry
-// isn't a style preference gone slightly wrong, it was reported as
-// actively unwanted — so this is a hard filter like Formal/Sport above,
-// not the softer versatility() nudge alone. Falls back to the unfiltered
-// list only if excluding them would leave nothing at all, same "never
-// fail the slot" guarantee every hard filter in this pipeline follows.
+// ============================================================================
+// TRAVEL SUITABILITY — the single place that defines "can this piece be
+// worn on a train/flight/ferry".
 //
-// GOING_OUT_SIGNAL reuses the same keyword-matching approach already
-// established elsewhere (HEAVY_SIGNAL/LIGHT_SIGNAL in
-// outfit-weather-rules.ts, the bare-shoulder check in the Work-occasion
-// prompt rule) rather than inventing a new "coverage" field — no such
-// field exists on wardrobe items, and category/subcategory/style text is
-// what AI classification actually populates.
-const GOING_OUT_SIGNAL = /cut.?out|cutout|bralette|crop top|halter|bandeau|off.?shoulder|bardot|backless|sheer|see.?through|plunge|deep neckline|club|nightlife|party dress|going out/i;
+// This used to be spread across five places (a versatility() score nudge,
+// eligibleFor's season gate, this filter, climateSuitability, and a
+// sentence in the AI prompt), which is exactly why fixing it in one place
+// kept surfacing the same problem somewhere else. Everything about travel
+// appropriateness now lives in isTravelSuitable below; the other four
+// keep doing their own separate jobs (weather, season, formality) and
+// don't try to reason about travel at all.
+//
+// Keyword matching rather than a new "coverage"/"comfort" field on the
+// item: no such field exists, 300+ items are already classified without
+// it, and category/subcategory/style text is what AI classification
+// actually populates today. Same approach as HEAVY_SIGNAL/LIGHT_SIGNAL
+// in outfit-weather-rules.ts.
+const GOING_OUT_SIGNAL = /cut.?out|cutout|bralette|crop top|halter|bandeau|off.?shoulder|bardot|backless|plunge|deep neckline|club|nightlife|party dress|going out/i;
+// Sheer/mesh is its own signal, not lumped in with going-out: a sheer
+// long-sleeve top reads as "evening" to a person but as a perfectly
+// ordinary long-sleeve top to a keyword list. Public transport is the
+// one context where see-through is unambiguously wrong regardless of
+// how the piece is otherwise styled.
+const SHEER_SIGNAL = /sheer|see.?through|mesh|transparent|trasparente|velato|organza|tulle/i;
+// A skirt or short dress is impractical to sit in for hours; long
+// sleeves and sweatshirts are wrong when it's genuinely hot out. Both
+// are hard exclusions here, not score nudges — a score can always be
+// outweighed by something else, which is how a mini skirt kept winning
+// a train slot.
+const TRAVEL_HOT_THRESHOLD_C = 26;
 
-export function applyTransportPracticalityFilter(candidates: PoolItem[], isTransport: boolean): PoolItem[] {
-  if (!isTransport) return candidates;
-  const practical = candidates.filter((it) => {
-    const isSkirtOrShortDress = it.category === "Dresses" || /skirt|gonna/i.test(it.subcategory ?? "");
-    if (isSkirtOrShortDress) return false;
-    const text = `${it.subcategory ?? ""} ${(it.style ?? []).join(" ")}`;
-    if (GOING_OUT_SIGNAL.test(text)) return false;
-    return true;
+/** The one definition of travel-appropriate. `temperature` null means no
+ *  forecast is known, in which case the temperature-dependent rules are
+ *  skipped rather than guessed. */
+export function isTravelSuitable(it: PoolItem, temperature: number | null): boolean {
+  const text = `${it.subcategory ?? ""} ${(it.style ?? []).join(" ")}`;
+  const isSkirtOrShortDress = it.category === "Dresses" || /skirt|gonna/i.test(it.subcategory ?? "");
+  if (isSkirtOrShortDress) return false;
+  if (GOING_OUT_SIGNAL.test(text)) return false;
+  if (SHEER_SIGNAL.test(text)) return false;
+  if (temperature != null && temperature >= TRAVEL_HOT_THRESHOLD_C) {
+    // Long sleeves and sweatshirts in real heat — the "6 settembre is
+    // still summer" case. Deliberately checked here on top of the
+    // season/climate rules elsewhere: those reason about the item's
+    // season TAG, this reasons about the garment's actual construction,
+    // which is what matters when someone is sitting in a train carriage.
+    if ((it.sleeveLength ?? "").toLowerCase() === "long sleeve") return false;
+    if (/sweatshirt|felpa|hoodie|sweater|maglione|knit|cardigan/i.test(text)) return false;
+  }
+  return true;
+}
+
+/** True when an already-composed outfit could be worn as-is for travel —
+ *  used to decide whether a transport activity needs its own separate
+ *  look at all, or can simply reuse the day's other outfit. */
+export function outfitIsTravelSuitable(itemIds: string[], catalog: PoolItem[], temperature: number | null): boolean {
+  return itemIds.every((id) => {
+    const it = catalog.find((c) => c.id === id);
+    return !it || isTravelSuitable(it, temperature);
   });
+}
+
+/** Hard filter, applied whenever the activity is transport — never
+ *  disabled by "they can change later": being able to change AFTER the
+ *  journey says nothing about what's sensible to wear DURING it. Falls
+ *  back to the unfiltered list only if excluding everything would leave
+ *  the slot empty, the same "never fail a slot" guarantee every other
+ *  hard filter here follows. */
+export function applyTransportPracticalityFilter(candidates: PoolItem[], isTransport: boolean, temperature: number | null = null): PoolItem[] {
+  if (!isTransport) return candidates;
+  const practical = candidates.filter((it) => isTravelSuitable(it, temperature));
   return practical.length > 0 ? practical : candidates;
 }
 
@@ -815,23 +870,19 @@ export async function generateTripCapsuleCore({ data, context }: {
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
-    // Transport gets first claim on the wardrobe's practical pieces
-    // within its own day — processed ahead of any other same-date
-    // activity (an accommodation check-in, an event) so the recently-
-    // worn avoidance below naturally pushes those OTHER activities
-    // toward different pieces, instead of the reverse: a same-day
-    // accommodation activity claiming the one practical outfit first and
-    // leaving the actual train ride to fall back on whatever's left,
-    // which could easily be the same going-out look assigned to a later
-    // event that day. This doesn't change WHICH items are eligible
-    // (applyTransportPracticalityFilter already handles that per
-    // activity) — only the order they're claimed in when several
-    // same-day activities are competing for a limited wardrobe.
+    // Transport processed LAST within its own day — the reverse of what
+    // it was, deliberately. A transport leg can now reuse another
+    // same-day outfit when that outfit is itself travel-appropriate (see
+    // the reuse check in the loop below), and it can only do that if the
+    // other activities have already been generated by the time the
+    // transport leg is reached. Nothing is lost by going last: the
+    // travel filter is a hard filter now, so the transport leg always
+    // gets suitable pieces regardless of what was claimed before it.
     capped.sort((a, b) => {
       if (a.date !== b.date) return 0;
       const aTransport = isTransportActivity(a.label) ? 1 : 0;
       const bTransport = isTransportActivity(b.label) ? 1 : 0;
-      return bTransport - aTransport;
+      return aTransport - bTransport;
     });
 
     // No early-return when capped is empty (e.g. everything's already
@@ -928,6 +979,10 @@ export async function generateTripCapsuleCore({ data, context }: {
     const created: { date: string; daySegment: string }[] = [];
     const failed: { date: string; daySegment: string; reason: string }[] = [];
     const usedOutfits: string[][] = [];
+    // Parallel to usedOutfits — which date each generated outfit belongs
+    // to, so a transport leg can look for a same-day look to reuse
+    // rather than pulling in one from another day entirely.
+    const usedOutfitDates: string[] = [];
     const allChosenItemIds = new Set<string>();
     // A worn-and-sweated-in piece from earlier in a hot day isn't a clean,
     // available option again later — separate from, and permanent-for-
@@ -936,6 +991,23 @@ export async function generateTripCapsuleCore({ data, context }: {
     // outfits). Only skin-contact categories matter here: a blazer or
     // jeans worn on a 30°C day is completely fine again that evening.
     const sweatConsumedItemIds = new Set<string>();
+    // Seeded from outfits ALREADY saved for this trip on hot days, not
+    // just the ones generated in this run. Without this, generating day
+    // 2 separately (or regenerating it) started with an empty memory and
+    // happily reused day 1's t-shirt — the "same t-shirt as yesterday at
+    // 32°C" case. Rebuilt from existingPlans + the temperature already
+    // resolved per activity, so it survives across separate generations.
+    {
+      const planRows = (existingPlans ?? []) as { trip_activity_id: string | null; item_ids: string[] | null }[];
+      for (const plan of planRows) {
+        if (!plan.trip_activity_id || !plan.item_ids) continue;
+        const planTemp = tempByActivity.get(plan.trip_activity_id) ?? null;
+        for (const id of plan.item_ids) {
+          const it = pool.find((p) => p.id === id);
+          if (isSweatConsumable(it?.category ?? null, planTemp)) sweatConsumedItemIds.add(id);
+        }
+      }
+    }
 
     for (const req of capped) {
       const season = seasonByDate.get(req.date)!;
@@ -946,12 +1018,46 @@ export async function generateTripCapsuleCore({ data, context }: {
       // fails a requirement the wardrobe could actually cover.
       if (candidatePool.length < 3) candidatePool = eligible;
       candidatePool = applyHardDressCodeFilter(candidatePool, req.dressCode);
-      const applyTransportFilter = isTransportActivity(req.label) && changeAssumedPossible(req, allRequirements, activities);
-      candidatePool = applyTransportPracticalityFilter(candidatePool, applyTransportFilter);
+      // Applied for EVERY transport activity, unconditionally. It used to
+      // be skipped when changeAssumedPossible() said a change was likely,
+      // which had it exactly backwards: being able to change after the
+      // journey says nothing about what's sensible to wear during it.
+      // That's what let a mini skirt back onto a train whenever a hotel
+      // was logged the same day.
+      candidatePool = applyTransportPracticalityFilter(
+        candidatePool,
+        isTransportActivity(req.label),
+        tempByActivity.get(req.activityId) ?? null,
+      );
 
       if (candidatePool.length === 0) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: "No wardrobe piece matches this activity's dress code, weather window, or day/evening slot." });
         continue;
+      }
+
+      // A transport activity doesn't always need a look of its own. If
+      // another outfit already generated for this same day would itself
+      // pass the travel filter — jeans and a t-shirt for a concert, say —
+      // wearing that on the train is exactly what a person would do, and
+      // generating a near-identical second outfit just adds noise. Only
+      // when the day's other look genuinely can't travel (a mini skirt,
+      // a sheer top) does the transport leg earn its own separate outfit.
+      if (isTransportActivity(req.label)) {
+        const sameDayTravelReady = usedOutfits.find((ids, i) =>
+          usedOutfitDates[i] === req.date && outfitIsTravelSuitable(ids, pool, tempByActivity.get(req.activityId) ?? null),
+        );
+        if (sameDayTravelReady) {
+          const slot = resolvePlanSlot({ date: req.date, daySegment: req.daySegment, tripActivityId: req.activityId, tripId: data.tripId });
+          await (supabase.from("outfit_plans" as never) as any).upsert({
+            ...slot,
+            user_id: userId,
+            item_ids: sameDayTravelReady,
+            occasion: occasionText(req),
+            status: "planned",
+          }, { onConflict: "trip_activity_id" });
+          created.push({ date: req.date, daySegment: req.daySegment });
+          continue;
+        }
       }
 
       // Real forecast within ~15 days, a 5-year historical average beyond
@@ -1032,6 +1138,7 @@ export async function generateTripCapsuleCore({ data, context }: {
       }
 
       usedOutfits.push(result.item_ids);
+      usedOutfitDates.push(req.date);
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
 
       // "Hot enough that sweat is a real concern" — deliberately its own
