@@ -11,7 +11,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter } from "./trip-capsule.server";
+import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity } from "./trip-capsule.server";
 
 function item(overrides: Partial<PoolItem> & { id: string }): PoolItem {
   return {
@@ -460,4 +460,62 @@ test("Dress code diversi da Formal/Sport (Evening, Work, null) non filtrano null
   assert.equal(applyHardDressCodeFilter(candidates, "Evening").length, 2, "Evening non deve filtrare — il contesto decide, non un muro di formalità");
   assert.equal(applyHardDressCodeFilter(candidates, "Work").length, 2);
   assert.equal(applyHardDressCodeFilter(candidates, null).length, 2);
+});
+
+// ---------------------------------------------------------------------------
+// bottomTarget — non deve scalare come i top, stesso principio di shoeTarget
+// ---------------------------------------------------------------------------
+
+test("REGRESSIONE — aggiungere un'attività a un trip breve non deve spingere a un terzo pantalone/gonna", () => {
+  const pool: PoolItem[] = [
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bottom-2", category: "Bottoms" }),
+    item({ id: "bottom-3", category: "Bottoms" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  // 5 requisiti (era un trip di 4, ne è stata aggiunta una quinta —
+  // esattamente lo scenario segnalato: "se metto un'attività in più").
+  const requirements: Requirement[] = [
+    { activityId: "a1", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno" },
+    { activityId: "a2", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Concerto" },
+    { activityId: "a3", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "Evening" },
+    { activityId: "a4", date: "2026-09-07", daySegment: "day", dressCode: null, label: "Day" },
+    { activityId: "a5", date: "2026-09-07", daySegment: "evening", dressCode: null, label: "Evening" },
+  ];
+  const seasonByDate = new Map(requirements.map((r) => [r.date, "Autumn"]));
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const bottomsInCapsule = Array.from(capsule).filter((id) => id.startsWith("bottom-"));
+  assert.ok(bottomsInCapsule.length <= 2, `attesi al massimo 2 bottoms per un trip ancora breve, trovati: ${bottomsInCapsule.join(", ")}`);
+});
+
+// ---------------------------------------------------------------------------
+// isTransportActivity + preferenza pratica per il trasporto
+// ---------------------------------------------------------------------------
+
+test("isTransportActivity riconosce treno/nave/aereo/volo in italiano e inglese", () => {
+  assert.equal(isTransportActivity("Treno SMN - Milano"), true);
+  assert.equal(isTransportActivity("Volo per Londra"), true);
+  assert.equal(isTransportActivity("Return flight"), true);
+  assert.equal(isTransportActivity("Cena da Mario"), false);
+  assert.equal(isTransportActivity(null), false);
+});
+
+test("REGRESSIONE — un'attività di trasporto preferisce i pantaloni alla gonna quando entrambi sono eleggibili", () => {
+  const pool: PoolItem[] = [
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno SMN - Milano" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  assert.ok(capsule.has("trousers"), "i pantaloni dovevano essere preferiti per un'attività di trasporto");
 });
