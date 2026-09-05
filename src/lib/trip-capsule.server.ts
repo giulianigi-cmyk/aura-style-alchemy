@@ -4,6 +4,7 @@ import { resolvePlanSlot } from "./outfit-plan-slot";
 import { getTripWeatherMap, weatherKey } from "./trip-weather.server";
 import { describeWeather } from "./weather";
 import { computeCapsuleSeedAndExclusions } from "./trip-capsule-persistence";
+import { violatesWeatherRule, HEAVY_SIGNAL, LIGHT_SIGNAL, type WeatherCheckableItem } from "./outfit-weather-rules";
 
 function daysBetween(a: string, b: string): number {
   return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
@@ -76,6 +77,20 @@ const SHOE_ROLE = new Set(["Shoes"]);
 const SWIM_ROLE = new Set(["Swimwear"]);
 const ACTIVE_ROLE = new Set(["Activewear"]);
 const BAG_ROLE = new Set(["Bags"]);
+// Categories worn directly against skin, where a hot day's sweat makes
+// same-day reuse a hygiene question, not just a styling one — a blazer
+// or a pair of jeans worn all day is still perfectly fine that evening,
+// a t-shirt worn all day at 30°C generally isn't.
+const SKIN_CONTACT_ROLE = new Set(["Tops", "Underwear", "Swimwear"]);
+const SWEAT_RELEVANT_TEMP_C = 25;
+
+/** True when an item just worn at this temperature should be treated as
+ *  used-up for the rest of THIS trip's generation run, not just briefly
+ *  avoided the way avoidOutfitWindow already handles style variety. Pure
+ *  and exported so this rule is testable on its own. */
+export function isSweatConsumable(category: string | null, temperature: number | null): boolean {
+  return temperature != null && temperature >= SWEAT_RELEVANT_TEMP_C && SKIN_CONTACT_ROLE.has(category ?? "");
+}
 
 /** Categories whose classification (formality / day_evening) is almost
  *  never filled in, because they're bought for a single obvious purpose.
@@ -147,6 +162,64 @@ function matchesSeasonLoose(itemSeason: string | null | undefined, season: strin
   return s.includes(season.toLowerCase());
 }
 
+export type ClimateSuitability = "compatible" | "possible" | "inappropriate";
+
+function toWeatherCheckable(it: PoolItem): WeatherCheckableItem {
+  return { category: it.category, subcategory: it.subcategory, styleTags: it.style, material: it.material, season: it.season, toeShape: null };
+}
+
+/**
+ * AURA doesn't dress the calendar, it dresses the person in the real
+ * conditions forecast — season is context, weather is reality. One
+ * generic function instead of a growing pile of `if (boot)`/`if
+ * (tshirt)` special cases, applied identically to shoes, tops, bottoms,
+ * outerwear, dresses, anything: every item's OWN category/subcategory/
+ * material/season already carries what's needed to judge it.
+ *
+ * Three tiers, not a binary hard filter:
+ * - "inappropriate": genuinely wrong for the real temperature — reuses
+ *   violatesWeatherRule (outfit-weather-rules.ts), the same hard rule
+ *   already enforced everywhere else in the app (a wool coat at 32°C,
+ *   sandals at 2°C). This is the ONLY tier that excludes.
+ * - "possible": the item's own season tag disagrees with a real
+ *   temperature that isn't extreme (a boot at 21°C, a sandal at 14°C,
+ *   a sandal in a mild December). Never excluded — only a soft nudge in
+ *   scoring, because a sandal with tights on a mild winter evening can
+ *   be a genuine, deliberate styling choice, not a mistake.
+ * - "compatible": no real disagreement, or no weather data at all — the
+ *   season tag is followed exactly as it always was.
+ *
+ * Without real temperature, this collapses to the season-tag check that
+ * already existed — nothing changes for a destination/date AURA has no
+ * forecast for.
+ */
+export function climateSuitability(it: PoolItem, temperature: number | null, calendarSeason: string): ClimateSuitability {
+  if (temperature == null) {
+    return matchesSeasonLoose(it.season, calendarSeason) ? "compatible" : "possible";
+  }
+  if (violatesWeatherRule(toWeatherCheckable(it), temperature)) return "inappropriate";
+  // Moderate mismatch, from TWO independent signals — either is enough to
+  // land on "possible":
+  // (1) the item's own construction (category/subcategory/material text
+  // — the same HEAVY_SIGNAL/LIGHT_SIGNAL patterns violatesWeatherRule
+  // uses for the hard case above, just re-checked at the milder
+  // thresholds). This is what still catches an ankle boot or a pair of
+  // sandals even when nobody ever set a season tag on them — season is
+  // frequently left blank, subcategory almost never is.
+  // (2) an explicit season tag that disagrees with the real temperature,
+  // when one is present — a secondary, additive signal, not a
+  // replacement for (1).
+  const warm = temperature >= MILD_WARM_THRESHOLD_C;
+  const cool = temperature < MILD_COOL_THRESHOLD_C;
+  const text = `${it.category ?? ""} ${it.subcategory ?? ""} ${(it.style ?? []).join(" ")} ${(it.material ?? []).join(" ")}`;
+  const looksHeavy = HEAVY_SIGNAL.test(text);
+  const looksLight = LIGHT_SIGNAL.test(text);
+  const tag = (it.season ?? "").toLowerCase();
+  if (warm && (looksHeavy || tag.includes("winter") || tag.includes("autumn"))) return "possible";
+  if (cool && (looksLight || tag.includes("summer"))) return "possible";
+  return "compatible";
+}
+
 export type PoolItem = {
   id: string;
   category: string | null;
@@ -186,57 +259,43 @@ function versatility(it: PoolItem, req?: Requirement, temperature?: number | nul
     if (it.formality >= min && it.formality <= max) score += 3;
     if (it.dayEvening === req.daySegment) score += 2;
 
-    // Real per-requirement temperature (already resolved upstream as
-    // tempMax for day / tempMin for evening — see generateTripCapsuleCore)
-    // when we have it; the month-bucket season as a fallback when we
-    // don't. This replaces a season-only check that silently never fired
-    // for a September trip: seasonForDate() buckets September as
-    // "Autumn", not "Summer", even on a genuinely warm evening — the
-    // exact case that motivated this fix.
-    const isWarm = temperature != null ? temperature >= MILD_WARM_THRESHOLD_C : (() => {
-      const s = seasonForDate(req.date);
-      return s === "Summer" || s === "Spring";
-    })();
-    const isCool = temperature != null && temperature < MILD_COOL_THRESHOLD_C;
+    // Generic, category-agnostic climate check — one shared signal
+    // instead of separate boot/sandal/sneaker-season special cases,
+    // applies identically to shoes, tops, bottoms, outerwear, dresses,
+    // anything with a season tag. "inappropriate" already excludes
+    // upstream in eligibleFor, so only the soft "possible" tier is left
+    // to matter here. See climateSuitability's own comment for the
+    // reasoning (real temperature over calendar-bucket season).
+    const calendarSeason = seasonForDate(req.date);
+    if (climateSuitability(it, temperature ?? null, calendarSeason) === "possible") score -= 3;
 
-    // A sneaker isn't wrong for a generic, unlabeled "Evening" slot the
-    // way it would be for an actual dinner (hasEleganceSignal already
-    // reserves a real elegant shoe for those, hard) — but defaulting to
-    // the exact same trainers worn all day reads as an oversight, not a
-    // choice. This is a soft nudge, not an exclusion: a sneaker still
-    // wins if it's genuinely the only shoe eligible (never leaves a
-    // requirement unfilled over a style preference), it just stops
-    // winning by default the moment any non-sporty shoe is available.
+    // Occasion-driven, NOT climate-driven — deliberately kept separate
+    // from climateSuitability above: a sneaker is climate-fine at any
+    // temperature, just stylistically wrong for a dinner. Folding it into
+    // the climate signal would either mislabel it "inappropriate" for the
+    // wrong reason or dilute what that signal means.
     if (req.daySegment === "evening" && it.category === "Shoes") {
       const sub = (it.subcategory ?? "").toLowerCase();
       if (/sneaker|running|trainer|scarpe da ginnastica/.test(sub)) score -= 3;
-      // Same principle, opposite temperature: a boot reads as wrong for a
-      // warm evening the way a sneaker reads as wrong for any evening.
-      if (isWarm && /boot|stival/.test(sub)) score -= 3;
     }
 
-    // Sleeve length vs temperature: independent, absolute-threshold nudge
-    // (not a day-vs-evening comparison) — every requirement already
-    // carries its OWN correctly-resolved temperature (cooler for evening,
-    // warmer for day, via the tempMin/tempMax split upstream), so scoring
-    // each requirement against its own temperature already produces the
-    // right day/evening contrast without needing to compare the two
-    // directly. A short-sleeve/sleeveless top on a cool evening, or a
-    // long-sleeve top on a hot day, both lose a little ground — never
-    // excluded outright, since layering or personal preference can
-    // legitimately override this.
-    if (it.category === "Tops" || it.category === "Dresses") {
+    // Sleeve length vs. real temperature: independent of the item's own
+    // season TAG (climateSuitability above looks at that), this reads the
+    // garment's actual construction — a short-sleeve top with no season
+    // tag at all sails through climateSuitability but is still objectively
+    // short-sleeved on a cold evening. Never excludes, only nudges.
+    if ((it.category === "Tops" || it.category === "Dresses") && temperature != null) {
       const sleeve = (it.sleeveLength ?? "").toLowerCase();
       const isShortSleeve = sleeve === "sleeveless" || sleeve === "short sleeve";
       const isLongSleeve = sleeve === "long sleeve";
-      if (isWarm && isLongSleeve) score -= 2;
-      if (isCool && isShortSleeve) score -= 2;
+      if (temperature >= MILD_WARM_THRESHOLD_C && isLongSleeve) score -= 3;
+      if (temperature < MILD_COOL_THRESHOLD_C && isShortSleeve) score -= 3;
     }
   }
   return score;
 }
 
-function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolItem[] {
+function eligibleFor(pool: PoolItem[], req: Requirement, season: string, temperature: number | null): PoolItem[] {
   const kind = activityKind(req);
   const purposeRole = kind === "swim" ? SWIM_ROLE : kind === "sport" ? ACTIVE_ROLE : null;
   return pool.filter((it) => {
@@ -258,7 +317,14 @@ function eligibleFor(pool: PoolItem[], req: Requirement, season: string): PoolIt
     // occasion-aware judgment in suggestOutfitCore) instead of excluding.
     // The swim/sport purpose exemption is unaffected — that's a genuine
     // "wrong item for this specific activity" case, not an over-filter.
-    if (!isPurpose && !matchesSeasonLoose(it.season, season)) return false;
+    // The season-only check below is now ONLY reached when the item
+    // doesn't have a purpose exemption — climateSuitability replaces it
+    // as the real gate: "inappropriate" (genuinely wrong for the real
+    // forecast, not just off-tag) is the only case that excludes. This
+    // is what lets a Summer-tagged sandal survive a September evening at
+    // 25°C, when the calendar bucket alone would have called it "Autumn"
+    // and dropped it here before temperature ever had a say.
+    if (!isPurpose && climateSuitability(it, temperature, season) === "inappropriate") return false;
     return true;
   });
 }
@@ -324,7 +390,7 @@ export function buildCapsule(
 
   const withEligibility = requirements.map((req) => ({
     req,
-    eligible: eligibleFor(pool, req, seasonByDate.get(req.date)!),
+    eligible: eligibleFor(pool, req, seasonByDate.get(req.date)!, tempByActivity.get(req.activityId) ?? null),
   }));
   // Hardest first = fewest eligible candidates in the whole wardrobe —
   // solving these while the capsule is still empty leaves the most
@@ -414,14 +480,59 @@ export function buildCapsule(
       // simplification.
       const repReq = eleganceReqs[0];
       const repTemp = tempByActivity.get(repReq.activityId) ?? null;
-      const bestElegantShoe = pool
-        .filter((it) => it.category === "Shoes" && it.formality >= 4 && !capsule.has(it.id))
+      const repSeason = seasonByDate.get(repReq.date) ?? "";
+      const formalShoes = pool.filter((it) => it.category === "Shoes" && it.formality >= 4 && !capsule.has(it.id));
+      // This reserved slot bypasses the normal eligible/candidatePool
+      // pipeline on purpose (it's a protected pick, not a ranked one —
+      // see the comment above) but that must never mean it also bypasses
+      // climate suitability: a genuinely "inappropriate" shoe (a heavy
+      // boot on a real 28°C evening) needs to be excluded here exactly
+      // as it would be everywhere else, not merely outscored —
+      // versatility() only knows how to penalize the soft "possible"
+      // tier, not exclude the hard one. Falls back to the unfiltered
+      // list only if climate suitability would leave nothing at all —
+      // this reserved slot must never end up empty over a climate
+      // preference, same principle as the "never leave it unfilled"
+      // rule already applied to the normal weather filter elsewhere.
+      const climateOk = formalShoes.filter((it) => climateSuitability(it, repTemp, repSeason) !== "inappropriate");
+      const bestElegantShoe = (climateOk.length > 0 ? climateOk : formalShoes)
         .sort((a, b) => versatility(b, repReq, repTemp) - versatility(a, repReq, repTemp))[0];
       if (bestElegantShoe) capsule.add(bestElegantShoe.id);
     }
   }
 
   return capsule;
+}
+
+// Formal and Sport are the only dress codes strong enough to be a real
+// requirement, not just a preference — "Dinner + Evening + Formal" must
+// actually produce a formal outfit, not merely one the AI was told about
+// in a sentence (deterministic constraints first, AI styling second).
+// Evening/Work/Everyday/Weekend/Travel stay purely soft (versatility()
+// scoring) on purpose — "Evening" alone does NOT mean "always evening
+// gown", context decides that, not a hard formality wall.
+// Sport ceiling and Formal floor use the same progressive-widening
+// fallback: try the strict band first, loosen once if that leaves too
+// little to work with, and only ever fall back to "everything eligible"
+// as a last resort — a bare wardrobe still gets an outfit, never a
+// silent failure, but a genuinely available formal wardrobe should never
+// be skipped in favor of jeans just because "Dinner" technically allows it.
+export function applyHardDressCodeFilter(candidates: PoolItem[], dressCode: string | null): PoolItem[] {
+  if (dressCode === "Formal") {
+    const strict = candidates.filter((it) => it.formality >= 4);
+    if (strict.length >= 3) return strict;
+    const loose = candidates.filter((it) => it.formality >= 3);
+    if (loose.length >= 3) return loose;
+    return candidates;
+  }
+  if (dressCode === "Sport") {
+    const strict = candidates.filter((it) => it.formality <= 1);
+    if (strict.length >= 3) return strict;
+    const loose = candidates.filter((it) => it.formality <= 2);
+    if (loose.length >= 3) return loose;
+    return candidates;
+  }
+  return candidates;
 }
 
 export async function generateTripCapsuleCore({ data, context }: {
@@ -642,15 +753,30 @@ export async function generateTripCapsuleCore({ data, context }: {
     const failed: { date: string; daySegment: string; reason: string }[] = [];
     const usedOutfits: string[][] = [];
     const allChosenItemIds = new Set<string>();
+    // A worn-and-sweated-in piece from earlier in a hot day isn't a clean,
+    // available option again later — separate from, and permanent-for-
+    // this-run unlike, the sliding avoidOutfitWindow above (which is about
+    // visual variety, not hygiene, and naturally "forgets" after a few
+    // outfits). Only skin-contact categories matter here: a blazer or
+    // jeans worn on a 30°C day is completely fine again that evening.
+    const sweatConsumedItemIds = new Set<string>();
 
+// Formal and Sport are the only dress codes strong enough to be a real
+// requirement, not just a preference — "Dinner + Evening + Formal" must
+// actually produce a formal outfit, not merely one the AI was told about
+// in a sentence (see docs discussion: "deterministic constraints first,
+// AI styling second"). Evening/Work/Everyday/Weekend/Travel stay purely
+// soft (versatility() scoring) on purpose — "Evening" alone does NOT mean
+// "always evening gown", context decides that, not a hard formality wall.
     for (const req of capped) {
       const season = seasonByDate.get(req.date)!;
-      const eligible = eligibleFor(pool, req, season);
+      const eligible = eligibleFor(pool, req, season, tempByActivity.get(req.activityId) ?? null);
       let candidatePool = eligible.filter((it) => capsule.has(it.id));
       // Falls back to the full eligible set only if the capsule subset is
       // too thin to plausibly compose a real outfit — never silently
       // fails a requirement the wardrobe could actually cover.
       if (candidatePool.length < 3) candidatePool = eligible;
+      candidatePool = applyHardDressCodeFilter(candidatePool, req.dressCode);
 
       if (candidatePool.length === 0) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: "No wardrobe piece matches this activity's dress code, weather window, or day/evening slot." });
@@ -723,7 +849,7 @@ export async function generateTripCapsuleCore({ data, context }: {
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
         items,
-        avoidItemIds: usedOutfits.slice(-avoidOutfitWindow).flat(),
+        avoidItemIds: Array.from(new Set([...usedOutfits.slice(-avoidOutfitWindow).flat(), ...sweatConsumedItemIds])),
         locationIdOverride: null,
         relativeWarmthHint,
       });
@@ -735,6 +861,16 @@ export async function generateTripCapsuleCore({ data, context }: {
 
       usedOutfits.push(result.item_ids);
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
+
+      // "Hot enough that sweat is a real concern" — deliberately its own
+      // constant (see isSweatConsumable), not reused from HOT_THRESHOLD_C
+      // or MILD_WARM_THRESHOLD_C, since it's answering a different
+      // question (skin hygiene, not "is a coat wrong" or "is a boot a bit
+      // much").
+      for (const id of result.item_ids) {
+        const chosenItem = pool.find((p) => p.id === id);
+        if (isSweatConsumable(chosenItem?.category ?? null, temperature)) sweatConsumedItemIds.add(id);
+      }
 
       const { error: insErr } = await supabase.from("outfit_plans").upsert({
         user_id: userId,
