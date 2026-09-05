@@ -4,7 +4,7 @@ import { resolvePlanSlot } from "./outfit-plan-slot";
 import { getTripWeatherMap, weatherKey } from "./trip-weather.server";
 import { describeWeather } from "./weather";
 import { computeCapsuleSeedAndExclusions } from "./trip-capsule-persistence";
-import { violatesWeatherRule, HEAVY_SIGNAL, LIGHT_SIGNAL, type WeatherCheckableItem } from "./outfit-weather-rules";
+import { violatesWeatherRule, HEAVY_SIGNAL, LIGHT_SIGNAL, MILD_WARM_THRESHOLD_C, MILD_COOL_THRESHOLD_C, type WeatherCheckableItem } from "./outfit-weather-rules";
 
 function daysBetween(a: string, b: string): number {
   return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
@@ -37,16 +37,11 @@ const REWEARABILITY: Record<string, number> = {
 const HEAVY_MATERIALS = ["cashmere", "wool", "mohair", "alpaca", "shearling", "down"];
 const HEAVY_MATERIAL_TEMP_THRESHOLD = 23;
 
-// Soft comfort boundaries for versatility()'s shoe/sleeve nudges — looser
-// than HEAVY_MATERIAL_TEMP_THRESHOLD or the hard hot/cold thresholds in
-// outfit-weather-rules.ts on purpose: those exclude outright (a wool coat
-// at 30°C), these only nudge a ranking (a boot at 21°C isn't wrong the way
-// a coat at 30°C is, just a slightly worse pick than a sandal when one is
-// available). Deliberately not derived from HEAVY_MATERIAL_TEMP_THRESHOLD
-// — a different question (fabric weight vs. general "boots/long sleeves
-// start to feel like too much").
-const MILD_WARM_THRESHOLD_C = 20;
-const MILD_COOL_THRESHOLD_C = 16;
+// MILD_WARM_THRESHOLD_C / MILD_COOL_THRESHOLD_C now live in
+// outfit-weather-rules.ts — shared with ai-suggest-outfit.functions.ts
+// (violatesSleeveClimate), so both capsule building here and the final
+// per-slot pick there agree on the same boundary instead of each having
+// its own copy that could drift.
 
 /** Free-text signal for "this trip has a real reason to need an elegant
  *  shoe" — a resort dinner or a wedding guest activity, not just any
@@ -110,6 +105,11 @@ type ActivityKind = "swim" | "sport" | null;
 
 /** Swim wins over sport when both read (a "pool workout" still needs a
  *  swimsuit); dress_code "Sport" only ever implies sport. */
+const TRANSPORT_KEYWORDS = ["treno", "nave", "aereo", "volo", "traghetto", "autobus", "pullman", "train", "flight", "plane", "airplane", "ship", "ferry", "transfer", "bus"];
+export function isTransportActivity(label: string | null): boolean {
+  return !!label && TRANSPORT_KEYWORDS.some((k) => label.toLowerCase().includes(k));
+}
+
 function activityKind(req: Requirement): ActivityKind {
   const text = `${req.label ?? ""}`.toLowerCase();
   if (SWIM_KEYWORDS.some((k) => text.includes(k))) return "swim";
@@ -269,6 +269,20 @@ function versatility(it: PoolItem, req?: Requirement, temperature?: number | nul
     const calendarSeason = seasonForDate(req.date);
     if (climateSuitability(it, temperature ?? null, calendarSeason) === "possible") score -= 3;
 
+    // A transport leg (train, flight, ferry) is a practicality context,
+    // not a styling one — a skirt or dress isn't WRONG on a train the way
+    // a sneaker is wrong for a dinner, just a less practical pick than
+    // trousers/jeans when both are equally appropriate otherwise. Soft
+    // nudge only: if the only bottom available is a skirt, that's still
+    // what gets worn. Skirt is a SUBCATEGORY under Bottoms, not its own
+    // category, so this checks subcategory text, not just Dresses/
+    // Jumpsuits — a plain pair of trousers (category Bottoms, no "skirt"
+    // in its subcategory) is never penalized here.
+    if (isTransportActivity(req.label)) {
+      const isSkirtLike = it.category === "Dresses" || it.category === "Jumpsuits" || /skirt|gonna/i.test(it.subcategory ?? "");
+      if (isSkirtLike) score -= 2;
+    }
+
     // Occasion-driven, NOT climate-driven — deliberately kept separate
     // from climateSuitability above: a sneaker is climate-fine at any
     // temperature, just stylistically wrong for a dinner. Folding it into
@@ -387,6 +401,15 @@ export function buildCapsule(
   // twice comfortably, which perRoleTarget already reflects.
   const isSummerTrip = requirements.some((r) => seasonByDate.get(r.date) === "Summer");
   const topTarget = isSummerTrip ? Math.min(approxTripDays, 6) : perRoleTarget;
+  // Bottoms don't need top-level rotation either — not skin-contact (see
+  // SKIN_CONTACT_ROLE, sweat isn't the concern the way it is for tops),
+  // and in practice people really do rewear the same pair of trousers or
+  // jeans across a short trip without it reading as a mistake, the same
+  // way shoes do. Capped like shoeTarget rather than sharing topTarget's
+  // faster-scaling perRoleTarget: adding one more activity to an already-
+  // short trip used to be enough to push a third pair of trousers into
+  // the capsule when the first one could still have covered it.
+  const bottomTarget = approxTripDays <= 3 ? 2 : Math.min(perRoleTarget, 3);
 
   const withEligibility = requirements.map((req) => ({
     req,
@@ -426,7 +449,7 @@ export function buildCapsule(
     // top the role up further, converging on the target as looser
     // requirements reveal more eligible candidates.
     const topNeed = kind === "swim" ? 0 : Math.max(0, topTarget - countInRole(inCapsule, TOP_ROLE));
-    const bottomNeed = kind === "swim" ? 0 : Math.max(0, perRoleTarget - countInRole(inCapsule, BOTTOM_ROLE));
+    const bottomNeed = kind === "swim" ? 0 : Math.max(0, bottomTarget - countInRole(inCapsule, BOTTOM_ROLE));
     const shoeNeed = Math.max(0, shoeTarget - countInRole(inCapsule, SHOE_ROLE));
     const bagNeed = (kind === "swim" || kind === "sport") ? 0 : Math.max(0, bagTarget - countInRole(inCapsule, BAG_ROLE));
     const swimNeed = kind === "swim" ? Math.max(0, perRoleTarget - countInRole(inCapsule, SWIM_ROLE)) : 0;
@@ -601,7 +624,17 @@ export async function generateTripCapsuleCore({ data, context }: {
     // any date that already has a real activity is left exactly as the
     // person entered it. Only runs on a full-trip generate — a targeted
     // regenerate of specific activities has no business inventing new ones.
+    //
+    // Exception: the trip's FIRST and LAST dates. A logged transport
+    // activity there (an outbound/return train, flight, ferry) already
+    // answers "what am I doing that day" — arrival/departure day is
+    // built around getting there or getting home, not a separate outfit
+    // for whichever segment the journey didn't happen to land in.
+    // Scaffolding one anyway defeats the exact point of giving the trip
+    // a real, bounded start and end.
     if (!data.activityIds?.length && tripStartDate && tripEndDate) {
+      const hasTransportOnFirstDay = activities.some((a) => a.activity_date === tripStartDate && isTransportActivity(a.activity_type));
+      const hasTransportOnLastDay = activities.some((a) => a.activity_date === tripEndDate && isTransportActivity(a.activity_type));
       const covered = new Set(
         activities.map((a) => `${a.activity_date}|${a.day_segment === "evening" ? "evening" : "day"}`),
       );
@@ -612,6 +645,7 @@ export async function generateTripCapsuleCore({ data, context }: {
       const toInsert = tripDates.flatMap((date) =>
         (["day", "evening"] as const)
           .filter((segment) => !covered.has(`${date}|${segment}`))
+          .filter(() => !(date === tripEndDate && hasTransportOnLastDay) && !(date === tripStartDate && hasTransportOnFirstDay))
           .map((segment) => ({
             trip_id: data.tripId,
             activity_date: date,
@@ -852,6 +886,7 @@ export async function generateTripCapsuleCore({ data, context }: {
         avoidItemIds: Array.from(new Set([...usedOutfits.slice(-avoidOutfitWindow).flat(), ...sweatConsumedItemIds])),
         locationIdOverride: null,
         relativeWarmthHint,
+        daySegment: req.daySegment,
       });
 
       if (!result.ok || !result.item_ids.length) {
