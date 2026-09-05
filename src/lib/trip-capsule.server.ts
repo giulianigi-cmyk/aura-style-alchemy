@@ -1013,10 +1013,19 @@ export async function generateTripCapsuleCore({ data, context }: {
       const season = seasonByDate.get(req.date)!;
       const eligible = eligibleFor(pool, req, season, tempByActivity.get(req.activityId) ?? null);
       let candidatePool = eligible.filter((it) => capsule.has(it.id));
-      // Falls back to the full eligible set only if the capsule subset is
-      // too thin to plausibly compose a real outfit — never silently
-      // fails a requirement the wardrobe could actually cover.
-      if (candidatePool.length < 3) candidatePool = eligible;
+      // Tops up from the wider eligible set when the capsule alone is too
+      // thin to compose a real outfit — but ADDS to it rather than
+      // replacing it. It used to discard the capsule entirely and hand
+      // the AI the whole wardrobe, which threw away the bag and shoes the
+      // capsule had already settled on: that's how three days ended up
+      // with three different bags and three pairs of sneakers even though
+      // the capsule held exactly one of each. Keeping the capsule pieces
+      // in front means they stay the natural choice, with the extras
+      // available only where the capsule genuinely can't cover a role.
+      if (candidatePool.length < 3) {
+        const capsuleIds = new Set(candidatePool.map((it) => it.id));
+        candidatePool = [...candidatePool, ...eligible.filter((it) => !capsuleIds.has(it.id))];
+      }
       candidatePool = applyHardDressCodeFilter(candidatePool, req.dressCode);
       // Applied for EVERY transport activity, unconditionally. It used to
       // be skipped when changeAssumedPossible() said a change was likely,
@@ -1126,7 +1135,20 @@ export async function generateTripCapsuleCore({ data, context }: {
         gender: profile?.gender ?? null,
         styleBoldness: profile?.style_boldness ?? null,
         items,
-        avoidItemIds: Array.from(new Set([...usedOutfits.slice(-avoidOutfitWindow).flat(), ...sweatConsumedItemIds])),
+        // Variety avoidance applies to clothes, never to bags and shoes.
+        // Nobody packs a fresh bag and fresh sneakers for every day of a
+        // trip — one bag and one pair of shoes covering three days is
+        // exactly right, and treating them like tops is what produced
+        // three bags and three pairs of sneakers across three days.
+        // sweatConsumedItemIds still applies to everything it covers,
+        // but that only ever contains skin-contact categories anyway.
+        avoidItemIds: Array.from(new Set([
+          ...usedOutfits.slice(-avoidOutfitWindow).flat().filter((id) => {
+            const it = pool.find((p) => p.id === id);
+            return !BAG_ROLE.has(it?.category ?? "") && !SHOE_ROLE.has(it?.category ?? "");
+          }),
+          ...sweatConsumedItemIds,
+        ])),
         locationIdOverride: null,
         relativeWarmthHint,
         daySegment: req.daySegment,
