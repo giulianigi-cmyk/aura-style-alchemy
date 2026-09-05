@@ -11,7 +11,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapsule, type PoolItem, type Requirement } from "./trip-capsule.server";
+import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter } from "./trip-capsule.server";
 
 function item(overrides: Partial<PoolItem> & { id: string }): PoolItem {
   return {
@@ -118,10 +118,7 @@ test("REGRESSIONE — una scarpa non-sneaker eleggibile entra in capsule per gli
 
 test("REGRESSIONE — uno stivaletto elegante non deve battere un tacco/sandalo estivo per una cena d'estate", () => {
   // Il trip ha una sola attività con segnale di eleganza (una cena),
-  // in un giorno estivo. Il guardaroba ha sia stivaletti eleganti che
-  // sandali eleganti, entrambi formality 4+. Senza la penalità stagionale,
-  // versatility() da sola poteva far vincere lo stivaletto (formality
-  // "giusta", colore neutro) anche in piena estate.
+  // in un giorno estivo, con temperatura reale nota e calda.
   const pool: PoolItem[] = [
     item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"] }),
     item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"] }),
@@ -134,8 +131,9 @@ test("REGRESSIONE — uno stivaletto elegante non deve battere un tacco/sandalo 
     { activityId: "dinner", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Cena da Mario" },
   ];
   const seasonByDate = new Map([["2026-07-10", "Summer"]]);
+  const tempByActivity = new Map([["dinner", 28]]);
 
-  const capsule = buildCapsule(pool, requirements, seasonByDate, []);
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
   assert.ok(capsule.has("sandal-elegant"), "il sandalo elegante estivo doveva essere scelto per la cena");
   assert.ok(!capsule.has("boot-elegant"), "lo stivaletto non doveva essere scelto per una cena in piena estate");
 });
@@ -230,10 +228,10 @@ test("REGRESSIONE — settembre reale e caldo (25°C) preferisce il sandalo allo
   assert.ok(!capsule.has("boot-elegant"), "lo stivaletto non doveva essere scelto a 25°C reali");
 });
 
-test("Senza temperatura nota, il fallback stagionale resta quello di prima (nessuna regressione)", () => {
+test("Senza temperatura nota, il fallback stagionale usa il tag season dell'item (nessuna regressione)", () => {
   const pool: PoolItem[] = [
-    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"] }),
-    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"] }),
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, colors: ["black"], season: "Autumn" }),
+    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, colors: ["black"], season: "Summer" }),
     item({ id: "top-1", category: "Tops" }),
     item({ id: "bottom-1", category: "Bottoms" }),
     item({ id: "bag-1", category: "Bags" }),
@@ -242,8 +240,9 @@ test("Senza temperatura nota, il fallback stagionale resta quello di prima (ness
     { activityId: "dinner", date: "2026-07-10", daySegment: "evening", dressCode: null, label: "Cena" },
   ];
   const seasonByDate = new Map([["2026-07-10", "Summer"]]);
-  // Nessun tempByActivity passato — deve ricadere sul comportamento
-  // stagionale già testato in precedenza.
+  // Nessun tempByActivity passato — deve ricadere sul tag season dell'item
+  // (matchesSeasonLoose), esattamente come prima che esistesse la
+  // temperatura reale.
   const capsule = buildCapsule(pool, requirements, seasonByDate, []);
   assert.ok(capsule.has("sandal-elegant"));
 });
@@ -286,4 +285,179 @@ test("REGRESSIONE — un giorno caldo preferisce un top a manica corta su uno a 
 
   const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
   assert.ok(capsule.has("top-short"), "il top a manica corta doveva essere preferito per un giorno caldo");
+});
+
+// ---------------------------------------------------------------------------
+// climateSuitability — casi A-F richiesti esplicitamente, più il caso
+// dell'eleggibilità (il bug reale: un capo "possible" non deve mai essere
+// escluso da eligibleFor/buildCapsule, solo penalizzato nel punteggio).
+// ---------------------------------------------------------------------------
+
+test("Il bug reale: sandalo Summer eleggibile a settembre (bucket 'Autumn') con temperatura reale calda", () => {
+  const pool: PoolItem[] = [
+    item({ id: "boot-elegant", category: "Shoes", subcategory: "Ankle Boots", formality: 4, season: "Autumn" }),
+    item({ id: "sandal-elegant", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, season: "Summer" }),
+    item({ id: "top-1", category: "Tops" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "Cena El Porteno" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["dinner", 25]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("sandal-elegant"), "il sandalo Summer doveva restare eleggibile ed essere scelto a 25°C reali, anche se settembre è bucketizzato come Autumn");
+});
+
+test("Caso A — 30°C: la T-shirt vince sulla maglia a maniche lunghe", () => {
+  const pool: PoolItem[] = [
+    item({ id: "tshirt", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve", season: null }),
+    item({ id: "sweater", category: "Tops", subcategory: "Sweater", sleeveLength: "Long Sleeve", season: "Autumn" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "day", date: "2026-07-15", daySegment: "day", dressCode: null, label: "Day" },
+  ];
+  const seasonByDate = new Map([["2026-07-15", "Summer"]]);
+  const tempByActivity = new Map([["day", 30]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("tshirt"), "la t-shirt doveva essere scelta a 30°C");
+  assert.ok(!capsule.has("sweater"), "la maglia a manica lunga non doveva essere scelta a 30°C (HEAVY_SIGNAL + hot = inappropriate)");
+});
+
+test("Caso C — dicembre, 15°C: il sandalo Summer resta eleggibile (non escluso)", () => {
+  const boot: PoolItem = item({ id: "boot", category: "Shoes", subcategory: "Ankle Boots", formality: 4, season: "Winter" });
+  const sandal: PoolItem = item({ id: "sandal", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, season: "Summer" });
+  assert.equal(climateSuitability(sandal, 15, "Winter"), "possible", "15°C non è freddo estremo — il sandalo deve restare 'possible', mai 'inappropriate'");
+  assert.notEqual(climateSuitability(sandal, 15, "Winter"), "inappropriate");
+});
+
+test("Caso D — 5°C reali: il sandalo è 'inappropriate' (fortemente sfavorito/escluso)", () => {
+  const sandal: PoolItem = item({ id: "sandal", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, season: "Summer" });
+  assert.equal(climateSuitability(sandal, 5, "Winter"), "inappropriate");
+});
+
+test("Caso E — settembre, 28°C reali: la T-shirt Summer vince sulla maglia Autumn nonostante il calendario dica Autumn", () => {
+  const pool: PoolItem[] = [
+    item({ id: "tshirt", category: "Tops", subcategory: "T-Shirt", season: "Summer" }),
+    item({ id: "sweater", category: "Tops", subcategory: "Sweater", season: "Autumn" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "day", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Day" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["day", 28]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("tshirt"));
+  assert.ok(!capsule.has("sweater"), "la maglia deve essere esclusa (inappropriate) a 28°C reali, anche se è 'in stagione' secondo il calendario");
+});
+
+test("Caso F — marzo, 5°C reali: la maglia Autumn/Winter vince sulla T-shirt Summer", () => {
+  const pool: PoolItem[] = [
+    item({ id: "tshirt", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve", season: "Summer" }),
+    item({ id: "sweater", category: "Tops", subcategory: "Sweater", sleeveLength: "Long Sleeve", season: "Winter" }),
+    item({ id: "bottom-1", category: "Bottoms" }),
+    item({ id: "shoes-1", category: "Shoes" }),
+    item({ id: "bag-1", category: "Bags" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "day", date: "2026-03-10", daySegment: "day", dressCode: null, label: "Day" },
+  ];
+  const seasonByDate = new Map([["2026-03-10", "Spring"]]);
+  const tempByActivity = new Map([["day", 5]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("sweater"), "la maglia doveva essere favorita a 5°C reali");
+});
+
+test("Senza temperatura nota, un capo fuori stagione resta 'possible' (mai 'inappropriate') — nessuna regressione sul fallback", () => {
+  const sweater: PoolItem = item({ id: "sweater", category: "Tops", season: "Winter" });
+  assert.equal(climateSuitability(sweater, null, "Summer"), "possible");
+});
+
+// ---------------------------------------------------------------------------
+// isSweatConsumable — sezioni 7-8 del documento
+// ---------------------------------------------------------------------------
+
+test("Un top a 30°C è sweat-consumable, un blazer a 30°C no", () => {
+  assert.equal(isSweatConsumable("Tops", 30), true);
+  assert.equal(isSweatConsumable("Outerwear", 30), false);
+});
+
+test("Un top a temperatura mite (18°C) non è sweat-consumable", () => {
+  assert.equal(isSweatConsumable("Tops", 18), false);
+});
+
+test("Nessuna temperatura nota -> mai sweat-consumable", () => {
+  assert.equal(isSweatConsumable("Tops", null), false);
+});
+
+// ---------------------------------------------------------------------------
+// applyHardDressCodeFilter — Step B: Formal/Sport come hard/strong
+// constraint, non solo testo nel prompt.
+// ---------------------------------------------------------------------------
+
+test("Formal con abbastanza capi eleganti disponibili -> filtra ai soli formality>=4 (jeans+tshirt esclusi)", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "jeans", category: "Bottoms", formality: 1 }),
+    item({ id: "tshirt", category: "Tops", formality: 1 }),
+    item({ id: "elegant-dress", category: "Dresses", formality: 4 }),
+    item({ id: "elegant-trousers", category: "Bottoms", formality: 4 }),
+    item({ id: "elegant-top", category: "Tops", formality: 5 }),
+  ];
+  const filtered = applyHardDressCodeFilter(candidates, "Formal");
+  assert.ok(!filtered.some((it) => it.id === "jeans"), "i jeans (formality 1) non devono comparire per un requisito Formal con alternative eleganti disponibili");
+  assert.ok(!filtered.some((it) => it.id === "tshirt"));
+  assert.ok(filtered.some((it) => it.id === "elegant-dress"));
+});
+
+test("Formal con pochi capi eleganti (2) allarga alla banda formality>=3 invece di lasciare jeans+tshirt come unica opzione", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "jeans", category: "Bottoms", formality: 1 }),
+    item({ id: "smart-trousers", category: "Bottoms", formality: 3 }),
+    item({ id: "smart-top", category: "Tops", formality: 3 }),
+    item({ id: "elegant-shoes", category: "Shoes", formality: 4 }),
+  ];
+  const filtered = applyHardDressCodeFilter(candidates, "Formal");
+  assert.ok(!filtered.some((it) => it.id === "jeans"), "i jeans devono restare esclusi anche nella banda allargata");
+  assert.ok(filtered.some((it) => it.id === "smart-trousers"), "la banda 3+ deve essere inclusa quando 4+ non basta");
+});
+
+test("Formal su un guardaroba quasi interamente casual -> non lascia mai lo slot vuoto (fallback totale)", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "jeans", category: "Bottoms", formality: 1 }),
+    item({ id: "tshirt", category: "Tops", formality: 1 }),
+  ];
+  const filtered = applyHardDressCodeFilter(candidates, "Formal");
+  assert.equal(filtered.length, 2, "senza nessuna alternativa elegante, il fallback deve restituire tutti i candidati invece di uno slot vuoto");
+});
+
+test("Sport filtra ai soli capi casual/sportivi quando ce ne sono abbastanza", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "elegant-dress", category: "Dresses", formality: 5 }),
+    item({ id: "sneaker", category: "Shoes", formality: 1 }),
+    item({ id: "joggers", category: "Bottoms", formality: 1 }),
+    item({ id: "sport-top", category: "Tops", formality: 1 }),
+  ];
+  const filtered = applyHardDressCodeFilter(candidates, "Sport");
+  assert.ok(!filtered.some((it) => it.id === "elegant-dress"), "un abito elegante non deve comparire per un requisito Sport con alternative disponibili");
+});
+
+test("Dress code diversi da Formal/Sport (Evening, Work, null) non filtrano nulla — restano soft preference", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "jeans", category: "Bottoms", formality: 1 }),
+    item({ id: "elegant-dress", category: "Dresses", formality: 5 }),
+  ];
+  assert.equal(applyHardDressCodeFilter(candidates, "Evening").length, 2, "Evening non deve filtrare — il contesto decide, non un muro di formalità");
+  assert.equal(applyHardDressCodeFilter(candidates, "Work").length, 2);
+  assert.equal(applyHardDressCodeFilter(candidates, null).length, 2);
 });
