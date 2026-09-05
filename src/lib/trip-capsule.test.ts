@@ -631,3 +631,38 @@ test("isAccommodationActivity riconosce hotel/check-in/albergo/airbnb", () => {
   assert.equal(isAccommodationActivity("David Guetta"), false);
   assert.equal(isAccommodationActivity(null), false);
 });
+
+test("REGRESSIONE — isAccommodationActivity riconosce l'alloggio in italiano, inglese, spagnolo e francese", () => {
+  assert.equal(isAccommodationActivity("Soggiorno: City Life Apartment"), true, "italiano");
+  assert.equal(isAccommodationActivity("Pernottamento a Roma"), true, "italiano");
+  assert.equal(isAccommodationActivity("2-night stay at The Ritz"), true, "inglese");
+  assert.equal(isAccommodationActivity("Overnight accommodation"), true, "inglese");
+  assert.equal(isAccommodationActivity("Alojamiento en Barcelona"), true, "spagnolo");
+  assert.equal(isAccommodationActivity("Pernoctación en Madrid"), true, "spagnolo");
+  assert.equal(isAccommodationActivity("Séjour à Paris"), true, "francese");
+  assert.equal(isAccommodationActivity("Hébergement centre-ville"), true, "francese");
+  // Falsi positivi da evitare — parole simili ma non di alloggio
+  assert.equal(isAccommodationActivity("David Guetta concert"), false);
+  assert.equal(isAccommodationActivity("Cena da Mario"), false);
+});
+
+test("REGRESSIONE — 'Soggiorno: City Life...' viene riconosciuto come alloggio", () => {
+  // Il caso reale segnalato: l'utente ha usato la parola 'Soggiorno' per
+  // segnalare che poteva cambiarsi, ma non era nella lista di parole
+  // chiave — risultato: il sistema assumeva 'nessun cambio possibile' e
+  // lasciava passare la gonna per il treno, l'esatto opposto di quanto
+  // l'utente intendeva.
+  assert.equal(isAccommodationActivity("Soggiorno: City Life Apartment"), true);
+});
+
+test("Con 'Soggiorno' loggato lo stesso giorno, il cambio è assunto possibile anche se treno e concerto condividono il segmento", () => {
+  const train: Requirement = { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno SMN - Milano" };
+  const concert: Requirement = { activityId: "concert", date: "2026-09-06", daySegment: "day", dressCode: null, label: "David Guetta" };
+  const all = [train, concert];
+  const activities = [
+    { activity_date: "2026-09-06", activity_type: "Soggiorno: City Life Apartment" },
+    { activity_date: "2026-09-06", activity_type: "Treno SMN - Milano" },
+    { activity_date: "2026-09-06", activity_type: "David Guetta" },
+  ];
+  assert.equal(changeAssumedPossible(train, all, activities), true);
+});
