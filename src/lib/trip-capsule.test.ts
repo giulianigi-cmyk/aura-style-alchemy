@@ -666,3 +666,17 @@ test("Con 'Soggiorno' loggato lo stesso giorno, il cambio è assunto possibile a
   ];
   assert.equal(changeAssumedPossible(train, all, activities), true);
 });
+
+test("isTransportActivity riconosce anche 'Milano Centrale - Firenze SMN 9551' senza la parola treno/train", () => {
+  assert.equal(isTransportActivity("Milano Centrale - Firenze SMN 9551"), true, "il caso reale segnalato — nessuna parola 'treno' o 'train', solo nomi di stazione");
+  assert.equal(isTransportActivity("Aeroporto di Fiumicino"), true);
+  assert.equal(isTransportActivity("Gare du Nord"), true);
+});
+
+test("Falsi positivi noti e accettati su isTransportActivity — 'centrale' è un compromesso deliberato", () => {
+  // 'centrale' è necessario per riconoscere nomi reali di stazioni
+  // italiane ('Milano Centrale', 'Napoli Centrale') ma può occasionalmente
+  // scattare su un'attività non di trasporto che contiene la stessa
+  // parola. Compromesso accettato consapevolmente, non un bug.
+  assert.equal(isTransportActivity("Farmacia Centrale"), true, "falso positivo noto e accettato");
+});
