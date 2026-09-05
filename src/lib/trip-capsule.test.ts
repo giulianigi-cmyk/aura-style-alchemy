@@ -11,7 +11,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity, applyTransportPracticalityFilter, isAccommodationActivity, changeAssumedPossible } from "./trip-capsule.server";
+import { buildCapsule, type PoolItem, type Requirement, climateSuitability, isSweatConsumable, applyHardDressCodeFilter, isTransportActivity, applyTransportPracticalityFilter, isAccommodationActivity, changeAssumedPossible, isTravelSuitable, outfitIsTravelSuitable } from "./trip-capsule.server";
 
 function item(overrides: Partial<PoolItem> & { id: string }): PoolItem {
   return {
@@ -711,4 +711,71 @@ test("Falsi positivi noti e accettati su isTransportActivity — 'centrale' è u
   // scattare su un'attività non di trasporto che contiene la stessa
   // parola. Compromesso accettato consapevolmente, non un bug.
   assert.equal(isTransportActivity("Farmacia Centrale"), true, "falso positivo noto e accettato");
+});
+
+// ---------------------------------------------------------------------------
+// isTravelSuitable — la definizione unica di "adatto a viaggiare"
+// ---------------------------------------------------------------------------
+
+test("REGRESSIONE — una maglia a maniche lunghe trasparente non è adatta al viaggio", () => {
+  const sheerTop = item({ id: "sheer", category: "Tops", subcategory: "Sheer Mesh Top", sleeveLength: "Long Sleeve" });
+  assert.equal(isTravelSuitable(sheerTop, 30), false);
+  assert.equal(isTravelSuitable(sheerTop, null), false, "la trasparenza è sbagliata in viaggio a qualunque temperatura");
+});
+
+test("REGRESSIONE — maniche lunghe e felpe escluse dal viaggio quando fa davvero caldo (32°C)", () => {
+  const longSleeve = item({ id: "ls", category: "Tops", subcategory: "Top", sleeveLength: "Long Sleeve" });
+  const sweatshirt = item({ id: "felpa", category: "Tops", subcategory: "Felpa" });
+  const tshirt = item({ id: "tee", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" });
+  assert.equal(isTravelSuitable(longSleeve, 32), false);
+  assert.equal(isTravelSuitable(sweatshirt, 32), false);
+  assert.equal(isTravelSuitable(tshirt, 32), true);
+});
+
+test("Maniche lunghe restano adatte al viaggio quando NON fa caldo", () => {
+  const longSleeve = item({ id: "ls", category: "Tops", subcategory: "Top", sleeveLength: "Long Sleeve" });
+  assert.equal(isTravelSuitable(longSleeve, 12), true);
+  assert.equal(isTravelSuitable(longSleeve, null), true, "senza previsione nota le regole di temperatura non si applicano");
+});
+
+test("Gonne corte e capi da serata restano esclusi dal viaggio a qualunque temperatura", () => {
+  assert.equal(isTravelSuitable(item({ id: "skirt", category: "Bottoms", subcategory: "Mini Skirt" }), 20), false);
+  assert.equal(isTravelSuitable(item({ id: "dress", category: "Dresses" }), 20), false);
+  assert.equal(isTravelSuitable(item({ id: "cutout", category: "Tops", subcategory: "Cut-Out Top" }), 20), false);
+});
+
+test("Jeans e t-shirt sono sempre adatti al viaggio", () => {
+  assert.equal(isTravelSuitable(item({ id: "jeans", category: "Bottoms", subcategory: "Jeans" }), 32), true);
+  assert.equal(isTravelSuitable(item({ id: "tee", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }), 32), true);
+});
+
+test("outfitIsTravelSuitable — un look da concerto con jeans+t-shirt può essere riusato per il treno", () => {
+  const catalog: PoolItem[] = [
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "jeans", category: "Bottoms", subcategory: "Jeans" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+  ];
+  assert.equal(outfitIsTravelSuitable(["tee", "jeans", "sneaker"], catalog, 30), true, "nessun outfit separato necessario per il treno");
+});
+
+test("outfitIsTravelSuitable — un look con minigonna NON può essere riusato per il treno", () => {
+  const catalog: PoolItem[] = [
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "mini", category: "Bottoms", subcategory: "Mini Skirt" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+  ];
+  assert.equal(outfitIsTravelSuitable(["tee", "mini", "sneaker"], catalog, 30), false, "il treno deve ricevere un outfit pratico separato");
+});
+
+test("Il filtro trasporto ora esclude anche in base alla temperatura", () => {
+  const candidates: PoolItem[] = [
+    item({ id: "ls", category: "Tops", subcategory: "Top", sleeveLength: "Long Sleeve" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "jeans", category: "Bottoms", subcategory: "Jeans" }),
+  ];
+  const hot = applyTransportPracticalityFilter(candidates, true, 32);
+  assert.ok(!hot.some((it) => it.id === "ls"), "manica lunga esclusa a 32°C");
+  assert.ok(hot.some((it) => it.id === "tee"));
+  const mild = applyTransportPracticalityFilter(candidates, true, 14);
+  assert.ok(mild.some((it) => it.id === "ls"), "manica lunga ammessa a 14°C");
 });
