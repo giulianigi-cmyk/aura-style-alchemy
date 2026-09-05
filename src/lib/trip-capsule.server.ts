@@ -110,6 +110,48 @@ export function isTransportActivity(label: string | null): boolean {
   return !!label && TRANSPORT_KEYWORDS.some((k) => label.toLowerCase().includes(k));
 }
 
+// No dedicated hotel/accommodation concept exists anywhere in the schema
+// (checked before adding this — see debug notes) and one isn't needed: a
+// logged check-in/hotel activity is the same kind of signal transport
+// already is, just the opposite direction (arriving somewhere to change,
+// not leaving on a journey). Detected the same way, not a new field.
+const ACCOMMODATION_KEYWORDS = ["hotel", "check-in", "checkin", "check in", "albergo", "resort", "b&b", "bnb", "airbnb", "alloggio"];
+export function isAccommodationActivity(label: string | null): boolean {
+  return !!label && ACCOMMODATION_KEYWORDS.some((k) => label.toLowerCase().includes(k));
+}
+
+/**
+ * Whether a change of clothes between a transport leg and whatever else
+ * is happening that day can reasonably be assumed — inferred from the
+ * itinerary that already exists, never a new question or a new field.
+ *
+ * Two signals, either is enough to assume YES:
+ * - A logged hotel/check-in activity that same day. The clearest
+ *   possible signal: the person is planning to arrive somewhere and
+ *   settle in, which is exactly when clothes get changed.
+ * - No OTHER activity shares this transport's exact day segment. Day
+ *   and evening are hours apart by construction — a train at midday and
+ *   a formal dinner that evening have a natural gap between them even
+ *   with nothing explicitly logged in it.
+ *
+ * When neither holds — a transport activity sharing its OWN segment with
+ * a same-day event, and no accommodation logged anywhere that day (the
+ * "train straight to the concert" case) — a change is NOT assumed, and
+ * the transport practicality filter is skipped entirely for that
+ * activity: the event's own needs are allowed to govern what's "correct"
+ * to wear, exactly like the document's Scenario B. This is a coarse
+ * proxy, not a certainty — day_segment is the only time granularity
+ * activities have, there's no literal clock time to reason about.
+ */
+export function changeAssumedPossible(req: Requirement, allRequirements: Requirement[], allActivities: { activity_date: string; activity_type: string | null }[]): boolean {
+  const hasAccommodationSameDay = allActivities.some((a) => a.activity_date === req.date && isAccommodationActivity(a.activity_type));
+  if (hasAccommodationSameDay) return true;
+  const hasSameSegmentCompetingActivity = allRequirements.some(
+    (r) => r.activityId !== req.activityId && r.date === req.date && r.daySegment === req.daySegment && !isTransportActivity(r.label),
+  );
+  return !hasSameSegmentCompetingActivity;
+}
+
 function activityKind(req: Requirement): ActivityKind {
   const text = `${req.label ?? ""}`.toLowerCase();
   if (SWIM_KEYWORDS.some((k) => text.includes(k))) return "swim";
@@ -558,17 +600,29 @@ export function applyHardDressCodeFilter(candidates: PoolItem[], dressCode: stri
   return candidates;
 }
 
-// A skirt or short dress on a train/flight/ferry isn't a style
-// preference gone slightly wrong, it was reported as actively unwanted —
-// so this is a hard filter like Formal/Sport above, not the softer
-// versatility() nudge alone. Falls back to the unfiltered list only if
-// excluding them would leave nothing at all, same "never fail the slot"
-// guarantee every hard filter in this pipeline follows.
+// A skirt/short dress or a cut-out/going-out top on a train/flight/ferry
+// isn't a style preference gone slightly wrong, it was reported as
+// actively unwanted — so this is a hard filter like Formal/Sport above,
+// not the softer versatility() nudge alone. Falls back to the unfiltered
+// list only if excluding them would leave nothing at all, same "never
+// fail the slot" guarantee every hard filter in this pipeline follows.
+//
+// GOING_OUT_SIGNAL reuses the same keyword-matching approach already
+// established elsewhere (HEAVY_SIGNAL/LIGHT_SIGNAL in
+// outfit-weather-rules.ts, the bare-shoulder check in the Work-occasion
+// prompt rule) rather than inventing a new "coverage" field — no such
+// field exists on wardrobe items, and category/subcategory/style text is
+// what AI classification actually populates.
+const GOING_OUT_SIGNAL = /cut.?out|cutout|bralette|crop top|halter|bandeau|off.?shoulder|bardot|backless|sheer|see.?through|plunge|deep neckline|club|nightlife|party dress|going out/i;
+
 export function applyTransportPracticalityFilter(candidates: PoolItem[], isTransport: boolean): PoolItem[] {
   if (!isTransport) return candidates;
   const practical = candidates.filter((it) => {
     const isSkirtOrShortDress = it.category === "Dresses" || /skirt|gonna/i.test(it.subcategory ?? "");
-    return !isSkirtOrShortDress;
+    if (isSkirtOrShortDress) return false;
+    const text = `${it.subcategory ?? ""} ${(it.style ?? []).join(" ")}`;
+    if (GOING_OUT_SIGNAL.test(text)) return false;
+    return true;
   });
   return practical.length > 0 ? practical : candidates;
 }
@@ -833,7 +887,8 @@ export async function generateTripCapsuleCore({ data, context }: {
       // fails a requirement the wardrobe could actually cover.
       if (candidatePool.length < 3) candidatePool = eligible;
       candidatePool = applyHardDressCodeFilter(candidatePool, req.dressCode);
-      candidatePool = applyTransportPracticalityFilter(candidatePool, isTransportActivity(req.label));
+      const applyTransportFilter = isTransportActivity(req.label) && changeAssumedPossible(req, allRequirements, activities);
+      candidatePool = applyTransportPracticalityFilter(candidatePool, applyTransportFilter);
 
       if (candidatePool.length === 0) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: "No wardrobe piece matches this activity's dress code, weather window, or day/evening slot." });
