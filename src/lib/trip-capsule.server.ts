@@ -807,6 +807,25 @@ export async function generateTripCapsuleCore({ data, context }: {
     // single run from firing an unbounded number of AI calls.
     const capped = requirements.slice(0, 30);
 
+    // Transport gets first claim on the wardrobe's practical pieces
+    // within its own day — processed ahead of any other same-date
+    // activity (an accommodation check-in, an event) so the recently-
+    // worn avoidance below naturally pushes those OTHER activities
+    // toward different pieces, instead of the reverse: a same-day
+    // accommodation activity claiming the one practical outfit first and
+    // leaving the actual train ride to fall back on whatever's left,
+    // which could easily be the same going-out look assigned to a later
+    // event that day. This doesn't change WHICH items are eligible
+    // (applyTransportPracticalityFilter already handles that per
+    // activity) — only the order they're claimed in when several
+    // same-day activities are competing for a limited wardrobe.
+    capped.sort((a, b) => {
+      if (a.date !== b.date) return 0;
+      const aTransport = isTransportActivity(a.label) ? 1 : 0;
+      const bTransport = isTransportActivity(b.label) ? 1 : 0;
+      return bTransport - aTransport;
+    });
+
     // No early-return when capped is empty (e.g. everything's already
     // generated): the for-loop below is a no-op on an empty array, and
     // exiting early here used to skip the underwear/packing-list step
