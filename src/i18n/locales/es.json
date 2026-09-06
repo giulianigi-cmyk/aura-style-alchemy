@@ -770,7 +770,6 @@
     "toastOutfitDeleted": "Outfit eliminado",
     "toastMarkedAsWorn": "Marcado como usado",
     "removeThisPieceAria": "Eliminar esta prenda",
-    "couldntUpdateOutfit": "No se pudo actualizar el look", "addAPiece": "Añadir una prenda", "sizeLabel": "Talla {{size}}",
     "addAPieceAria": "Añadir una prenda",
     "atelier": "Atelier",
     "stylist": "Estilista",
@@ -1002,7 +1001,10 @@
     "addToCapsule": "Añadir",
     "tapToAddToCapsule": "Toca para añadir a la cápsula",
     "removeFromCapsuleAria": "Quitar de la Trip Capsule",
-    "couldntUpdateCapsule": "No se pudo actualizar la Trip Capsule"
+    "couldntUpdateCapsule": "No se pudo actualizar la Trip Capsule",
+    "viewPieceAria": "Ver prenda",
+    "openInWardrobe": "Abrir en el armario",
+    "close": "Cerrar"
   },
   "batchReview": {
     "couldntLoadBatch": "No se pudo cargar este lote.",
