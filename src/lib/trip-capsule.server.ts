@@ -579,9 +579,17 @@ export function buildCapsule(
   // normal target/cap logic: this is a reserved slot, not a ranked pick.
   const eleganceReqs = requirements.filter(hasEleganceSignal);
   if (eleganceReqs.length) {
+    const repReqPre = eleganceReqs[0];
+    const repTempPre = tempByActivity.get(repReqPre.activityId) ?? null;
+    const repSeasonPre = seasonByDate.get(repReqPre.date) ?? "";
+    // Must be elegant AND climate-appropriate. Checking only "is there an
+    // elegant shoe" let an ankle boot that had already entered the
+    // capsule for some other reason satisfy this test, so the block below
+    // never ran and the sandals/heels the wardrobe actually had were
+    // never reserved — the dinner then had nothing but the boot to pick.
     const alreadyHasElegantShoe = Array.from(capsule).some((id) => {
       const it = pool.find((p) => p.id === id);
-      return it?.category === "Shoes" && it.formality >= 4;
+      return it?.category === "Shoes" && it.formality >= 4 && climateSuitability(it, repTempPre, repSeasonPre) !== "inappropriate";
     });
     if (!alreadyHasElegantShoe) {
       // Scored against the first elegance-requiring requirement so the
