@@ -625,15 +625,25 @@ export function buildCapsule(
     const repReq = transportReqs[0];
     const repTemp = tempByActivity.get(repReq.activityId) ?? null;
     for (const role of [BOTTOM_ROLE, TOP_ROLE]) {
-      const alreadyHasTravelReady = Array.from(capsule).some((id) => {
+      // One travel-ready piece per role isn't enough once a trip has BOTH
+      // an outbound and a return leg: the single reserved piece gets used
+      // on the way out, then variety avoidance pushes it away on the way
+      // back, leaving the return journey with nothing suitable again.
+      // Reserving one per transport leg (capped at 2 — a piece worn on
+      // the way out is perfectly fine again on the way home) is what
+      // makes the return leg come out as sensible as the outbound one.
+      const wanted = Math.min(transportReqs.length, 2);
+      const travelReadyInCapsule = Array.from(capsule).filter((id) => {
         const it = pool.find((p) => p.id === id);
         return it && role.has(it.category ?? "") && isTravelSuitable(it, repTemp);
-      });
-      if (alreadyHasTravelReady) continue;
+      }).length;
+      const missing = wanted - travelReadyInCapsule;
+      if (missing <= 0) continue;
       const best = pool
         .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id) && isTravelSuitable(it, repTemp))
-        .sort((a, b) => versatility(b, repReq, repTemp) - versatility(a, repReq, repTemp))[0];
-      if (best) capsule.add(best.id);
+        .sort((a, b) => versatility(b, repReq, repTemp) - versatility(a, repReq, repTemp))
+        .slice(0, missing);
+      best.forEach((it) => capsule.add(it.id));
     }
   }
 
@@ -730,13 +740,15 @@ export function isTravelSuitable(it: PoolItem, temperature: number | null): bool
   // the forecast was unavailable or merely mild.
   if (/boot|stival|heel|tacco|pump|stiletto|slingback/i.test(text)) return false;
   if (temperature != null && temperature >= TRAVEL_HOT_THRESHOLD_C) {
-    // Long sleeves and sweatshirts in real heat — the "6 settembre is
-    // still summer" case. Deliberately checked here on top of the
-    // season/climate rules elsewhere: those reason about the item's
-    // season TAG, this reasons about the garment's actual construction,
-    // which is what matters when someone is sitting in a train carriage.
+    // Long sleeves and warm knits in real heat — the "6 settembre is
+    // still summer" case. A wool sweater is perfectly practical for a
+    // train (bulk isn't the issue); 26°C+ is. Deliberately checked here
+    // on top of the season/climate rules elsewhere: those reason about
+    // the item's season TAG, this reasons about the garment's actual
+    // material and construction, which is what matters when someone is
+    // sitting in a warm carriage.
     if ((it.sleeveLength ?? "").toLowerCase() === "long sleeve") return false;
-    if (/sweatshirt|felpa|hoodie|sweater|maglione|knit|cardigan/i.test(text)) return false;
+    if (/sweatshirt|felpa|hoodie|sweater|maglione|knit|cardigan|wool|lana|cashmere|cachemire|mohair/i.test(text)) return false;
   }
   return true;
 }
@@ -1210,10 +1222,23 @@ export async function generateTripCapsuleCore({ data, context }: {
         // three bags and three pairs of sneakers across three days.
         // sweatConsumedItemIds still applies to everything it covers,
         // but that only ever contains skin-contact categories anyway.
+        //
+        // On a transport leg, travel-suitable BOTTOMS get the same
+        // exemption: wearing the same trousers on the way out and the way
+        // home is what a person actually does, and pushing them away for
+        // variety left the return journey reaching for the event skirt
+        // instead. Tops stay subject to variety (a fresh top matters,
+        // especially in heat) — only the bottom is exempt.
         avoidItemIds: Array.from(new Set([
           ...usedOutfits.slice(-avoidOutfitWindow).flat().filter((id) => {
             const it = pool.find((p) => p.id === id);
-            return !BAG_ROLE.has(it?.category ?? "") && !SHOE_ROLE.has(it?.category ?? "");
+            if (BAG_ROLE.has(it?.category ?? "") || SHOE_ROLE.has(it?.category ?? "")) return false;
+            if (
+              isTransportActivity(req.label) &&
+              it && BOTTOM_ROLE.has(it.category ?? "") &&
+              isTravelSuitable(it, tempByActivity.get(req.activityId) ?? null)
+            ) return false;
+            return true;
           }),
           ...sweatConsumedItemIds,
         ])),
