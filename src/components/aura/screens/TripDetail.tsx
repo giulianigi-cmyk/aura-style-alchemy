@@ -60,6 +60,10 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
   const [capsuleItems, setCapsuleItems] = useState<{ id: string; wardrobe_item_id: string; source: string }[]>([]);
   const [capsulePickerOpen, setCapsulePickerOpen] = useState(false);
   const [capsuleBusyId, setCapsuleBusyId] = useState<string | null>(null);
+  /** Tapped piece shown large. Read-only preview — the "Apri nel
+   *  guardaroba" button inside it goes to the wardrobe for real edits,
+   *  since the full item sheet lives there and isn't reachable directly. */
+  const [previewItem, setPreviewItem] = useState<WardrobeItem | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genResult, setGenResult] = useState<{ generated: number; failed: { date: string; daySegment: string; reason: string }[]; unclassifiedExcluded: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1163,9 +1167,15 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
                           const it = wardrobeItems.find((w) => w.id === id);
                           const src = it ? thumbSrc(it, wardrobeSigned) : "";
                           return (
-                            <div key={id} className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60" style={{ background: "#FFFFFF" }}>
+                            <button
+                              key={id}
+                              onClick={() => it && setPreviewItem(it)}
+                              aria-label={t("tripDetail.viewPieceAria")}
+                              className="h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/60 active:scale-95 transition"
+                              style={{ background: "#FFFFFF" }}
+                            >
                               {src ? <img src={src} className="h-full w-full object-contain p-1" alt="" loading="lazy" /> : null}
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -1210,6 +1220,46 @@ export function TripDetail({ go, tripId, focusActivityId = null, openBuilder }: 
           <p className="mt-2 text-[11px] text-muted-foreground text-center">{t("tripDetail.noActivitiesHint")}</p>
         )}
       </section>
+
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-[85] bg-background/80 backdrop-blur-sm flex items-center justify-center px-6"
+          onClick={() => setPreviewItem(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-border bg-card overflow-hidden shadow-luxe">
+            <div className="relative aspect-square" style={{ background: "#FFFFFF" }}>
+              {(() => {
+                const src = thumbSrc(previewItem, wardrobeSigned);
+                return src ? <img src={src} className="h-full w-full object-contain p-4" alt="" /> : null;
+              })()}
+              <button
+                onClick={() => setPreviewItem(null)}
+                aria-label={t("tripDetail.close")}
+                className="absolute top-3 right-3 h-9 w-9 rounded-full bg-background/90 border border-border/60 flex items-center justify-center"
+              ><X size={16} /></button>
+            </div>
+            <div className="p-4">
+              {previewItem.brand && <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{previewItem.brand}</p>}
+              <p className="font-serif text-lg mt-0.5">{previewItem.subcategory || previewItem.category || t("tripDetail.untitledEvent")}</p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {previewItem.category && (
+                  <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{previewItem.category}</span>
+                )}
+                {previewItem.season && (
+                  <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{previewItem.season}</span>
+                )}
+                {previewItem.size && (
+                  <span className="rounded-full bg-secondary/60 px-2.5 py-1 text-[10px] uppercase tracking-widest">{previewItem.size}</span>
+                )}
+              </div>
+              <button
+                onClick={() => { setPreviewItem(null); go("wardrobe"); }}
+                className="mt-4 w-full h-11 rounded-full border border-border text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-2"
+              ><Pencil size={13} /> {t("tripDetail.openInWardrobe")}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center px-6" onClick={() => setConfirmDelete(false)}>
