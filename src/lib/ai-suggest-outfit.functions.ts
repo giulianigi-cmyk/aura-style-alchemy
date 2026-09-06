@@ -443,6 +443,28 @@ export async function suggestOutfitCore(params: {
   // one of the seven literal occasion choices) for callers that don't
   // pass daySegment yet.
   const isEvening = params.daySegment === "evening" || (params.occasion ?? "").toLowerCase().includes("evening");
+  // A cardigan (or any open-front layer) is worn OVER something, never as
+  // the top itself — an outfit whose only upper-body piece is a cardigan
+  // leaves the person with nothing underneath it. Deterministic check
+  // rather than a prompt sentence, since this is a structural fact about
+  // the garment, not a style preference the model should weigh.
+  const violatesOpenLayerWithoutBase = (ids: string[]): boolean => {
+    const upper = ids
+      .map((id) => catalog.find((c) => c.id === id))
+      .filter((c): c is NonNullable<typeof c> => !!c && (c.category === "Tops" || c.category === "Outerwear"));
+    if (upper.length === 0) return false;
+    const isOpenLayer = (c: (typeof upper)[number]) =>
+      /cardigan|blazer|jacket|giacca|coat|cappotto|kimono|duster|gilet|waistcoat/i.test(`${c.subcategory ?? ""} ${c.style ?? ""}`);
+    // A dress or jumpsuit already covers the torso — a cardigan over one
+    // is complete, no separate top required.
+    const hasDressBase = ids.some((id) => {
+      const c = catalog.find((x) => x.id === id);
+      return c?.category === "Dresses" || c?.category === "Jumpsuits";
+    });
+    if (hasDressBase) return false;
+    return upper.every(isOpenLayer);
+  };
+
   const violatesEveningSunglasses = (ids: string[]): boolean =>
     isEvening && ids.some((id) => catalog.find((c) => c.id === id)?.subcategory === "Sunglasses");
 
@@ -456,6 +478,7 @@ export async function suggestOutfitCore(params: {
     if (violatesOccasionTag(ids)) return false;
     if (violatesSleeve(ids)) return false;
     if (violatesEveningSunglasses(ids)) return false;
+    if (violatesOpenLayerWithoutBase(ids)) return false;
     return true;
   };
 
