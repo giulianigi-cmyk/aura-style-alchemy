@@ -683,11 +683,28 @@ const TRAVEL_HOT_THRESHOLD_C = 26;
  *  forecast is known, in which case the temperature-dependent rules are
  *  skipped rather than guessed. */
 export function isTravelSuitable(it: PoolItem, temperature: number | null): boolean {
-  const text = `${it.subcategory ?? ""} ${(it.style ?? []).join(" ")}`;
-  const isSkirtOrShortDress = it.category === "Dresses" || /skirt|gonna/i.test(it.subcategory ?? "");
+  // Reads EVERY text field the item has, not just subcategory. Real
+  // wardrobes have items with subcategory left blank, or filled in with
+  // a brand/model name instead of the canonical value — a filter that
+  // only checks one field silently passes those through, which is how a
+  // skirt kept ending up on a train even with the rule in place. Cheap
+  // to check all of them; nothing is lost by being thorough.
+  const text = `${it.category ?? ""} ${it.subcategory ?? ""} ${(it.style ?? []).join(" ")}`;
+  // Skirt/dress detection: category OR any text field. "gonna" covers
+  // Italian-labelled items, "mini"/"midi" catch a skirt recorded only by
+  // its length.
+  const isSkirtOrShortDress =
+    it.category === "Dresses" ||
+    /skirt|gonna|mini\b|minigonna/i.test(text);
   if (isSkirtOrShortDress) return false;
   if (GOING_OUT_SIGNAL.test(text)) return false;
   if (SHEER_SIGNAL.test(text)) return false;
+  // Heels and boots are wrong for a journey regardless of temperature —
+  // not a heat rule (that lives in climateSuitability), a practicality
+  // one: nobody walks a station or an airport in stiletto ankle boots by
+  // choice. This is what the temperature-only rule kept missing whenever
+  // the forecast was unavailable or merely mild.
+  if (/boot|stival|heel|tacco|pump|stiletto|slingback/i.test(text)) return false;
   if (temperature != null && temperature >= TRAVEL_HOT_THRESHOLD_C) {
     // Long sleeves and sweatshirts in real heat — the "6 settembre is
     // still summer" case. Deliberately checked here on top of the
@@ -1152,6 +1169,13 @@ export async function generateTripCapsuleCore({ data, context }: {
         locationIdOverride: null,
         relativeWarmthHint,
         daySegment: req.daySegment,
+        // Everything the travel filter removed from the pool, passed
+        // explicitly so suggestOutfitCore's last-resort completion steps
+        // can't reach around the filter and put a mini skirt or a pair of
+        // ankle boots back into a train outfit.
+        hardExcludedItemIds: isTransportActivity(req.label)
+          ? pool.filter((it) => !isTravelSuitable(it, tempByActivity.get(req.activityId) ?? null)).map((it) => it.id)
+          : [],
       });
 
       if (!result.ok || !result.item_ids.length) {
