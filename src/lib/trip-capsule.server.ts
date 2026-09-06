@@ -720,6 +720,11 @@ const SHEER_SIGNAL = /sheer|see.?through|mesh|transparent|trasparente|velato|org
 // outweighed by something else, which is how a mini skirt kept winning
 // a train slot.
 const TRAVEL_HOT_THRESHOLD_C = 26;
+// Below this, boots are simply what one wears — including on a train.
+// Above it they're an impractical choice for a journey. Distinct from the
+// weather-rule thresholds: this answers "is a boot sensible to travel in",
+// not "is it wrong for the weather".
+const COLD_BOOT_THRESHOLD_C = 15;
 
 /** The one definition of travel-appropriate. `temperature` null means no
  *  forecast is known, in which case the temperature-dependent rules are
@@ -746,7 +751,13 @@ export function isTravelSuitable(it: PoolItem, temperature: number | null): bool
   // one: nobody walks a station or an airport in stiletto ankle boots by
   // choice. This is what the temperature-only rule kept missing whenever
   // the forecast was unavailable or merely mild.
-  if (/boot|stival|heel|tacco|pump|stiletto|slingback/i.test(text)) return false;
+  // Heels are never a travel shoe, at any temperature — that's
+  // practicality, not weather. Boots are different: impractical for a
+  // warm journey, but genuinely the right thing below ~15°C, so they get
+  // a cold-weather exception heels don't.
+  if (/heel|tacco|pump|stiletto|slingback/i.test(text)) return false;
+  const isBoot = /boot|stival/i.test(text);
+  if (isBoot && (temperature == null || temperature >= COLD_BOOT_THRESHOLD_C)) return false;
   if (temperature != null && temperature >= TRAVEL_HOT_THRESHOLD_C) {
     // Long sleeves and warm knits in real heat — the "6 settembre is
     // still summer" case. A wool sweater is perfectly practical for a
@@ -1126,6 +1137,25 @@ export async function generateTripCapsuleCore({ data, context }: {
         isTransportActivity(req.label),
         tempByActivity.get(req.activityId) ?? null,
       );
+
+      // Boots at a warm-weather dinner: a hard exclusion, not just a
+      // reserved elegant slot. Reserving the best elegant shoe in the
+      // capsule doesn't stop the AI picking a boot that's also in there
+      // for other days — only removing it from this activity's pool
+      // does. Same per-category fallback shape as the travel filter: if
+      // boots are the only formal footwear owned, they stay rather than
+      // leaving the dinner barefoot.
+      if (hasEleganceSignal(req)) {
+        const dinnerTemp = tempByActivity.get(req.activityId) ?? null;
+        if (dinnerTemp != null && dinnerTemp >= MILD_WARM_THRESHOLD_C) {
+          const shoes = candidatePool.filter((it) => SHOE_ROLE.has(it.category ?? ""));
+          const nonBoots = shoes.filter((it) => !/boot|stival/i.test(`${it.subcategory ?? ""} ${it.style ?? ""}`));
+          if (nonBoots.length > 0) {
+            const bootIds = new Set(shoes.filter((it) => !nonBoots.includes(it)).map((it) => it.id));
+            candidatePool = candidatePool.filter((it) => !bootIds.has(it.id));
+          }
+        }
+      }
 
       if (candidatePool.length === 0) {
         failed.push({ date: req.date, daySegment: req.daySegment, reason: "No wardrobe piece matches this activity's dress code, weather window, or day/evening slot." });
