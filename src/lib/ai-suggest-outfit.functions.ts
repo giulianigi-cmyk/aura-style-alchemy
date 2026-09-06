@@ -77,6 +77,20 @@ export async function suggestOutfitCore(params: {
   // it lands directly in that string).
   daySegment?: "day" | "evening" | null;
   /**
+   * Ids the caller has already ruled out for hard, non-negotiable reasons
+   * (travel practicality, dress code) — as opposed to avoidItemIds, which
+   * is a soft variety preference the relaxation logic above is free to
+   * override when a category runs dry.
+   *
+   * This exists because the last-resort completion steps near the end of
+   * this function (append a missing bag, swap in shoes) pick straight out
+   * of `catalog`, bypassing every filter the caller applied upstream.
+   * That's how a mini skirt or ankle boots kept reappearing on a train
+   * outfit even after being correctly excluded from the candidate pool:
+   * the pool was right, the safety net then reached around it.
+   */
+  hardExcludedItemIds?: string[];
+  /**
    * Explicit multi-location selection (e.g. "use my main wardrobe AND
    * the beach house while I'm on this trip") — when provided, this
    * REPLACES the single active-location lookup entirely rather than
@@ -537,8 +551,14 @@ export async function suggestOutfitCore(params: {
     // eligible ones just takes the first — eligibleItems is already
     // filtered by dress preferences and location, so anything here is
     // already a legitimate candidate.
+    // Every last-resort completion below picks straight out of `catalog`,
+    // which deliberately bypasses the soft variety filtering — but it must
+    // NOT bypass the caller's hard exclusions (see hardExcludedItemIds).
+    const hardExcluded = new Set(params.hardExcludedItemIds ?? []);
+    const pickable = (c: { id: string }) => !hardExcluded.has(c.id) && !item_ids.includes(c.id);
+
     if (missingMandatoryBag(item_ids)) {
-      const bag = catalog.find((c) => c.category === "Bags" && !item_ids.includes(c.id));
+      const bag = catalog.find((c) => c.category === "Bags" && pickable(c));
       if (bag) item_ids = [...item_ids, bag.id];
     }
 
@@ -546,13 +566,13 @@ export async function suggestOutfitCore(params: {
     // only strips, it doesn't replace), swap in a proper alternative
     // rather than leaving the outfit without shoes at all.
       if (violatesFootwearRule(item_ids)) {
-      const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && !item_ids.includes(c.id));
+      const replacement = catalog.find((c) => c.category === "Shoes" && c.subcategory !== "Running Shoes" && pickable(c));
       if (replacement) item_ids = [...item_ids, replacement.id];
     }
 
     if (!item_ids.some((id) => catalog.find((c) => c.id === id)?.category === "Shoes")) {
       const shoe = catalog.find((c) =>
-        c.category === "Shoes" && !violatesFootwearRule([c.id]) && !violatesOccasionTag([c.id]) && !item_ids.includes(c.id)
+        c.category === "Shoes" && !violatesFootwearRule([c.id]) && !violatesOccasionTag([c.id]) && pickable(c)
       );
       if (shoe) item_ids = [...item_ids, shoe.id];
     }
