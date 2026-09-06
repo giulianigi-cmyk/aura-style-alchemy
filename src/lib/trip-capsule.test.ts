@@ -826,16 +826,14 @@ test("REGRESSIONE — una gonna con subcategory VUOTA viene comunque riconosciut
   assert.equal(isTravelSuitable(skirtItalian, 25), false);
 });
 
-test("REGRESSIONE — stivaletti e tacchi esclusi dal viaggio a QUALUNQUE temperatura", () => {
-  // Prima erano esclusi solo sopra i 26°C: con meteo mancante o mite
-  // passavano. Camminare in stazione coi tacchi non è una questione di
-  // temperatura ma di praticità.
+test("REGRESSIONE — stivaletti esclusi dal viaggio col caldo, ammessi sotto i 15°C; tacchi mai", () => {
   const ankleBoot = item({ id: "b1", category: "Shoes", subcategory: "Ankle Boots" });
-  assert.equal(isTravelSuitable(ankleBoot, null), false, "meteo sconosciuto");
-  assert.equal(isTravelSuitable(ankleBoot, 15), false, "temperatura mite");
+  assert.equal(isTravelSuitable(ankleBoot, null), false, "meteo sconosciuto: non si rischia");
+  assert.equal(isTravelSuitable(ankleBoot, 20), false, "20°C: troppo caldo per stivaletti in viaggio");
   assert.equal(isTravelSuitable(ankleBoot, 32), false, "caldo");
+  assert.equal(isTravelSuitable(ankleBoot, 10), true, "10°C: gli stivaletti sono la scelta giusta anche in treno");
   const heels = item({ id: "b2", category: "Shoes", subcategory: "Pumps" });
-  assert.equal(isTravelSuitable(heels, 20), false);
+  assert.equal(isTravelSuitable(heels, 5), false, "i tacchi non sono mai una scarpa da viaggio, a nessuna temperatura");
 });
 
 test("Sneakers e sandali restano adatti al viaggio", () => {
