@@ -954,3 +954,26 @@ test("REGRESSIONE — andata E ritorno ricevono entrambi un bottom da viaggio, n
   const travelBottoms = ["trousers", "jeans"].filter((id) => capsule.has(id));
   assert.ok(travelBottoms.length >= 2, `con due viaggi servono due bottom da viaggio in capsule, trovati: ${travelBottoms.join(", ")}`);
 });
+
+test("REGRESSIONE — con una cena al caldo, uno stivaletto già in capsule non impedisce di riservare il sandalo", () => {
+  // Il bug: 'alreadyHasElegantShoe' controllava solo che ci fosse UNA
+  // scarpa elegante, senza verificare se fosse adatta al clima. Lo
+  // stivaletto entrato per altri motivi soddisfaceva il test, il blocco
+  // che avrebbe scelto il sandalo non partiva, e alla cena restava solo
+  // lo stivaletto.
+  const pool: PoolItem[] = [
+    item({ id: "boot", category: "Shoes", subcategory: "Ankle Boots", formality: 4, dayEvening: "both" }),
+    item({ id: "sandal", category: "Shoes", subcategory: "Heeled Sandals", formality: 4, dayEvening: "both" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
+    item({ id: "bag", category: "Bags", subcategory: "Clutch", formality: 4 }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "dinner", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "Cena El Porteño" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["dinner", 30]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, ["boot"], tempByActivity);
+  assert.ok(capsule.has("sandal"), "il sandalo deve essere riservato per la cena anche se lo stivaletto era già in capsule");
+});
