@@ -613,6 +613,30 @@ export function buildCapsule(
     }
   }
 
+  // Reserved slot for travel, mirroring the elegant-shoe slot above. A
+  // trip with a transport leg needs at least one genuinely travel-
+  // appropriate bottom and top in the capsule, or the travel filter has
+  // nothing to select and its per-category fallback hands back the very
+  // skirt it was meant to exclude. Owning no trousers at all still can't
+  // be fixed here — but as long as the wardrobe has one, the capsule
+  // will carry it.
+  const transportReqs = requirements.filter((r) => isTransportActivity(r.label));
+  if (transportReqs.length) {
+    const repReq = transportReqs[0];
+    const repTemp = tempByActivity.get(repReq.activityId) ?? null;
+    for (const role of [BOTTOM_ROLE, TOP_ROLE]) {
+      const alreadyHasTravelReady = Array.from(capsule).some((id) => {
+        const it = pool.find((p) => p.id === id);
+        return it && role.has(it.category ?? "") && isTravelSuitable(it, repTemp);
+      });
+      if (alreadyHasTravelReady) continue;
+      const best = pool
+        .filter((it) => role.has(it.category ?? "") && !capsule.has(it.id) && isTravelSuitable(it, repTemp))
+        .sort((a, b) => versatility(b, repReq, repTemp) - versatility(a, repReq, repTemp))[0];
+      if (best) capsule.add(best.id);
+    }
+  }
+
   return capsule;
 }
 
@@ -735,8 +759,35 @@ export function outfitIsTravelSuitable(itemIds: string[], catalog: PoolItem[], t
  *  hard filter here follows. */
 export function applyTransportPracticalityFilter(candidates: PoolItem[], isTransport: boolean, temperature: number | null = null): PoolItem[] {
   if (!isTransport) return candidates;
-  const practical = candidates.filter((it) => isTravelSuitable(it, temperature));
-  return practical.length > 0 ? practical : candidates;
+  // Per-CATEGORY fallback, not whole-pool. The previous version returned
+  // the entire unfiltered list whenever filtering left nothing at all —
+  // which is precisely what happened with a capsule holding a skirt but
+  // no trousers: excluding the skirt emptied the Bottoms role, the guard
+  // fired, and the skirt came straight back along with everything else.
+  // Now each role falls back independently: a category with no suitable
+  // option keeps its unsuitable ones (better than an outfit with no
+  // bottom at all), while every other category stays properly filtered.
+  const byCategory = new Map<string, PoolItem[]>();
+  for (const it of candidates) {
+    const cat = it.category ?? "";
+    const arr = byCategory.get(cat) ?? [];
+    arr.push(it);
+    byCategory.set(cat, arr);
+  }
+  const out: PoolItem[] = [];
+  for (const [cat, catItems] of byCategory.entries()) {
+    const suitable = catItems.filter((it) => isTravelSuitable(it, temperature));
+    if (suitable.length > 0) { out.push(...suitable); continue; }
+    // No suitable option in this category. Keep the unsuitable ones only
+    // for roles an outfit genuinely can't do without — a bottom, a top,
+    // shoes. Dresses and Jumpsuits are alternatives to a top+bottom pair,
+    // never a requirement on their own, so an unwearable-for-travel dress
+    // is simply dropped rather than kept as a "better than nothing"
+    // option that then wins the slot outright.
+    const isOptionalRole = cat === "Dresses" || cat === "Jumpsuits";
+    if (!isOptionalRole) out.push(...catItems);
+  }
+  return out;
 }
 
 export async function generateTripCapsuleCore({ data, context }: {
@@ -1185,6 +1236,39 @@ export async function generateTripCapsuleCore({ data, context }: {
 
       usedOutfits.push(result.item_ids);
       usedOutfitDates.push(req.date);
+
+      // DIAGNOSTIC — travel activities only. Answers the one question the
+      // unit tests can't: when an unsuitable piece shows up in a train
+      // outfit, was it in the pool the AI chose from (filter is leaking),
+      // or did it get appended afterwards by suggestOutfitCore's
+      // last-resort completion steps (safety net reaching around the
+      // filter)? Remove once the travel filter is confirmed stable.
+      if (isTransportActivity(req.label)) {
+        const describe = (id: string) => {
+          const it = pool.find((p) => p.id === id);
+          return it ? `${it.category ?? "?"}/${it.subcategory ?? "?"}` : `unknown:${id}`;
+        };
+        const reqTemp = tempByActivity.get(req.activityId) ?? null;
+        const unsuitableInPool = finalPool.filter((it) => !isTravelSuitable(it, reqTemp));
+        const unsuitableInResult = result.item_ids.filter((id) => {
+          const it = pool.find((p) => p.id === id);
+          return it ? !isTravelSuitable(it, reqTemp) : false;
+        });
+        console.log("[AURA trip-capsule] TRAVEL DIAGNOSTIC", JSON.stringify({
+          activity: req.label,
+          date: req.date,
+          temperature: reqTemp,
+          poolSize: finalPool.length,
+          unsuitableLeftInPool: unsuitableInPool.map((it) => `${it.category ?? "?"}/${it.subcategory ?? "?"}`),
+          chosen: result.item_ids.map(describe),
+          unsuitableInFinalOutfit: unsuitableInResult.map(describe),
+          verdict: unsuitableInResult.length === 0
+            ? "OK"
+            : unsuitableInPool.length > 0
+              ? "FILTER LEAK — unsuitable item was still in the pool"
+              : "APPENDED AFTER — pool was clean, item added downstream",
+        }));
+      }
       result.item_ids.forEach((id) => allChosenItemIds.add(id));
 
       // "Hot enough that sweat is a real concern" — deliberately its own
