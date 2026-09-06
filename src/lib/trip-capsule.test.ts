@@ -815,3 +815,109 @@ test("REGRESSIONE — un trip di più giorni tiene UNA borsa e UN paio di scarpe
   assert.ok(bags.length <= 1, `un trip di 3 giorni dovrebbe avere 1 borsa, trovate: ${bags.join(", ")}`);
   assert.ok(shoes.length <= 2, `un trip di 3 giorni dovrebbe avere al massimo 2 paia di scarpe, trovate: ${shoes.join(", ")}`);
 });
+
+test("REGRESSIONE — una gonna con subcategory VUOTA viene comunque riconosciuta dal nome/categoria", () => {
+  // Il caso reale: se la sottocategoria non è compilata (o contiene il
+  // brand invece del valore canonico), il filtro guardava un solo campo
+  // e lasciava passare la gonna. Ora legge tutti i campi testuali.
+  const skirtNoSubcat = item({ id: "s1", category: "Bottoms", subcategory: null, style: ["mini skirt"] });
+  assert.equal(isTravelSuitable(skirtNoSubcat, 25), false);
+  const skirtItalian = item({ id: "s2", category: "Bottoms", subcategory: "Minigonna" });
+  assert.equal(isTravelSuitable(skirtItalian, 25), false);
+});
+
+test("REGRESSIONE — stivaletti e tacchi esclusi dal viaggio a QUALUNQUE temperatura", () => {
+  // Prima erano esclusi solo sopra i 26°C: con meteo mancante o mite
+  // passavano. Camminare in stazione coi tacchi non è una questione di
+  // temperatura ma di praticità.
+  const ankleBoot = item({ id: "b1", category: "Shoes", subcategory: "Ankle Boots" });
+  assert.equal(isTravelSuitable(ankleBoot, null), false, "meteo sconosciuto");
+  assert.equal(isTravelSuitable(ankleBoot, 15), false, "temperatura mite");
+  assert.equal(isTravelSuitable(ankleBoot, 32), false, "caldo");
+  const heels = item({ id: "b2", category: "Shoes", subcategory: "Pumps" });
+  assert.equal(isTravelSuitable(heels, 20), false);
+});
+
+test("Sneakers e sandali restano adatti al viaggio", () => {
+  assert.equal(isTravelSuitable(item({ id: "sn", category: "Shoes", subcategory: "Sneakers" }), 30), true);
+  assert.equal(isTravelSuitable(item({ id: "sa", category: "Shoes", subcategory: "Sandals" }), 30), true);
+  assert.equal(isTravelSuitable(item({ id: "fl", category: "Shoes", subcategory: "Flats" }), 20), true);
+});
+
+test("REGRESSIONE — il fallback del filtro viaggio è per categoria, non svuota tutto il filtro", () => {
+  // Il caso reale: la capsule aveva una gonna ma NESSUN pantalone.
+  // Escludendo la gonna il ruolo Bottoms restava vuoto, il vecchio
+  // fallback restituiva l'intera lista NON filtrata, e la gonna
+  // rientrava insieme a tutto il resto (anche il top cut-out).
+  const candidates: PoolItem[] = [
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "cutout", category: "Tops", subcategory: "Cut-Out Top" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true, 30);
+  // Bottoms non ha alternative -> la gonna resta (meglio di nessun bottom)
+  assert.ok(filtered.some((it) => it.id === "skirt"), "senza pantaloni disponibili la gonna resta, ma solo per il suo ruolo");
+  // Tops HA un'alternativa -> il cut-out deve restare escluso
+  assert.ok(!filtered.some((it) => it.id === "cutout"), "il top cut-out NON deve rientrare: la t-shirt è disponibile");
+  assert.ok(filtered.some((it) => it.id === "tee"));
+});
+
+test("REGRESSIONE — buildCapsule riserva un bottom e un top adatti al viaggio quando c'è un trasporto", () => {
+  const pool: PoolItem[] = [
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers" }),
+    item({ id: "cutout", category: "Tops", subcategory: "Cut-Out Top" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "bag", category: "Bags", subcategory: "Tote" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno SMN - Milano" },
+    { activityId: "concert", date: "2026-09-06", daySegment: "day", dressCode: null, label: "David Guetta" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["train", 30], ["concert", 30]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("trousers"), "la capsule deve includere un pantalone: c'è un viaggio in treno");
+  assert.ok(capsule.has("tee"), "la capsule deve includere un top adatto al viaggio");
+});
+
+test("REGRESSIONE — un trip con un treno riserva sempre un bottom da viaggio in capsule, anche se l'evento richiede una gonna", () => {
+  // Il caso reale: la capsule la costruisce il generatore per coprire gli
+  // eventi. Il concerto vuole la minigonna, quindi la capsule prendeva
+  // SOLO quella come bottom — e al treno non restava nessun pantalone,
+  // facendo scattare il ripiego che rimetteva dentro proprio la gonna.
+  const pool: PoolItem[] = [
+    item({ id: "mini", category: "Bottoms", subcategory: "Skirt", formality: 3, dayEvening: "evening" }),
+    item({ id: "jeans", category: "Bottoms", subcategory: "Jeans", formality: 2, dayEvening: "both" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "bag", category: "Bags", subcategory: "Tote" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "train", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno SMN - Milano" },
+    { activityId: "concert", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "David Guetta" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"]]);
+  const tempByActivity = new Map([["train", 32], ["concert", 28]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  assert.ok(capsule.has("jeans"), "la capsule deve contenere un bottom adatto al viaggio, non solo la gonna dell'evento");
+});
+
+test("REGRESSIONE — il filtro trasporto ripiega per CATEGORIA, non svuotando tutto il pool", () => {
+  // Se l'unico bottom disponibile è una gonna, quella resta (meglio di un
+  // outfit senza bottom) — ma questo non deve far rientrare anche il top
+  // cut-out, che ha invece un'alternativa valida.
+  const candidates: PoolItem[] = [
+    item({ id: "skirt", category: "Bottoms", subcategory: "Skirt" }),
+    item({ id: "cutout", category: "Tops", subcategory: "Cut-Out Top" }),
+    item({ id: "tee", category: "Tops", subcategory: "T-Shirt" }),
+  ];
+  const filtered = applyTransportPracticalityFilter(candidates, true, 30);
+  assert.ok(filtered.some((it) => it.id === "skirt"), "la gonna resta: è l'unico bottom");
+  assert.ok(filtered.some((it) => it.id === "tee"));
+  assert.ok(!filtered.some((it) => it.id === "cutout"), "il cut-out NON deve rientrare: esiste la t-shirt come alternativa");
+});
