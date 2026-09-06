@@ -770,7 +770,6 @@
     "toastOutfitDeleted": "Outfit eliminato",
     "toastMarkedAsWorn": "Segnato come indossato",
     "removeThisPieceAria": "Rimuovi questo capo",
-    "couldntUpdateOutfit": "Impossibile aggiornare l'outfit", "addAPiece": "Aggiungi un capo", "sizeLabel": "Taglia {{size}}",
     "addAPieceAria": "Aggiungi un capo",
     "atelier": "Atelier",
     "stylist": "Stylist",
@@ -1002,7 +1001,10 @@
     "addToCapsule": "Aggiungi",
     "tapToAddToCapsule": "Tocca per aggiungere alla capsule",
     "removeFromCapsuleAria": "Rimuovi dalla Trip Capsule",
-    "couldntUpdateCapsule": "Non sono riuscito ad aggiornare la Trip Capsule"
+    "couldntUpdateCapsule": "Non sono riuscito ad aggiornare la Trip Capsule",
+    "viewPieceAria": "Vedi il capo",
+    "openInWardrobe": "Apri nel guardaroba",
+    "close": "Chiudi"
   },
   "batchReview": {
     "couldntLoadBatch": "Impossibile caricare questo batch.",
