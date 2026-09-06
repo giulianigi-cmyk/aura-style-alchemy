@@ -921,3 +921,36 @@ test("REGRESSIONE — il filtro trasporto ripiega per CATEGORIA, non svuotando t
   assert.ok(filtered.some((it) => it.id === "tee"));
   assert.ok(!filtered.some((it) => it.id === "cutout"), "il cut-out NON deve rientrare: esiste la t-shirt come alternativa");
 });
+
+test("Una maglia di lana è pratica per il treno, ma non a 26°C+", () => {
+  const woolTop = item({ id: "wool", category: "Tops", subcategory: "Wool Sweater", sleeveLength: "Long Sleeve" });
+  assert.equal(isTravelSuitable(woolTop, 28), false, "28°C: troppo caldo per la lana");
+  assert.equal(isTravelSuitable(woolTop, 20), true, "20°C: la lana è perfettamente pratica in treno");
+  assert.equal(isTravelSuitable(woolTop, 5), true, "5°C: la lana è la scelta giusta");
+  assert.equal(isTravelSuitable(woolTop, null), true, "senza meteo noto non si esclude un capo pratico");
+});
+
+test("REGRESSIONE — andata E ritorno ricevono entrambi un bottom da viaggio, non solo l'andata", () => {
+  // Il caso reale: con un solo pantalone riservato, l'andata lo usava e
+  // la varietà lo spingeva via al ritorno, che ripiegava sulla gonna.
+  const pool: PoolItem[] = [
+    item({ id: "mini", category: "Bottoms", subcategory: "Skirt", formality: 3, dayEvening: "evening" }),
+    item({ id: "trousers", category: "Bottoms", subcategory: "Trousers", formality: 2, dayEvening: "both" }),
+    item({ id: "jeans", category: "Bottoms", subcategory: "Jeans", formality: 2, dayEvening: "both" }),
+    item({ id: "tee-1", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "tee-2", category: "Tops", subcategory: "T-Shirt", sleeveLength: "Short Sleeve" }),
+    item({ id: "sneaker", category: "Shoes", subcategory: "Sneakers" }),
+    item({ id: "bag", category: "Bags", subcategory: "Tote" }),
+  ];
+  const requirements: Requirement[] = [
+    { activityId: "andata", date: "2026-09-06", daySegment: "day", dressCode: null, label: "Treno SMN - Milano" },
+    { activityId: "concert", date: "2026-09-06", daySegment: "evening", dressCode: null, label: "David Guetta" },
+    { activityId: "ritorno", date: "2026-09-07", daySegment: "day", dressCode: null, label: "Treno Milano Centrale - SMN" },
+  ];
+  const seasonByDate = new Map([["2026-09-06", "Autumn"], ["2026-09-07", "Autumn"]]);
+  const tempByActivity = new Map([["andata", 32], ["concert", 28], ["ritorno", 30]]);
+
+  const capsule = buildCapsule(pool, requirements, seasonByDate, [], tempByActivity);
+  const travelBottoms = ["trousers", "jeans"].filter((id) => capsule.has(id));
+  assert.ok(travelBottoms.length >= 2, `con due viaggi servono due bottom da viaggio in capsule, trovati: ${travelBottoms.join(", ")}`);
+});
